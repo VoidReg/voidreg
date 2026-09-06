@@ -1,0 +1,44 @@
+@import 'tailwindcss';
+
+@theme {
+  /* Brand tokens */
+  --color-brand-primary: #3b82f6;
+  --color-brand-dark: #1e293b;
+  --font-display: 'Poppins', sans-serif;
+  --animate-slow-spin: spin 5s linear infinite;
+
+  /* Semantic light-mode tokens */
+  --color-background: oklch(1 0 0);
+  --color-foreground: oklch(0.145 0 0);
+  --color-muted: oklch(0.965 0 0);
+  --color-muted-foreground: oklch(0.45 0 0);
+  --color-border: oklch(0.9 0 0);
+  --color-surface: oklch(0.985 0 0);
+  --color-primary: var(--color-brand-primary);
+  --color-primary-foreground: oklch(0.985 0 0);
+}
+
+@layer theme {
+  :root,
+  :host {
+    @variant dark {
+      --color-background: oklch(0.145 0 0);
+      --color-foreground: oklch(0.985 0 0);
+      --color-muted: oklch(0.22 0 0);
+      --color-muted-foreground: oklch(0.65 0 0);
+      --color-border: oklch(0.28 0 0);
+      --color-surface: oklch(0.18 0 0);
+      --color-primary-foreground: oklch(0.985 0 0);
+    }
+  }
+}
+
+@layer base {
+  html {
+    color-scheme: light dark;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}
