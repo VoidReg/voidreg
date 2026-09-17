@@ -25,3 +25,6 @@ vite.config.ts.timestamp-*
 
 # VSCode
 .vscode
+
+# Agents
+/.cursor
