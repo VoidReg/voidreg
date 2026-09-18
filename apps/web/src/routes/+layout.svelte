@@ -1,6 +1,7 @@
 <script lang="ts">
   import '../app.css';
   import { page } from '$app/state';
+  import CookieConsent from '$lib/components/CookieConsent.svelte';
   import ErrorHeader from '$lib/components/ErrorHeader.svelte';
   import SiteFooter from '$lib/components/SiteFooter.svelte';
   import SiteHeader from '$lib/components/SiteHeader.svelte';
@@ -23,3 +24,4 @@
   {@render children()}
   {#if !page.error}<SiteFooter />{/if}
 </div>
+<CookieConsent />
