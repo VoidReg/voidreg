@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { setTheme } from '$lib/theme';
   import Icon from './Icon.svelte';
 
   let dark = $state(false);
@@ -10,11 +11,7 @@
 
   function toggleTheme() {
     dark = !document.documentElement.classList.contains('dark');
-    const theme = dark ? 'dark' : 'light';
-    document.documentElement.classList.toggle('dark', dark);
-    document.documentElement.classList.toggle('light', !dark);
-    document.documentElement.dataset.theme = theme;
-    localStorage.setItem('voidreg-theme', theme);
+    setTheme(dark ? 'dark' : 'light');
   }
 </script>
 
