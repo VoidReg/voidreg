@@ -24,18 +24,33 @@ export default defineConfig(
     }
   },
   {
-    files: ['**/*.svelte', '**/*.svelte.ts', '**/*.svelte.js'],
+    files: ['**/*.svelte', '**/*.svelte.ts'],
     languageOptions: {
       parserOptions: {
         projectService: true,
         extraFileExtensions: ['.svelte'],
         parser: ts.parser
       }
+    },
+    rules: {
+      'svelte/block-lang': [
+        'error',
+        {
+          script: 'ts'
+        }
+      ]
     }
   },
   {
-    // Override or add rule settings here, such as:
-    // 'svelte/button-has-type': 'error'
-    rules: {}
+    files: ['**/*.{js,cjs,mjs,jsx}', '**/*.svelte.js'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'Program',
+          message: 'JavaScript files are not allowed. Use TypeScript (.ts) instead.'
+        }
+      ]
+    }
   }
 );

@@ -1,5 +1,7 @@
-/** @type {import("prettier").Config} */
-const config = {
+import type { Config } from 'prettier';
+import type { PluginOptions } from 'prettier-plugin-tailwindcss';
+
+const config: Config & PluginOptions = {
   useTabs: false,
   singleQuote: true,
   trailingComma: 'none',
