@@ -46,4 +46,3 @@ volumes:
 networks:
   edge:
   backend:
-    internal: true
