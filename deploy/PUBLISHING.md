@@ -7,7 +7,9 @@ The admin app is available at `/admin/`, dynamic article shells at `/blog/*`, an
 the live sitemap at `/sitemap-blogs.xml`. Static hashed assets cache immutably;
 HTML revalidates and admin HTML uses no-store. gzip is enabled for text formats.
 
-Run the API migration before the upgraded service starts. Use the same public
+The API container entrypoint runs the idempotent migration before starting the
+service. Back up the database and configuration before replacing its image.
+Use the same public
 origin for the reader, admin, API proxy, and OAuth callbacks. Configure
 `PUBLIC_BASE_URL` accordingly. The production nginx server names include
 voidreg.xyz, www.voidreg.xyz, and api.voidreg.xyz; the installed certificate must
@@ -19,6 +21,10 @@ For local development, compose.override.yaml exposes nginx only on
 never expose the API directly to untrusted clients when using forwarded-IP limits.
 The API permits 7 MiB JSON requests and nginx matches that upload limit.
 
-No live deployment or remote database migration was performed during implementation.
+Production uses the API repository workflow to build and deploy a SHA-pinned
+image. Deploy static app build directories alongside this repository before
+recreating nginx. Reload nginx after replacing the API container so its upstream
+address refreshes. Keep production backups under the ignored `backups/` directory.
+
 OAuth callbacks still require Google/GitHub application credentials and an external
 provider smoke test. Multiple API replicas do not share in-memory rate limits.
