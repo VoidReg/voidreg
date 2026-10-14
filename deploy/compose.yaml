@@ -32,6 +32,8 @@ services:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - ./certs:/etc/nginx/certs:ro
       - ./certbot:/var/www/certbot:ro
+      - ../voidreg-web/build:/srv/web:ro
+      - ../voidreg-admin/build:/srv/admin:ro
     networks:
       - edge
       - backend
