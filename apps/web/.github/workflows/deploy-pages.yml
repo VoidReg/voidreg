@@ -32,7 +32,8 @@ jobs:
       - name: Type check
         run: pnpm check
 
-      - run: pnpm build
+      - name: Build site and generate sitemap
+        run: pnpm build
         env:
           NODE_ENV: production
 
