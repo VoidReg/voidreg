@@ -602,3 +602,130 @@
     justify-content: center;
   }
 }
+
+/* Publishing uses the existing Silicon tokens and spacing scale. */
+.article-prose {
+  width: min(100%, 68ch);
+  margin-inline: auto;
+  font-size: 1.125rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.article-prose :where(h2, h3, h4, p, ul, ol, pre, figure, blockquote, table) {
+  margin-block: 1.5rem;
+}
+.article-prose h2 {
+  font-size: clamp(1.75rem, 3vw, 2.25rem);
+  line-height: 1.15;
+}
+.article-prose h3 {
+  font-size: clamp(1.25rem, 2vw, 1.5rem);
+  line-height: 1.3;
+}
+.article-prose img,
+.article-prose svg {
+  max-width: 100%;
+  height: auto;
+}
+.article-prose pre {
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 1rem;
+  background: var(--card);
+  font: 0.8125rem/1.5 var(--font-code);
+}
+.article-prose table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.article-prose blockquote {
+  border-inline-start: 3px solid var(--primary);
+  padding-inline-start: 1.5rem;
+}
+.article-prose a {
+  color: var(--link);
+  text-decoration: underline;
+}
+.publishing-form {
+  display: grid;
+  gap: 1rem;
+  max-width: 40rem;
+}
+.publishing-form label {
+  display: grid;
+  gap: 0.5rem;
+}
+.publishing-form :where(input, textarea, select) {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.875rem;
+  border: 1px solid var(--input);
+  border-radius: var(--radius);
+  background: var(--background);
+  color: var(--foreground);
+  padding: 0.75rem;
+}
+.publishing-form .button {
+  justify-self: start;
+}
+.button:disabled {
+  background: var(--disabled);
+  border-color: var(--disabled);
+  color: var(--disabled-foreground);
+  cursor: not-allowed;
+}
+.comments {
+  width: min(100%, 68ch);
+  margin-inline: auto;
+}
+.comment-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2rem;
+}
+.comment-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin-top: 1rem;
+}
+.blog-skeleton {
+  min-height: 20rem;
+  border-radius: var(--radius);
+  background: var(--card);
+  padding: 1.5rem;
+}
+.project-card h2 {
+  margin-top: 1rem;
+  font-size: 1.5rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+:where(h1, h2, h3) {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 47.999rem) {
+  .publishing-form .button {
+    width: 100%;
+  }
+}
+.article-prose [data-publisle-activate] {
+  min-height: 2.875rem;
+  padding: 0.65rem 1rem;
+  border: 1px solid var(--primary);
+  border-radius: var(--radius);
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font: 500 0.875rem/1.2 var(--font-ui);
+  cursor: pointer;
+}
+.comments h2 {
+  font-size: clamp(1.75rem, 3vw, 2.25rem);
+  line-height: 1.15;
+}
+.comments h3 {
+  font-size: 1.25rem;
+  line-height: 1.3;
+}

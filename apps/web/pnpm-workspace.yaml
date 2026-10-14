@@ -3,3 +3,16 @@ packages:
 
 allowBuilds:
   esbuild: true
+
+overrides:
+  '@publisle/schema': 'file:vendor/publisle-schema-0.1.0.tgz'
+  '@publisle/adapter-svelte': 'file:vendor/publisle-adapter-svelte-0.1.1.tgz'
+  '@publisle/core': 'file:vendor/publisle-core-0.1.1.tgz'
+  '@publisle/adapter-core': 'file:vendor/publisle-adapter-core-0.1.1.tgz'
+  '@publisle/contracts': 'file:vendor/publisle-contracts-0.1.1.tgz'
+  '@publisle/block-sdk': 'file:vendor/publisle-block-sdk-0.1.1.tgz'
+  '@publisle/playground': 'file:vendor/publisle-playground-0.2.1.tgz'
+  '@publisle/profiles': 'file:vendor/publisle-profiles-0.1.1.tgz'
+  '@publisle/markdown': 'file:vendor/publisle-markdown-0.1.1.tgz'
+  '@publisle/blocks-core': 'file:vendor/publisle-blocks-core-0.1.1.tgz'
+  '@publisle/blocks-technical': 'file:vendor/publisle-blocks-technical-0.1.1.tgz'

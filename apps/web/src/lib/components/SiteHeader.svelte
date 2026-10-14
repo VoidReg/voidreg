@@ -27,7 +27,12 @@
           aria-current={current('/about') ? 'page' : undefined}
           href={resolve('/about')}>About</a
         >
-        <span class="nav-link nav-link-disabled" aria-disabled="true">Blog</span>
+        <a
+          class="nav-link"
+          aria-current={page.url.pathname.startsWith('/blog') ? 'page' : undefined}
+          href={resolve('/blog')}
+          onclick={() => (menuOpen = false)}>Blog</a
+        >
         <a class="button" href={resolve('/about#contact')}>Contact</a>
       </nav>
       <ThemeToggle />
@@ -70,7 +75,12 @@
       <a class="nav-link" href={resolve('/about#contact')} onclick={() => (menuOpen = false)}
         >Contact</a
       >
-      <span class="nav-link nav-link-disabled" aria-disabled="true">Blog</span>
+      <a
+        class="nav-link"
+        aria-current={page.url.pathname.startsWith('/blog') ? 'page' : undefined}
+        href={resolve('/blog')}
+        onclick={() => (menuOpen = false)}>Blog</a
+      >
     </nav>
   {/if}
 </header>

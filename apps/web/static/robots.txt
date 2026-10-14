@@ -3,3 +3,4 @@ User-agent: *
 Disallow:
 
 Sitemap: https://www.voidreg.xyz/sitemap.xml
+Sitemap: https://www.voidreg.xyz/sitemap-blogs.xml

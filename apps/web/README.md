@@ -14,3 +14,29 @@ and `robots.txt`, on every push to `main`.
 
 Submit `https://www.voidreg.xyz/sitemap.xml` to Google Search Console after
 deployment. The hostname matches the site's existing redirect to `www`.
+
+## API-backed blog
+
+`/blog` is a prerendered shell. `/blog/[slug]` loads published API content in the
+browser, so newly published slugs need no rebuild. The static host must serve the
+SPA fallback (`404.html`) with status 200 for `/blog/*`. voidreg-solution provides
+this routing. Article metadata and JSON-LD update client-side; full server-rendered
+SEO is outside the static-shell architecture. robots.txt also points to the live
+API blog sitemap.
+
+Development proxies `/api` to localhost:8080. `VOIDREG_API_PROXY` overrides that
+target. Public reads use bounded memory caching and ETag revalidation; errors can
+be retried. Comments render plain text and remain hidden until approved.
+Configured OAuth providers are discovered from `/api/v1/auth/providers`.
+
+PublisleArticle renders sanitized artifacts and activates only local host-approved
+islands from `src/lib/publishing/renderers.ts`. Unknown implementations keep the
+static alternative. Raw HTML scripts, iframe embeds, forms, and styles are removed
+by the host sanitizer. Approved remote embeds should be added through an explicit
+provider policy rather than generic iframe passthrough.
+
+Publisle dependencies are packed locally. Build the sibling Publisle repo, run
+`python3 scripts/refresh-publisle.py --source ../publisle`, then `pnpm install`,
+`pnpm check`, and `pnpm build`. Commit the file dependency pins, tarballs, and
+lockfile together. Preview components are shared with the admin via its refresh
+script; keep that snapshot current when renderer behavior changes.
