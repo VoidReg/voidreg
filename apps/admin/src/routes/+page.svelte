@@ -1,0 +1,518 @@
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import { beforeNavigate } from '$app/navigation';
+  import { DocumentEditor } from '@publisle/playground';
+  import { prepare, assertPrepared } from '@publisle/core';
+  import { compilePublication, type PublicationArtifact } from '@publisle/adapter-core';
+  import { parseDocument, type Document, type Diagnostic } from '@publisle/schema';
+  import { accessibilityProfile, interactivePublicationProfile } from '@publisle/profiles';
+  import { rendererRegistry } from '$lib/publishing/renderers';
+  import type { Article, Page } from '$lib/publishing/api';
+  import { ApiError, adminRequest } from '$lib/api';
+  import EditorWorkspace from '$lib/editor/EditorWorkspace.svelte';
+  import { extensions, registry } from '$lib/blocks';
+
+  type Comment = {
+    id: string;
+    article_slug: string;
+    author_name: string;
+    body: string;
+    status: string;
+  };
+  let restoring = $state(true),
+    loggedIn = $state(false),
+    password = $state(''),
+    error = $state(''),
+    message = $state(''),
+    busy = $state(false);
+  let articles = $state<Article[]>([]),
+    comments = $state<Page<Comment>>({ items: [], page: 1, per_page: 20, total: 0 }),
+    commentStatus = $state('pending');
+  let tab = $state<'articles' | 'comments'>('articles'),
+    editing = $state(false),
+    storedSlug = $state('');
+  let slug = $state(''),
+    title = $state(''),
+    category = $state(''),
+    summary = $state(''),
+    featured = $state(false),
+    sortOrder = $state(0),
+    status = $state<'draft' | 'published'>('draft');
+  let doc = $state<Document>({ schemaVersion: 1, metadata: { language: 'en' }, blocks: [] });
+  let revision = $state(0),
+    savedRevision = $state(0);
+  const editor = new DocumentEditor(undefined, registry, extensions);
+  editor.subscribe(() => {
+    doc = editor.document;
+    error = '';
+    revision++;
+  });
+  const preview = $derived.by(
+    (): { artifact?: PublicationArtifact; diagnostics: readonly Diagnostic[] } => {
+      try {
+        const prepared = prepare(
+          {
+            ...(JSON.parse(JSON.stringify(doc)) as Document),
+            metadata: { ...doc.metadata, title, language: doc.metadata?.language ?? 'en' }
+          },
+          {
+            registry,
+            unknownBlocks: 'error',
+            profiles: [accessibilityProfile(), interactivePublicationProfile()]
+          }
+        );
+        const artifact = compilePublication(assertPrepared(prepared), {
+          renderers: rendererRegistry,
+          rawHtml: 'escape'
+        });
+        return { artifact, diagnostics: artifact.diagnostics };
+      } catch (e) {
+        return {
+          diagnostics: [{ level: 'error', code: 'validation', message: (e as Error).message }]
+        };
+      }
+    }
+  );
+  const previewArticle = $derived<Article>({
+    slug: slug || 'preview',
+    title,
+    category,
+    summary,
+    status,
+    featured,
+    sort_order: sortOrder,
+    published_at: null,
+    reading_time_minutes: null,
+    sections: [],
+    content_hash: '',
+    compiled: preview.artifact
+  });
+  const dirty = $derived(revision !== savedRevision);
+  function changed() {
+    error = '';
+    revision++;
+  }
+  function report(e: unknown) {
+    error = (e as Error).message;
+    if (e instanceof ApiError && e.status === 401) {
+      loggedIn = false;
+      message = 'Your session expired. Sign in to keep editing.';
+    }
+  }
+  async function dashboard() {
+    articles = (await adminRequest<{ items: Article[] }>('/articles')).items;
+  }
+  async function loadComments(page = 1) {
+    try {
+      comments = await adminRequest(`/comments?status=${commentStatus}&page=${page}`);
+    } catch (e) {
+      report(e);
+    }
+  }
+  onMount(() => {
+    void adminRequest('/session')
+      .then(async () => {
+        loggedIn = true;
+        await dashboard();
+      })
+      .catch((e) => {
+        if (!(e instanceof ApiError && e.status === 401)) report(e);
+      })
+      .finally(() => (restoring = false));
+    const warn = (event: BeforeUnloadEvent) => {
+      if (dirty) {
+        event.preventDefault();
+        event.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  });
+  beforeNavigate(({ cancel }) => {
+    if (dirty && !confirm('Leave with unsaved changes?')) cancel();
+  });
+  $effect(() => {
+    if (
+      !loggedIn ||
+      !editing ||
+      !dirty ||
+      busy ||
+      error ||
+      !title.trim() ||
+      !category.trim() ||
+      !summary.trim()
+    )
+      return;
+    const timer = setTimeout(() => {
+      void save();
+    }, 1500);
+    return () => clearTimeout(timer);
+  });
+  async function login(event: SubmitEvent) {
+    event.preventDefault();
+    busy = true;
+    error = '';
+    try {
+      await adminRequest('/session', 'POST', { password });
+      password = '';
+      loggedIn = true;
+      await dashboard();
+    } catch (e) {
+      report(e);
+    } finally {
+      busy = false;
+    }
+  }
+  async function logout() {
+    if (dirty && !confirm('Sign out with unsaved changes?')) return;
+    busy = true;
+    try {
+      await adminRequest('/session', 'DELETE');
+      loggedIn = false;
+      editing = false;
+    } catch (e) {
+      report(e);
+    } finally {
+      busy = false;
+    }
+  }
+  async function open(article?: Article) {
+    if (dirty && !confirm('Discard unsaved changes?')) return;
+    busy = true;
+    error = '';
+    message = '';
+    try {
+      let value = article ? await adminRequest<Article>(`/articles/${article.slug}`) : undefined;
+      if (value && !value.document)
+        value = await adminRequest<Article>(`/articles/${value.slug}`, 'PUT', {});
+      storedSlug = value?.slug ?? '';
+      slug = storedSlug;
+      title = value?.title ?? '';
+      category = value?.category ?? '';
+      summary = value?.summary ?? '';
+      featured = value?.featured ?? false;
+      sortOrder = value?.sort_order ?? 0;
+      status = value?.status ?? 'draft';
+      editor.setDocument(
+        value?.document
+          ? parseDocument(value.document)
+          : { schemaVersion: 1, metadata: { language: 'en' }, blocks: [] }
+      );
+      savedRevision = revision;
+      editing = true;
+    } catch (e) {
+      report(e);
+    } finally {
+      busy = false;
+    }
+  }
+  async function save(): Promise<boolean> {
+    if (busy) return false;
+    busy = true;
+    error = '';
+    const saving = revision;
+    try {
+      const compiled = preview.diagnostics.some((d) => d.level === 'error')
+        ? undefined
+        : preview.artifact;
+      const document = {
+        ...doc,
+        metadata: { ...doc.metadata, title, language: doc.metadata?.language ?? 'en' }
+      };
+      const payload = {
+        slug: slug || undefined,
+        title,
+        category,
+        summary,
+        featured,
+        sort_order: Number(sortOrder),
+        document,
+        document_version: document.schemaVersion,
+        compiled
+      };
+      const value = await adminRequest<Article>(
+        storedSlug ? `/articles/${storedSlug}` : '/articles',
+        storedSlug ? 'PUT' : 'POST',
+        payload
+      );
+      storedSlug = value.slug;
+      slug = value.slug;
+      savedRevision = saving;
+      message = 'Saved.';
+      await dashboard();
+      return true;
+    } catch (e) {
+      report(e);
+      return false;
+    } finally {
+      busy = false;
+    }
+  }
+  async function publish() {
+    if (preview.diagnostics.some((d) => d.level === 'error')) {
+      error = 'Resolve validation errors before publishing.';
+      return;
+    }
+    if (!(await save())) return;
+    if (dirty) {
+      error = 'The document changed while saving. Save again before publishing.';
+      return;
+    }
+    busy = true;
+    try {
+      await adminRequest(`/articles/${storedSlug}/publish`, 'POST');
+      status = 'published';
+      message = 'Published.';
+      await dashboard();
+    } catch (e) {
+      report(e);
+    } finally {
+      busy = false;
+    }
+  }
+  async function unpublish() {
+    busy = true;
+    try {
+      await adminRequest(`/articles/${storedSlug}/unpublish`, 'POST');
+      status = 'draft';
+      message = 'Returned to draft.';
+      await dashboard();
+    } catch (e) {
+      report(e);
+    } finally {
+      busy = false;
+    }
+  }
+  async function removeArticle() {
+    if (!confirm(`Delete “${title}”? This cannot be undone.`)) return;
+    busy = true;
+    try {
+      await adminRequest(`/articles/${storedSlug}`, 'DELETE');
+      editing = false;
+      savedRevision = revision;
+      await dashboard();
+    } catch (e) {
+      report(e);
+    } finally {
+      busy = false;
+    }
+  }
+  async function moderate(comment: Comment, approve: boolean) {
+    if (!approve && !confirm('Delete this comment?')) return;
+    busy = true;
+    try {
+      await adminRequest(
+        `/comments/${comment.id}${approve ? '/approve' : ''}`,
+        approve ? 'POST' : 'DELETE'
+      );
+      await loadComments(comments.page);
+    } catch (e) {
+      report(e);
+    } finally {
+      busy = false;
+    }
+  }
+  function importDocument(source: string, format: string) {
+    if (!confirm('Replace the current blocks with the imported document?')) return;
+    const result = format === 'json' ? editor.fromJson(source) : editor.importMarkdown(source);
+    error = result.diagnostics.map((d) => d.message).join('\n');
+  }
+  function download(format: 'json' | 'markdown') {
+    const result = format === 'markdown' ? editor.exportMarkdown() : undefined;
+    if (result?.diagnostics.some((d) => d.level === 'error')) {
+      error = result.diagnostics.map((d) => d.message).join('\n');
+      return;
+    }
+    const source =
+      format === 'json'
+        ? JSON.stringify({ ...doc, metadata: { ...doc.metadata, title } }, null, 2)
+        : (result?.markdown ?? '');
+    const url = URL.createObjectURL(new Blob([source], { type: 'text/plain;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${slug || 'article'}.${format === 'json' ? 'json' : 'md'}`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+</script>
+
+<svelte:head
+  ><title>Publishing | Voidreg Admin</title><meta
+    name="robots"
+    content="noindex,nofollow"
+  /></svelte:head
+>
+<main
+  id="main-content"
+  class={loggedIn && editing && tab === 'articles'
+    ? 'editor-root admin'
+    : 'site-container page-shell admin'}
+>
+  {#if loggedIn && editing && tab === 'articles'}
+    <EditorWorkspace
+      {doc}
+      {editor}
+      bind:title
+      bind:summary
+      bind:slug
+      bind:category
+      bind:featured
+      bind:sortOrder
+      {storedSlug}
+      {status}
+      {busy}
+      {dirty}
+      {message}
+      {error}
+      diagnostics={preview.diagnostics}
+      {previewArticle}
+      onchange={changed}
+      onsave={save}
+      onpublish={publish}
+      onunpublish={unpublish}
+      ondelete={removeArticle}
+      onimport={importDocument}
+      onexport={download}
+      onback={() => {
+        if (!dirty || confirm('Discard unsaved changes?')) {
+          editing = false;
+          savedRevision = revision;
+        }
+      }}
+    />
+  {:else}
+    <header class="admin-bar">
+      <div>
+        <p class="eyebrow">Voidreg</p>
+        <h1>Publishing</h1>
+      </div>
+      {#if loggedIn}<button class="button button-secondary" disabled={busy} onclick={logout}
+          >Sign out</button
+        >{/if}
+    </header>
+    {#if error}<p role="alert" class="feedback">{error}</p>{/if}
+    <p role="status">{message}</p>
+    {#if restoring}<p role="status">Restoring session…</p>
+    {:else if !loggedIn}
+      <form class="publishing-form" onsubmit={login}>
+        <h2>Sign in</h2>
+        <label
+          >Admin password<input
+            type="password"
+            bind:value={password}
+            autocomplete="current-password"
+            required
+          /></label
+        ><button class="button" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
+      </form>
+    {:else}
+      <nav class="button-row" aria-label="Admin sections">
+        <button
+          class="button button-secondary"
+          aria-pressed={tab === 'articles'}
+          onclick={() => (tab = 'articles')}>Articles</button
+        ><button
+          class="button button-secondary"
+          aria-pressed={tab === 'comments'}
+          onclick={() => {
+            tab = 'comments';
+            void loadComments();
+          }}>Comments</button
+        >
+      </nav>
+      {#if tab === 'comments'}
+        <section class="section-stack">
+          <h2>Moderation queue</h2>
+          <label
+            >Status <select bind:value={commentStatus} onchange={() => loadComments()}
+              ><option value="pending">Pending</option><option value="approved">Approved</option
+              ><option value="">All</option></select
+            ></label
+          >
+          {#if comments.items.length === 0}<p>No comments in this queue.</p>{/if}
+          {#each comments.items as comment (comment.id)}<article class="moderation-row">
+              <h3>{comment.author_name}</h3>
+              <p>{comment.article_slug} · {comment.status}</p>
+              <p class="comment-body">{comment.body}</p>
+              <div class="button-row">
+                {#if comment.status === 'pending'}<button
+                    class="button"
+                    disabled={busy}
+                    onclick={() => moderate(comment, true)}>Approve</button
+                  >{/if}<button
+                  class="button button-secondary"
+                  disabled={busy}
+                  onclick={() => moderate(comment, false)}>Delete comment</button
+                >
+              </div>
+            </article>{/each}
+          <nav class="button-row" aria-label="Moderation pages">
+            <button
+              class="button button-secondary"
+              disabled={comments.page <= 1 || busy}
+              onclick={() => loadComments(comments.page - 1)}>Previous</button
+            ><button
+              class="button button-secondary"
+              disabled={comments.page * comments.per_page >= comments.total || busy}
+              onclick={() => loadComments(comments.page + 1)}>Next</button
+            >
+          </nav>
+        </section>
+      {:else}
+        <section class="section-stack">
+          <div class="admin-bar">
+            <h2>Articles</h2>
+            <button class="button" disabled={busy} onclick={() => open()}>New article</button>
+          </div>
+          {#if articles.length === 0}<p>No articles yet. Create your first draft.</p>{/if}
+          {#each articles as article (article.slug)}<article class="article-row">
+              <div>
+                <h3>{article.title}</h3>
+                <p>{article.status} · {article.category}{article.featured ? ' · Featured' : ''}</p>
+              </div>
+              <button class="button button-secondary" disabled={busy} onclick={() => open(article)}
+                >Edit</button
+              >
+            </article>{/each}
+        </section>
+      {/if}
+    {/if}
+  {/if}
+</main>
+
+<style>
+  .admin {
+    gap: 2rem;
+  }
+  .admin-bar,
+  .article-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .moderation-row,
+  .article-row {
+    padding: 1.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .feedback {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    padding: 1rem;
+    background: var(--card);
+    border-inline-start: 3px solid var(--primary);
+  }
+  select {
+    max-width: 100%;
+    min-height: 2.875rem;
+    color: var(--foreground);
+    background: var(--background);
+    border: 1px solid var(--input);
+    border-radius: var(--radius);
+    padding: 0.75rem;
+    font: inherit;
+  }
+</style>
