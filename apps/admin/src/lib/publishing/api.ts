@@ -1,5 +1,6 @@
 import type { PublicationArtifact } from '@publisle/adapter-core';
 export type Article = {
+  revision?: number;
   slug: string;
   title: string;
   category: string;

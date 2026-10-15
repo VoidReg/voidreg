@@ -2,11 +2,10 @@
   import { onMount } from 'svelte';
   import { beforeNavigate, replaceState } from '$app/navigation';
   import { DocumentEditor } from '@publisle/playground';
-  import { prepare, assertPrepared } from '@publisle/core';
-  import { compilePublication, type PublicationArtifact } from '@publisle/adapter-core';
+  import type { PublicationArtifact } from '@publisle/adapter-core';
   import { parseDocument, type Document, type Diagnostic } from '@publisle/schema';
-  import { accessibilityProfile, interactivePublicationProfile } from '@publisle/profiles';
-  import { rendererRegistry } from '$lib/publishing/renderers';
+  import { compileDocument } from '$lib/authoring';
+  import McpConnections from '$lib/McpConnections.svelte';
   import type { Article, Page } from '$lib/publishing/api';
   import { ApiError, adminRequest } from '$lib/api';
   import EditorWorkspace from '$lib/editor/EditorWorkspace.svelte';
@@ -34,9 +33,11 @@
   let articles = $state<Article[]>([]),
     comments = $state<Page<Comment>>({ items: [], page: 1, per_page: 20, total: 0 }),
     commentStatus = $state('pending');
-  let tab = $state<'articles' | 'comments'>('articles'),
+  let tab = $state<'articles' | 'comments' | 'mcp'>('articles'),
     editing = $state(false),
     storedSlug = $state('');
+  let serverRevision = $state(1),
+    conflict = $state(false);
   let slug = $state(''),
     title = $state(''),
     category = $state(''),
@@ -55,28 +56,7 @@
   });
   const preview = $derived.by(
     (): { artifact?: PublicationArtifact; diagnostics: readonly Diagnostic[] } => {
-      try {
-        const prepared = prepare(
-          {
-            ...(JSON.parse(JSON.stringify(doc)) as Document),
-            metadata: { ...doc.metadata, title, language: doc.metadata?.language ?? 'en' }
-          },
-          {
-            registry,
-            unknownBlocks: 'error',
-            profiles: [accessibilityProfile(), interactivePublicationProfile()]
-          }
-        );
-        const artifact = compilePublication(assertPrepared(prepared), {
-          renderers: rendererRegistry,
-          rawHtml: 'escape'
-        });
-        return { artifact, diagnostics: artifact.diagnostics };
-      } catch (e) {
-        return {
-          diagnostics: [{ level: 'error', code: 'validation', message: (e as Error).message }]
-        };
-      }
+      return compileDocument(JSON.parse(JSON.stringify(doc)), title);
     }
   );
   const previewArticle = $derived<Article>({
@@ -90,6 +70,7 @@
     published_at: null,
     reading_time_minutes: null,
     sections: [],
+    revision: serverRevision,
     content_hash: '',
     compiled: preview.artifact
   });
@@ -100,6 +81,11 @@
   }
   function report(e: unknown) {
     error = (e as Error).message;
+    if (e instanceof ApiError && e.status === 409 && editing) {
+      conflict = true;
+      error =
+        'This article changed elsewhere. Export your edits before reloading the latest version. Autosave is paused.';
+    }
     if (e instanceof ApiError && e.status === 401) {
       loggedIn = false;
       message = 'Your session expired. Sign in to keep editing.';
@@ -144,6 +130,9 @@
       .then(async () => {
         loggedIn = true;
         await dashboard();
+        const selected = new URLSearchParams(window.location.search).get('article');
+        const article = articles.find((a) => a.slug === selected);
+        if (article) await open(article);
       })
       .catch((e) => {
         if (!(e instanceof ApiError && e.status === 401)) report(e);
@@ -164,6 +153,7 @@
   $effect(() => {
     if (
       !loggedIn ||
+      conflict ||
       !editing ||
       !dirty ||
       busy ||
@@ -214,8 +204,12 @@
     try {
       let value = article ? await adminRequest<Article>(`/articles/${article.slug}`) : undefined;
       if (value && !value.document)
-        value = await adminRequest<Article>(`/articles/${value.slug}`, 'PUT', {});
+        value = await adminRequest<Article>(`/articles/${value.slug}`, 'PUT', {
+          expected_revision: value.revision
+        });
       storedSlug = value?.slug ?? '';
+      serverRevision = value?.revision ?? 1;
+      conflict = false;
       slug = storedSlug;
       title = value?.title ?? '';
       category = value?.category ?? '';
@@ -237,7 +231,7 @@
     }
   }
   async function save(): Promise<boolean> {
-    if (busy) return false;
+    if (busy || conflict) return false;
     busy = true;
     error = '';
     const saving = revision;
@@ -250,6 +244,7 @@
         metadata: { ...doc.metadata, title, language: doc.metadata?.language ?? 'en' }
       };
       const payload = {
+        expected_revision: storedSlug ? serverRevision : undefined,
         slug: slug || undefined,
         title,
         category,
@@ -266,6 +261,7 @@
         payload
       );
       storedSlug = value.slug;
+      serverRevision = value.revision ?? 1;
       slug = value.slug;
       savedRevision = saving;
       message = 'Saved.';
@@ -290,7 +286,12 @@
     }
     busy = true;
     try {
-      await adminRequest(`/articles/${storedSlug}/publish`, 'POST');
+      const result = await adminRequest<{ revision: number }>(
+        `/articles/${storedSlug}/publish`,
+        'POST',
+        { expected_revision: serverRevision }
+      );
+      serverRevision = result.revision;
       status = 'published';
       message = 'Published.';
       await dashboard();
@@ -303,7 +304,12 @@
   async function unpublish() {
     busy = true;
     try {
-      await adminRequest(`/articles/${storedSlug}/unpublish`, 'POST');
+      const result = await adminRequest<{ revision: number }>(
+        `/articles/${storedSlug}/unpublish`,
+        'POST',
+        { expected_revision: serverRevision }
+      );
+      serverRevision = result.revision;
       status = 'draft';
       message = 'Returned to draft.';
       await dashboard();
@@ -317,7 +323,9 @@
     if (!confirm(`Delete “${title}”? This cannot be undone.`)) return;
     busy = true;
     try {
-      await adminRequest(`/articles/${storedSlug}`, 'DELETE');
+      await adminRequest(`/articles/${storedSlug}`, 'DELETE', {
+        expected_revision: serverRevision
+      });
       editing = false;
       savedRevision = revision;
       await dashboard();
@@ -392,6 +400,8 @@
       {status}
       {busy}
       {dirty}
+      {conflict}
+      onreload={() => open({ slug: storedSlug } as Article)}
       {message}
       {error}
       diagnostics={preview.diagnostics}
@@ -475,8 +485,15 @@
             void loadComments();
           }}>Comments</button
         >
+        <button
+          class="button button-secondary"
+          aria-pressed={tab === 'mcp'}
+          onclick={() => (tab = 'mcp')}>MCP connections</button
+        >
       </nav>
-      {#if tab === 'comments'}
+      {#if tab === 'mcp'}
+        <McpConnections />
+      {:else if tab === 'comments'}
         <section class="section-stack">
           <h2>Moderation queue</h2>
           <label

@@ -24,6 +24,8 @@
     status: 'draft' | 'published';
     busy: boolean;
     dirty: boolean;
+    conflict: boolean;
+    onreload: () => unknown;
     message: string;
     error: string;
     diagnostics: readonly Diagnostic[];
@@ -50,6 +52,8 @@
     status,
     busy,
     dirty,
+    conflict,
+    onreload,
     message,
     error,
     diagnostics,
@@ -76,13 +80,15 @@
   const errors = $derived(diagnostics.filter((item) => item.level === 'error'));
   const readyToSave = $derived(Boolean(title.trim() && summary.trim() && category.trim()));
   const saveStatus = $derived(
-    busy
-      ? 'Saving…'
-      : dirty && !readyToSave
-        ? 'Complete title, summary, and category to enable autosave.'
-        : dirty
-          ? 'Unsaved changes'
-          : message || (storedSlug ? 'All changes saved' : 'Not saved yet')
+    conflict
+      ? 'Autosave paused. Resolve the editing conflict.'
+      : busy
+        ? 'Saving…'
+        : dirty && !readyToSave
+          ? 'Complete title, summary, and category to enable autosave.'
+          : dirty
+            ? 'Unsaved changes'
+            : message || (storedSlug ? 'All changes saved' : 'Not saved yet')
   );
   const wordCount = $derived(outlineText(doc.blocks).trim().match(/\S+/g)?.length ?? 0);
 
@@ -171,9 +177,11 @@
       <h1 class="workspace-title">Article editor</h1>
     </div>
     <div class="editor-primary-actions">
-      <button class="editor-button secondary" disabled={busy} onclick={onsave}>Save</button><button
+      <button class="editor-button secondary" disabled={busy || conflict} onclick={onsave}
+        >Save</button
+      ><button
         class="editor-button primary"
-        disabled={busy || errors.length > 0 || !readyToSave}
+        disabled={busy || conflict || errors.length > 0 || !readyToSave}
         onclick={onpublish}>{status === 'published' ? 'Update' : 'Publish'}</button
       >
     </div>
@@ -210,6 +218,19 @@
     <p role="status">{saveStatus}</p>
     <span class="document-count">{doc.blocks.length} blocks · {wordCount} words</span>
   </div>
+  {#if conflict}
+    <section class="editor-notice" aria-label="Resolve editing conflict">
+      <p>Export your local edits, then reload the saved article to continue.</p>
+      <div class="button-row">
+        <button class="button button-secondary" onclick={() => onexport('json')}
+          >Export local edits</button
+        >
+        <button class="button button-secondary" disabled={busy} onclick={onreload}
+          >Reload saved article</button
+        >
+      </div>
+    </section>
+  {/if}
   {#if error}<div class="editor-notice" role="alert">{error}</div>{/if}
   {#if errors.length > 0}<div class="editor-notice validation-notice">
       <p>
@@ -532,9 +553,9 @@
               <div class="inspector-fields">
                 <button
                   class="editor-button secondary"
-                  disabled={busy || status === 'draft'}
+                  disabled={busy || conflict || status === 'draft'}
                   onclick={onunpublish}>Unpublish article</button
-                ><button class="editor-button danger" disabled={busy} onclick={ondelete}
+                ><button class="editor-button danger" disabled={busy || conflict} onclick={ondelete}
                   >Delete article</button
                 >
               </div>
