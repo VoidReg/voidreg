@@ -40,3 +40,16 @@ Publisle dependencies are packed locally. Build the sibling Publisle repo, run
 `pnpm check`, and `pnpm build`. Commit the file dependency pins, tarballs, and
 lockfile together. Preview components are shared with the admin via its refresh
 script; keep that snapshot current when renderer behavior changes.
+
+## Live blog and discussions
+
+The home page and blog index share API-backed article previews with working
+reader links, publication dates, and reading times. Unpublished placeholders
+are removed. Loading, empty, and retry states reflect the live API.
+
+Discussion threads have inline reply composers, replies to replies, separate
+reply pagination, parent context, and permanent comment links. Logical reply
+ancestry stays intact while replies use a compact visual indent on phones.
+Drafts survive submission errors, and cancelling restores the reply button's
+focus. Anonymous replies await moderation. Removed ancestors keep a content-free
+placeholder when needed by approved descendants. OAuth returns to the article.

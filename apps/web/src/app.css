@@ -729,3 +729,16 @@
   font-size: 1.25rem;
   line-height: 1.3;
 }
+
+/* Navigation also responds to enlarged text within the available header width. */
+.site-header {
+  container: site-header / inline-size;
+}
+@container site-header (max-width: 63.999rem) {
+  .desktop-only {
+    display: none;
+  }
+  .mobile-only {
+    display: inline-flex;
+  }
+}

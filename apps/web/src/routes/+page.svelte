@@ -4,20 +4,26 @@
   import ProjectCard from '$lib/components/ProjectCard.svelte';
   import { projects } from '$lib/data/projects';
 
-  const posts = [
-    {
-      category: 'Design Engineering / Draft',
-      title: 'How to validate a semantic color system',
-      summary:
-        'A practical approach to testing contrast, interaction states, and theme consistency.'
-    },
-    {
-      category: 'Systems / Draft',
-      title: 'What building an HTTP server teaches about protocol design',
-      summary:
-        'Parsing, connection lifecycles, and the boundary between a protocol and its implementation.'
+  import { onMount } from 'svelte';
+  import ArticleCard from '$lib/publishing/ArticleCard.svelte';
+  import { getPublic, type Article, type Page } from '$lib/publishing/api';
+  let posts = $state<Article[]>([]),
+    postsLoading = $state(true),
+    postsError = $state('');
+  async function loadPosts(force = false) {
+    postsLoading = true;
+    postsError = '';
+    try {
+      posts = (await getPublic<Page<Article>>('/blogs?per_page=3', undefined, force)).items;
+    } catch {
+      postsError = 'Latest articles could not be loaded.';
+    } finally {
+      postsLoading = false;
     }
-  ];
+  }
+  onMount(() => {
+    void loadPosts();
+  });
 </script>
 
 <svelte:head>
@@ -38,9 +44,9 @@
         bare-metal development, AI, and performance optimization.
       </p>
       <div class="button-row">
-        <a class="button" href={resolve('/projects')}>View projects</a><span
-          class="button button-secondary button-disabled"
-          aria-disabled="true">Read the blog</span
+        <a class="button" href={resolve('/projects')}>View projects</a><a
+          class="button button-secondary"
+          href={resolve('/blog')}>Read the blog</a
         >
       </div>
     </div>
@@ -76,17 +82,16 @@
       <h2 id="latest-posts" class="section-heading">Latest Blog Posts</h2>
     </div>
     <div class="post-list">
-      {#each posts as post (post.title)}
-        <article class="post-preview">
-          <p class="eyebrow">{post.category}</p>
-          <h3>{post.title}</h3>
-          <p>{post.summary}</p>
-          <p class="placeholder-note">Unpublished · date and reading time pending</p>
-        </article>
-      {/each}
+      {#if postsLoading}<p role="status">Loading latest articles…</p>
+      {:else if postsError}<p role="alert">{postsError}</p>
+        <button class="button button-secondary" onclick={() => loadPosts(true)}>Try again</button>
+      {:else if posts.length === 0}<p>No articles published yet. Check back soon.</p>
+      {:else}{#each posts as article (article.slug)}<ArticleCard
+            {article}
+            heading="h3"
+          />{/each}{/if}
     </div>
-    <span class="control-disabled text-link" aria-disabled="true"
-      >View all blogs <span aria-hidden="true">→</span></span
+    <a class="text-link" href={resolve('/blog')}>View all blogs <span aria-hidden="true">→</span></a
     >
   </section>
 
@@ -128,19 +133,6 @@
   .post-list {
     display: grid;
   }
-  .post-preview {
-    display: grid;
-    gap: 0.65rem;
-    border-bottom: 1px solid var(--border);
-    padding-block: 1.5rem;
-  }
-  .post-preview:first-child {
-    padding-top: 0;
-  }
-  .post-preview h3 {
-    font-size: 1.5rem;
-    line-height: 1.3;
-  }
   @media (max-width: 63.999rem) {
     .hero {
       grid-template-columns: 1fr;
@@ -153,9 +145,6 @@
     .hero-mark :global(svg) {
       width: 10rem;
       height: 10rem;
-    }
-    .post-preview h3 {
-      font-size: 1.25rem;
     }
   }
 </style>

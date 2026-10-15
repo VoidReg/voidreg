@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import ArticleCard from '$lib/publishing/ArticleCard.svelte';
   import { resolve } from '$app/paths';
   import { getPublic, type Article, type Page } from '$lib/publishing/api';
   let result = $state<Page<Article>>({ items: [], page: 1, per_page: 20, total: 0 });
@@ -43,21 +44,8 @@
     </div>
   {:else if result.items.length === 0}<p>No articles published yet. Check back soon.</p>
   {:else}
-    <section class="card-grid" aria-label="Articles">
-      {#each result.items as article (article.slug)}
-        <article class="project-card">
-          <p class="eyebrow">{article.category}</p>
-          <h2>
-            <a class="text-link" href={resolve('/blog/[slug]', { slug: article.slug })}
-              >{article.title}</a
-            >
-          </h2>
-          <p>{article.summary}</p>
-          <p class="placeholder-note">
-            {article.reading_time_minutes ? `${article.reading_time_minutes} min read` : ''}
-          </p>
-        </article>
-      {/each}
+    <section class="article-list" aria-label="Articles">
+      {#each result.items as article (article.slug)}<ArticleCard {article} />{/each}
     </section>
     <nav class="button-row" aria-label="Article pages">
       <button
@@ -72,3 +60,9 @@
     </nav>
   {/if}
 </main>
+
+<style>
+  .article-list {
+    width: min(100%, 68ch);
+  }
+</style>
