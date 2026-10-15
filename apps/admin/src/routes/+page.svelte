@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { beforeNavigate } from '$app/navigation';
+  import { beforeNavigate, replaceState } from '$app/navigation';
   import { DocumentEditor } from '@publisle/playground';
   import { prepare, assertPrepared } from '@publisle/core';
   import { compilePublication, type PublicationArtifact } from '@publisle/adapter-core';
@@ -131,10 +131,9 @@
       rejectedAccount = params.get('account') ?? '';
       params.delete('auth_error');
       params.delete('account');
-      history.replaceState(
-        null,
-        '',
-        window.location.pathname + (params.size ? '?' + params : '') + window.location.hash
+      replaceState(
+        window.location.pathname + (params.size ? '?' + params : '') + window.location.hash,
+        {}
       );
     }
     void loadLoginOptions();
