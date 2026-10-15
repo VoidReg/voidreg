@@ -22,6 +22,9 @@
   let restoring = $state(true),
     loggedIn = $state(false),
     password = $state(''),
+    loginOptions = $state<{ providers: string[]; password_enabled: boolean } | null>(null),
+    loginOptionsError = $state(''),
+    rejectedAccount = $state(''),
     error = $state(''),
     message = $state(''),
     busy = $state(false);
@@ -109,7 +112,32 @@
       report(e);
     }
   }
+  async function loadLoginOptions() {
+    loginOptionsError = '';
+    try {
+      loginOptions = await adminRequest('/login-options');
+    } catch {
+      loginOptionsError = 'Could not load sign-in options. Please try again.';
+    }
+  }
   onMount(() => {
+    const params = new URLSearchParams(window.location.search);
+    const authError = params.get('auth_error');
+    if (authError) {
+      error =
+        authError === 'not_authorized'
+          ? 'This account does not have admin access.'
+          : 'Sign-in was cancelled. Please try again.';
+      rejectedAccount = params.get('account') ?? '';
+      params.delete('auth_error');
+      params.delete('account');
+      history.replaceState(
+        null,
+        '',
+        window.location.pathname + (params.size ? '?' + params : '') + window.location.hash
+      );
+    }
+    void loadLoginOptions();
     void adminRequest('/session')
       .then(async () => {
         loggedIn = true;
@@ -394,17 +422,43 @@
     <p role="status">{message}</p>
     {#if restoring}<p role="status">Restoring session…</p>
     {:else if !loggedIn}
-      <form class="publishing-form" onsubmit={login}>
-        <h2>Sign in</h2>
-        <label
-          >Admin password<input
-            type="password"
-            bind:value={password}
-            autocomplete="current-password"
-            required
-          /></label
-        ><button class="button" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
-      </form>
+      <section class="publishing-form" aria-labelledby="sign-in-title">
+        <h2 id="sign-in-title">Sign in</h2>
+        <p>Use your approved GitHub or Google account to manage publishing.</p>
+        {#if rejectedAccount}<p>Account ID: <code>{rejectedAccount}</code></p>{/if}
+        {#if loginOptionsError}
+          <p role="alert">{loginOptionsError}</p>
+          <button class="button button-secondary" onclick={loadLoginOptions}>Retry</button>
+        {:else if !loginOptions}
+          <p role="status">Loading sign-in options…</p>
+        {:else}
+          <div class="button-row">
+            {#each loginOptions.providers as provider}
+              <a class="button" href={'/api/v1/auth/' + provider + '/start?purpose=admin'}>
+                Continue with {provider === 'github' ? 'GitHub' : 'Google'}
+              </a>
+            {/each}
+          </div>
+          {#if loginOptions.providers.length === 0 && !loginOptions.password_enabled}
+            <p>Admin sign-in is not available yet. Contact the site owner.</p>
+          {/if}
+          {#if loginOptions.password_enabled}
+            <form onsubmit={login} class="publishing-form">
+              <label
+                >Admin password<input
+                  type="password"
+                  bind:value={password}
+                  autocomplete="current-password"
+                  required
+                /></label
+              >
+              <button class="button button-secondary" disabled={busy}
+                >{busy ? 'Signing in…' : 'Sign in with password'}</button
+              >
+            </form>
+          {/if}
+        {/if}
+      </section>
     {:else}
       <nav class="button-row" aria-label="Admin sections">
         <button
