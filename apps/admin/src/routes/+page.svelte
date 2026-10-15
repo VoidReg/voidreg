@@ -131,10 +131,10 @@
       rejectedAccount = params.get('account') ?? '';
       params.delete('auth_error');
       params.delete('account');
-      replaceState(
-        window.location.pathname + (params.size ? '?' + params : '') + window.location.hash,
-        {}
-      );
+      const cleanUrl =
+        window.location.pathname + (params.size ? '?' + params : '') + window.location.hash;
+      // Initial mount runs before SvelteKit finishes initializing its router.
+      setTimeout(() => replaceState(cleanUrl, {}), 0);
     }
     void loadLoginOptions();
     void adminRequest('/session')
