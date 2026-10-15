@@ -16,12 +16,8 @@
       <strong>{comment.author_name}</strong>{#if comment.verified}<small>Verified account</small
         >{/if}
     </p>
-    <a
-      class="comment-date"
-      href={'#comment-' + comment.id}
-      aria-label={'Link to comment by ' + comment.author_name}
-      ><time datetime={comment.created_at}>{new Date(comment.created_at).toLocaleDateString()}</time
-      ></a
+    <time class="comment-date" datetime={comment.created_at}
+      >{new Date(comment.created_at).toLocaleDateString()}</time
     >
   </header>
   {#if comment.replying_to}<p class="reply-context">Replying to {comment.replying_to}</p>{/if}
@@ -57,12 +53,6 @@
   .reply-context {
     color: var(--muted-foreground);
     font-size: 0.875rem;
-  }
-  .comment-date {
-    display: inline-flex;
-    align-items: center;
-    min-height: 2.75rem;
-    text-decoration: underline;
   }
   .comment-body {
     margin: 0;

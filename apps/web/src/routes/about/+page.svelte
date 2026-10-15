@@ -29,8 +29,8 @@
     <div class="button-row">
       <a class="button" href={resolve('/projects')}
         >Explore projects <span aria-hidden="true">→</span></a
-      ><span class="button button-secondary button-disabled" aria-disabled="true"
-        >Read the blog <span aria-hidden="true">→</span></span
+      ><a class="button button-secondary" href={resolve('/blog')}
+        >Read the blog <span aria-hidden="true">→</span></a
       >
     </div>
   </section>
@@ -98,8 +98,8 @@
           Articles are where implementation decisions, mathematical models and engineering
           trade-offs are examined more closely.
         </p>
-        <span class="button button-secondary button-disabled" aria-disabled="true"
-          >Read the blog <span aria-hidden="true">→</span></span
+        <a class="button button-secondary" href={resolve('/blog')}
+          >Read the blog <span aria-hidden="true">→</span></a
         >
       </article>
     </div>

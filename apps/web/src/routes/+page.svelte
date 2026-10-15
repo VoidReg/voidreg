@@ -103,6 +103,9 @@
 </main>
 
 <style>
+  .home-page {
+    container: home-content / inline-size;
+  }
   .hero {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 18rem;
@@ -145,6 +148,22 @@
     .hero-mark :global(svg) {
       width: 10rem;
       height: 10rem;
+    }
+  }
+  @container home-content (max-width: 59.999rem) {
+    .hero {
+      grid-template-columns: 1fr;
+    }
+    .hero-mark {
+      order: 2;
+    }
+    .card-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @container home-content (max-width: 43.999rem) {
+    .card-grid {
+      grid-template-columns: 1fr;
     }
   }
 </style>
