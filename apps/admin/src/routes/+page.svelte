@@ -13,6 +13,9 @@
   import { extensions, registry } from '$lib/blocks';
 
   type Comment = {
+    parent_id: string | null;
+    parent_author: string | null;
+    parent_body: string | null;
     id: string;
     article_slug: string;
     author_name: string;
@@ -486,6 +489,11 @@
           {#each comments.items as comment (comment.id)}<article class="moderation-row">
               <h3>{comment.author_name}</h3>
               <p>{comment.article_slug} · {comment.status}</p>
+              {#if comment.parent_id}<p>Reply to {comment.parent_author ?? 'another reader'}</p>
+                {#if comment.parent_body}<blockquote class="comment-body">
+                    {comment.parent_body}
+                  </blockquote>{/if}
+              {/if}
               <p class="comment-body">{comment.body}</p>
               <div class="button-row">
                 {#if comment.status === 'pending'}<button
