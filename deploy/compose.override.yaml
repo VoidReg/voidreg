@@ -2,6 +2,9 @@ services:
   api:
     build:
       context: ../voidreg-api
+  mcp:
+    environment:
+      PUBLIC_BASE_URL: http://localhost:8080
   nginx:
     ports: !override
       - "127.0.0.1:8080:80"
