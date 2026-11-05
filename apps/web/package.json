@@ -44,6 +44,7 @@
   "dependencies": {
     "@publisle/markdown": "catalog:",
     "@publisle/schema": "catalog:",
-    "@voidreg/publishing-ui": "workspace:*"
+    "@voidreg/publishing-ui": "workspace:*",
+    "isomorphic-dompurify": "^2.36.0"
   }
 }

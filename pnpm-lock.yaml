@@ -259,6 +259,9 @@ importers:
       '@voidreg/publishing-ui':
         specifier: workspace:*
         version: link:../../packages/publishing-ui
+      isomorphic-dompurify:
+        specifier: ^2.36.0
+        version: 2.36.0
     devDependencies:
       '@eslint/js':
         specifier: ^10.0.1

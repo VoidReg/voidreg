@@ -10,6 +10,8 @@ export default defineConfig({
       '/media': process.env.VOIDREG_API_PROXY ?? 'http://127.0.0.1:8080'
     }
   },
+  // Keep jsdom-backed DOMPurify out of the server bundle; it needs its own node_modules.
+  ssr: { external: ['isomorphic-dompurify'] },
   build: { sourcemap: false, reportCompressedSize: false },
   plugins: [
     tailwindcss(),
