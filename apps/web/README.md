@@ -4,7 +4,7 @@ Personal Blog
 
 ## Server-rendered projects and blog
 
-Run `pnpm install --frozen-lockfile`, `pnpm check`, and `pnpm build`. The output
+From the repository root run `pnpm install --frozen-lockfile`, `pnpm --filter voidreg-web check`, and `pnpm --filter voidreg-web build`. The output
 is a SvelteKit Node server; start it with `node build` or build the supplied
 Dockerfile. Set `VOIDREG_API_URL` to the server-only API origin and `ORIGIN` to
 the public site origin. The site no longer deploys to GitHub Pages.
@@ -29,16 +29,15 @@ be retried. Comments render plain text and remain hidden until approved.
 Configured OAuth providers are discovered from `/api/v1/auth/providers`.
 
 PublisleArticle renders sanitized artifacts and activates only local host-approved
-islands from `src/lib/publishing/renderers.ts`. Unknown implementations keep the
+islands from `packages/publishing-ui/src/renderers.ts`. Unknown implementations keep the
 static alternative. Raw HTML scripts, iframe embeds, forms, and styles are removed
 by the host sanitizer. Approved remote embeds should be added through an explicit
 provider policy rather than generic iframe passthrough.
 
-Publisle dependencies are packed locally. Build the sibling Publisle repo, run
-`python3 scripts/refresh-publisle.py --source ../publisle`, then `pnpm install`,
-`pnpm check`, and `pnpm build`. Commit the file dependency pins, tarballs, and
-lockfile together. Preview components are shared with the admin via its refresh
-script; keep that snapshot current when renderer behavior changes.
+Publisle packages come from the public npm registry; versions are declared once in
+the `catalog:` section of the root `pnpm-workspace.yaml`. `PublisleArticle`, the
+sanitizer and the renderer allowlist live in `packages/publishing-ui` and are shared
+with the admin preview, so there is no copy to keep in sync.
 
 ## Live blog and discussions
 

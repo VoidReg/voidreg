@@ -30,7 +30,7 @@ both working and published article versions.
 
 ## Hosting
 
-`voidreg-web` now runs a SvelteKit Node server behind nginx. `VOIDREG_API_URL`
+`apps/web` now runs a SvelteKit Node server behind nginx. `VOIDREG_API_URL`
 is its server-only API origin (Docker default: `http://api:8080`). The admin
 remains a static application. The old GitHub Pages publishing workflow is
 replaced by an explicitly triggered server-artifact build.
@@ -62,8 +62,8 @@ pnpm build
 # Dashboard
 pnpm install --frozen-lockfile
 pnpm check
-pnpm mcp:check
-pnpm mcp:test
+pnpm --filter voidreg-mcp check
+pnpm --filter voidreg-mcp test
 pnpm build
 # Compose
  docker compose config --quiet

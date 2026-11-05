@@ -1,13 +1,13 @@
 # Voidreg Admin
 
 SvelteKit dashboard for database-backed projects, articles, and media. Static output lives in
-`build` and is served at `/admin/` by voidreg-solution. No deployment is required
+`build` and is served at `/admin/` by the nginx service in `deploy/`. No deployment is required
 to publish a new article.
 
 Run `pnpm install`, `pnpm check`, and `pnpm build`. For development, start the API
 at localhost:8080, then `pnpm dev`. Requests proxy to the API. Set
 `VOIDREG_API_PROXY` to override the development target. Configure provider OAuth credentials and approved account IDs as described in
-voidreg-api/PUBLISHING.md. Password login is disabled by default and can be
+`apps/api/PUBLISHING.md`. Password login is disabled by default and can be
 explicitly enabled for local development.
 
 The editor supports all core block types, footnotes, technical schematics, and a
@@ -29,13 +29,13 @@ move controls. Markdown export uses the lossless archival grammar to preserve co
 payloads, metadata, and block IDs. JSON export remains available. Imports replace the active document after
 confirmation. Core schema and accessibility diagnostics appear next to preview.
 
-Custom definitions live in `src/lib/blocks.ts`. Register a namespaced type, schema
+Custom definitions live in `packages/authoring/src/blocks.ts`. Register a namespaced type, schema
 parser, descriptor payload schema, editable field specs, and default content.
 `SchemaPayload.svelte` renders number, string, and boolean payload forms; complex
 payloads use JSON. Reader-approved island implementations and compile renderer
-mapping live in `src/lib/publishing/renderers.ts`. Add the same renderer to
-voidreg-web first, then run `python3 scripts/refresh-site-renderers.py` here.
-The shared source is the reader repository; admin keeps a reviewed snapshot.
+mapping live in `packages/publishing-ui/src/renderers.ts`. That package is the
+single source for the reader, the admin preview, the MCP service and the
+publishing compiler, so a renderer is added once.
 
 Both previews and public reading sanitize compiled HTML. Arbitrary stored module
 URLs are never loaded. The counter is an authoring example, not a circuit
@@ -43,13 +43,13 @@ simulator. Technical schematics currently show their authored static alternative
 until the host supplies a reviewed schematic implementation. Unsupported diagram
 engines and embeds similarly retain authored fallbacks. Raw HTML is escaped.
 
-Dependencies use locally packed Publisle tarballs plus pnpm workspace overrides
-for all transitive Publisle packages. Build Publisle, then run
-`python3 scripts/refresh-publisle.py --source ../publisle` to refresh the pins.
-Run install, checks, and build after refreshing. Keep tarballs and lockfile together.
-The Vite alias for the packed playground Svelte source works around its current
-dist component importing `./index.ts`. Remove the alias after upstream packaging
-is fixed and verified. No changes to Publisle source are required.
+Publisle packages come from the public npm registry, with versions declared once in
+the `catalog:` section of the root `pnpm-workspace.yaml`. Dependabot proposes
+upgrades as a single grouped pull request. The `publisle-playground-dist-imports`
+plugin in `vite.config.ts` works around `@publisle/playground` publishing
+`dist/*.svelte` files that import `./x.ts` modules which only exist as `./x.js`.
+Remove the plugin once a published release fixes this and the build is verified.
+No changes to the Publisle repository are required.
 
 OAuth provider exchange requires real credentials and remains a deployment check.
 Penpot reconciliation is deferred per PLAN-publishing-integration.md. This app

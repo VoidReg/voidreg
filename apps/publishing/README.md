@@ -12,7 +12,7 @@ Readers load no static diagram engine. Interactive blocks retain their own loade
 
 ## Deployment
 
-Use the publishing service in `voidreg-solution/compose.yaml`. Set a strong shared
+Use the publishing service in `deploy/compose.yaml`. Set a strong shared
 `COMPILER_TOKEN` in the solution's private `.env`. Only the API and worker need
 this token. Set API `COMPILER_URL` to the internal service URL. Never expose the
 worker port through a public proxy. Its health check is unauthenticated; rendering,
@@ -34,7 +34,7 @@ Mermaid loader, regenerate any existing diagram publications:
 
 ```sh
 PUBLISHING_ORIGIN=https://www.voidreg.xyz \
-ADMIN_COOKIE_FILE=/private/admin-cookie.txt node publishing/migrate.mjs
+ADMIN_COOKIE_FILE=/private/admin-cookie.txt node apps/publishing/migrate.mjs
 ```
 
 The cookie file contains the Cookie header from an authenticated administrator
@@ -47,16 +47,16 @@ cookie file afterward. Deploy the admin and reader after migration succeeds.
 ## Local checks
 
 ```sh
-pnpm check
-pnpm exec tsc -p publishing/tsconfig.json
-pnpm mcp:check
-pnpm mcp:test
-pnpm publishing:build
-COMPILER_TOKEN=local-test-secret node publishing/smoke.mjs
+pnpm --filter voidreg-admin check
+pnpm --filter voidreg-publishing check
+pnpm --filter voidreg-mcp check
+pnpm --filter voidreg-mcp test
+pnpm --filter voidreg-publishing build
+COMPILER_TOKEN=local-test-secret pnpm --filter voidreg-publishing smoke
 ```
 
 For local development set `COMPILER_TOKEN`, `CHROMIUM_PATH`, `PLANTUML_JAR` and
-optionally `COMPILER_DATA_PATH`, then run `pnpm publishing:dev`. The worker listens
+optionally `COMPILER_DATA_PATH`, then run `pnpm --filter voidreg-publishing dev`. The worker listens
 on loopback port 18084 by default. API tests use an isolated compiler fixture;
 `smoke.mjs` checks all four real engines, both PNG themes, invalid diagram source,
 and invalid LaTeX against the running worker.

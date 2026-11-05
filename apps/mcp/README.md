@@ -48,15 +48,15 @@ browser pauses autosave on conflict and offers local JSON export before reload.
 
 ## Development and deployment
 
-Run `pnpm mcp:check`, `pnpm mcp:test`, `pnpm check`, `pnpm build`, and
-`pnpm mcp:build`. The integration tests use real HTTP MCP clients in legacy and
+Run `pnpm --filter voidreg-mcp check`, `pnpm --filter voidreg-mcp test`, `pnpm check`,
+`pnpm build`, and `pnpm --filter voidreg-mcp build`. The integration tests use real HTTP MCP clients in legacy and
 current negotiation modes. Rust integration tests cover token authorization and
 storage permissions.
 
 For development, set `MCP_API_URL` to the Rust API origin and `PUBLIC_BASE_URL`
-to the public origin that clients use, then run `pnpm mcp:dev`. The process binds
-loopback by default. Production uses `mcp/Dockerfile` and the solution Compose
-service. Nginx exposes only `/mcp`, denying the internal Rust bridge prefix.
+to the public origin that clients use, then run `pnpm --filter voidreg-mcp dev`. The process binds
+loopback by default. Production uses `apps/mcp/Dockerfile` and the `mcp` service in
+`deploy/compose.yaml`. Nginx exposes only `/mcp`, denying the internal Rust bridge prefix.
 
 The service has no database volume. It forwards each request's bearer token to
 Rust, which rechecks expiry, revocation, and the GitHub administrator allowlist.
