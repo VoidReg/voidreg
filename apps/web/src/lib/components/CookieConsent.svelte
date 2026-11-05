@@ -161,7 +161,6 @@
     inset: auto 0 0;
     border-top: 1px solid var(--border);
     background: var(--background);
-    box-shadow: 0 -12px 28px color-mix(in srgb, var(--foreground) 10%, transparent);
   }
 
   .cookie-banner-inner {
@@ -221,11 +220,10 @@
     overflow: auto;
     display: grid;
     gap: 1rem;
-    border: 1px solid var(--border);
+    border: 2px solid var(--foreground);
     border-radius: var(--radius);
     background: var(--background);
     padding: 1.5rem;
-    box-shadow: 0 16px 40px color-mix(in srgb, #000 18%, transparent);
   }
 
   .cookie-dialog-form h2 {

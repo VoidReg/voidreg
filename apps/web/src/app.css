@@ -96,7 +96,13 @@
     --radius: 0;
     --duration-fast: 120ms;
     --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --duration-medium: 240ms;
+    --duration-reveal: 640ms;
+    --section-gap: 5rem;
+    --header-height: 5rem;
     scroll-behavior: smooth;
+    scroll-padding-block-start: calc(var(--header-height) + 1rem);
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -181,9 +187,12 @@
   }
 
   .site-header {
-    position: relative;
+    position: sticky;
+    inset-block-start: 0;
     z-index: 20;
     min-height: 5rem;
+    border-block-end: 1px solid var(--border);
+    background: var(--background);
   }
 
   .header-inner {
@@ -245,12 +254,30 @@
     padding-inline: 1.5rem;
   }
 
+  .nav-link {
+    position: relative;
+  }
+
+  .nav-link::after {
+    content: '';
+    position: absolute;
+    inset-block-end: 0.375rem;
+    inset-inline: 1rem;
+    height: 3px;
+    background: var(--primary);
+    transform: scaleX(0);
+    transform-origin: left center;
+    transition: transform var(--duration-medium) var(--ease-out);
+  }
+
   .nav-link:hover,
   .nav-link[aria-current='page'] {
-    background: var(--muted);
     color: var(--link-hover);
-    text-decoration: underline;
-    text-underline-offset: 0.25em;
+  }
+
+  .nav-link:hover::after,
+  .nav-link[aria-current='page']::after {
+    transform: scaleX(1);
   }
 
   .nav-link-disabled,
@@ -303,11 +330,10 @@
     inset: calc(100% - 0.25rem) 1.5rem auto;
     display: grid;
     gap: 0.25rem;
-    border: 1px solid var(--border);
+    border: 1px solid var(--input);
     border-radius: var(--radius);
     background: var(--background);
     padding: 0.75rem;
-    box-shadow: 0 12px 28px color-mix(in srgb, var(--foreground) 12%, transparent);
   }
 
   .mobile-menu .nav-link {
@@ -389,12 +415,19 @@
     font-weight: 500;
     line-height: 1.2;
     text-decoration: none;
-    transition: background-color var(--duration-fast) var(--ease-standard);
+    transition:
+      background-color var(--duration-fast) var(--ease-standard),
+      translate var(--duration-fast) var(--ease-standard);
   }
 
   .button:hover {
     border-color: var(--primary-hover);
     background: var(--primary-hover);
+    translate: 0 -2px;
+  }
+
+  .button:active {
+    translate: 0;
   }
 
   .button-secondary {
@@ -433,15 +466,22 @@
   }
 
   .project-card {
+    position: relative;
     display: flex;
     min-width: 0;
     min-height: 19rem;
     flex-direction: column;
     align-items: flex-start;
+    border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--card);
     color: var(--card-foreground);
     padding: 1.5rem;
+    transition:
+      background-color var(--duration-medium) var(--ease-standard),
+      border-color var(--duration-medium) var(--ease-standard),
+      color var(--duration-medium) var(--ease-standard),
+      translate var(--duration-medium) var(--ease-out);
   }
 
   .project-card :is(h2, h3) {
@@ -467,8 +507,10 @@
     background: var(--background);
     color: var(--muted-foreground);
     padding: 0.15rem 0.6rem;
-    font-size: 0.8125rem;
-    font-weight: 500;
+    font-family: var(--font-code);
+    font-size: 0.75rem;
+    font-weight: 400;
+    line-height: 1.5;
   }
 
   .project-card .button {

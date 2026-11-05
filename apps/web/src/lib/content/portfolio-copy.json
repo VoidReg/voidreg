@@ -30,5 +30,13 @@
   "blogDescription": "Personal notes, questions, and experiments in hardware and software.",
   "blogEyebrow": "Personal notes",
   "blogTitle": "Blog",
-  "blogIntro": "Ideas, experiments, and things I learn while exploring hardware and software."
+  "blogIntro": "Ideas, experiments, and things I learn while exploring hardware and software.",
+  "heroNote": "Independent portfolio | projects, experiments, and technical notes",
+  "workLabel": "01 / FEATURED PROJECTS",
+  "workTitle": "Selected projects",
+  "notesLabel": "02 / BLOGS",
+  "notesTitle": "Latest Blog Posts",
+  "contactLabel": "07 / CONTACT",
+  "contactBandTitle": "Want to compare notes?",
+  "contactAction": "Get in touch"
 }

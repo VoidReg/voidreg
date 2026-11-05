@@ -1,5 +1,6 @@
 <script lang="ts">
   import '../app.css';
+  import '$lib/styles/landing.css';
   import { page } from '$app/state';
   import CookieConsent from '$lib/components/CookieConsent.svelte';
   import ErrorHeader from '$lib/components/ErrorHeader.svelte';

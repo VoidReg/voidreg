@@ -20,7 +20,7 @@
   </header>
   {#if result.items.length === 0}<EmptyContent kind="articles" heading="h2" />
   {:else}
-    <section class="article-list" aria-label="Articles">
+    <section class="note-list" aria-label="Articles">
       {#each result.items as article (article.slug)}<ArticleCard {article} />{/each}
     </section>
     <nav class="button-row" aria-label="Article pages">
@@ -34,9 +34,3 @@
     </nav>
   {/if}
 </main>
-
-<style>
-  .article-list {
-    width: min(100%, 68ch);
-  }
-</style>

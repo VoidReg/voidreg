@@ -4,10 +4,20 @@
   import heroDark from '$lib/assets/hero-mark-dark.svg';
   import heroLight from '$lib/assets/hero-mark-light.svg';
 
-  let { size = 32, extruded = false }: { size?: number; extruded?: boolean } = $props();
+  let {
+    size = 32,
+    extruded = false,
+    fluid = false
+  }: { size?: number; extruded?: boolean; fluid?: boolean } = $props();
 </script>
 
-<span class="brand-mark" style:width={`${size}px`} style:height={`${size}px`} aria-hidden="true">
+<span
+  class="brand-mark"
+  style:width={fluid ? '100%' : `${size}px`}
+  style:height={fluid ? 'auto' : `${size}px`}
+  style:aspect-ratio={fluid ? '1' : undefined}
+  aria-hidden="true"
+>
   <img
     class="light-mark"
     src={extruded ? heroLight : flatLight}

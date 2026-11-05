@@ -57,10 +57,12 @@
   {#if data.posts.total}<ReadingColumn>
       <section class="section-stack" aria-labelledby="project-posts">
         <h2 id="project-posts" class="section-heading">Writing about this project</h2>
-        {#each data.posts.items as article (article.slug)}<ArticleCard
-            {article}
-            heading="h3"
-          />{/each}
+        <div class="note-list">
+          {#each data.posts.items as article (article.slug)}<ArticleCard
+              {article}
+              heading="h3"
+            />{/each}
+        </div>
         <nav class="button-row" aria-label="Related post pages">
           {#if data.posts.page > 1}<a
               href={resolve(`/projects/[slug]?page=${data.posts.page - 1}`, { slug: project.slug })}
