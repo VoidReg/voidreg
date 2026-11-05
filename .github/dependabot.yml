@@ -1,0 +1,55 @@
+version: 2
+updates:
+  # pnpm workspace: root lockfile plus the pnpm catalog in pnpm-workspace.yaml.
+  - package-ecosystem: npm
+    directories:
+      - /
+      - /apps/*
+      - /packages/*
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      # Publisle is a separate project published to npm. One grouped PR per release wave.
+      publisle:
+        patterns:
+          - '@publisle/*'
+      svelte:
+        patterns:
+          - svelte
+          - svelte-check
+          - '@sveltejs/*'
+          - vite
+          - '@tailwindcss/*'
+          - tailwindcss
+      lint-and-format:
+        patterns:
+          - eslint*
+          - '@eslint/*'
+          - typescript-eslint
+          - prettier*
+          - globals
+      mcp:
+        patterns:
+          - '@modelcontextprotocol/*'
+  - package-ecosystem: cargo
+    directory: /apps/api
+    schedule:
+      interval: weekly
+    groups:
+      rust-minor-and-patch:
+        update-types:
+          - minor
+          - patch
+  - package-ecosystem: docker
+    directories:
+      - /apps/web
+      - /apps/mcp
+      - /apps/publishing
+      - /apps/api
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
