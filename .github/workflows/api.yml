@@ -67,24 +67,3 @@ jobs:
             ${{ env.IMAGE }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-  deploy:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [build-image]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Deploy SHA-pinned API image
-        uses: appleboy/ssh-action@v1.2.2
-        env:
-          SHA: ${{ github.sha }}
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          envs: SHA,DEPLOY_PATH
-          script: |
-            set -euo pipefail
-            cd "$DEPLOY_PATH"
-            API_IMAGE_TAG="$SHA" docker compose -f compose.yaml pull api
-            API_IMAGE_TAG="$SHA" docker compose -f compose.yaml up -d --no-deps --wait api

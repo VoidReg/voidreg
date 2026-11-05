@@ -22,10 +22,10 @@ For local development, compose.override.yaml exposes nginx only on
 never expose the API directly to untrusted clients when using forwarded-IP limits.
 The API permits 7 MiB JSON requests and nginx matches that upload limit.
 
-Production uses the API repository workflow to build and deploy a SHA-pinned
-image. Deploy admin static assets and build the Node reader image alongside this
-repository before recreating nginx. Reload nginx after replacing the API container so its upstream
-address refreshes. Keep production backups under the ignored `backups/` directory.
+Production is deployed from a trusted local machine with `deploy/deploy.sh`; no CI
+job has SSH access to the server. CI only tests and builds, and publishes the API
+image to GHCR. See [DEPLOY.md](DEPLOY.md). Keep production backups under the ignored
+`backups/` directory.
 
 OAuth callbacks still require Google/GitHub application credentials and an external
 provider smoke test. Multiple API replicas do not share in-memory rate limits.

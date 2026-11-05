@@ -57,4 +57,5 @@ docker build -t voidreg-api apps/api
 `deploy/compose.yaml` builds web, mcp and publishing from this checkout and pulls the
 API image from GHCR. Production data lives in external `voidreg_*` volumes. CI is in
 `.github/workflows`: `node.yml` for the TypeScript workspaces and image builds, and
-`api.yml` for Rust checks, the API image and the SSH deploy.
+`api.yml` for Rust checks and the API image. CI never deploys: production is
+updated from a local machine with [`deploy/deploy.sh`](deploy/DEPLOY.md).
