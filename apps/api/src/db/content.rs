@@ -330,10 +330,10 @@ impl Db {
             return Err(AppError::Conflict("content changed; reload".into()));
         }
         let mut value: Value = serde_json::from_str(&row.working)?;
-        if action == "publish" {
-            if let Some(compiled) = compiled {
-                value["compiled"] = compiled;
-            }
+        if action == "publish"
+            && let Some(compiled) = compiled
+        {
+            value["compiled"] = compiled;
         }
         let mut published = row.published;
         let mut archived = row.archived;
