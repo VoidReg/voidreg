@@ -2,10 +2,8 @@ version: 2
 updates:
   # pnpm workspace: root lockfile plus the pnpm catalog in pnpm-workspace.yaml.
   - package-ecosystem: npm
-    directories:
-      - /
-      - /apps/*
-      - /packages/*
+    # One entry: the root lockfile and every workspace manifest are updated together.
+    directory: /
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
