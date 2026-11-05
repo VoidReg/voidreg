@@ -45,6 +45,6 @@
     "@publisle/markdown": "catalog:",
     "@publisle/schema": "catalog:",
     "@voidreg/publishing-ui": "workspace:*",
-    "isomorphic-dompurify": "^2.36.0"
+    "isomorphic-dompurify": "^4.6.0"
   }
 }
