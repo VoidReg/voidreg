@@ -13,6 +13,9 @@ DEPLOY_HOST=<ssh alias>
 DEPLOY_PATH=<absolute path of the checkout on the server>
 ```
 
+The server needs Docker with Compose, `and `rsync` (`apt install rsync`).
+The deploy user must be in the `docker` group.
+
 ## Deploy
 
 Commit your work, then run from anywhere in the repository:
@@ -55,3 +58,9 @@ the repository root. Before the first deploy, on the server:
 3. Back up the database and publishing volume first (see [PUBLISHING.md](PUBLISHING.md)).
 4. Stop the old stack only after `deploy/deploy.sh --dry-run` looks right, because both
    stacks use the same project name and published ports.
+5. Add `COMPILER_TOKEN` (`openssl rand -hex 32`) to `deploy/.env`, create the
+   `voidreg_media-data` and `voidreg_publishing-data` volumes, and expect a short outage:
+   the backend network moves to a pinned subnet, so use `docker compose down` in the old
+   directory, then `docker compose up -d --wait` in the new one (not per-service updates).
+6. nginx also mounts `/etc/publisle-nginx` read-only for the `api.publisle.xyz` block.
+   Publisle's own host sync owns that directory; do not edit it from this repo.
