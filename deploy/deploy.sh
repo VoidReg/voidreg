@@ -64,7 +64,7 @@ for service in "${services[@]}"; do
       remote+="docker compose -f compose.yaml build $service"$'\n'
       remote+="docker compose -f compose.yaml up -d --no-deps --wait $service"$'\n' ;;
     admin)
-      remote+=$'(cd .. && rm -rf apps/admin/build && docker build -f apps/admin/Dockerfile --target export --output type=local,dest=apps/admin/build . && chmod 755 apps/admin/build)\n' ;;
+      remote+=$'(cd .. && mkdir -p apps/admin/build && find apps/admin/build -mindepth 1 -delete && docker build -f apps/admin/Dockerfile --target export --output type=local,dest=apps/admin/build . && chmod 755 apps/admin/build)\n' ;;
   esac
 done
 # The API container address can change; nginx must re-resolve upstreams.
