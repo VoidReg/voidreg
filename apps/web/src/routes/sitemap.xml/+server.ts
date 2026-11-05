@@ -1,5 +1,5 @@
 import { publicContent, site } from '$lib/server/content';
-import type { Article, Page } from '$lib/publishing/api';
+import type { Article, Page } from '@voidreg/publishing-ui/api';
 import type { Project } from '$lib/data/projects';
 const escape = (s: string) =>
   s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;');

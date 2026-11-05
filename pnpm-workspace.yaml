@@ -1,0 +1,24 @@
+packages:
+  - apps/web
+  - apps/admin
+  - apps/mcp
+  - apps/publishing
+  - packages/*
+
+allowBuilds:
+  esbuild: true
+
+# Publisle is a separate project consumed from the public npm registry.
+# Versions live here only; Dependabot opens one grouped PR for upgrades.
+catalog:
+  '@publisle/adapter-core': ^0.2.3
+  '@publisle/adapter-svelte': ^0.1.3
+  '@publisle/block-sdk': ^0.1.4
+  '@publisle/blocks-core': ^0.2.0
+  '@publisle/blocks-technical': ^0.1.4
+  '@publisle/contracts': ^0.2.0
+  '@publisle/core': ^0.1.3
+  '@publisle/markdown': ^0.1.4
+  '@publisle/playground': ^0.2.6
+  '@publisle/profiles': ^0.1.3
+  '@publisle/schema': ^0.1.2

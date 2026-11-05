@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { apiBase, request, type Page } from './api';
+  import { apiBase, request, type Page } from '@voidreg/publishing-ui/api';
   import type { DiscussionComment } from './discussion';
   import CommentEntry from './CommentEntry.svelte';
   import CommentComposer from './CommentComposer.svelte';

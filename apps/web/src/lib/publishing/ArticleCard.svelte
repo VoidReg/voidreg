@@ -1,6 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import type { Article } from './api';
+  import type { Article } from '@voidreg/publishing-ui/api';
   let { article, heading = 'h2' }: { article: Article; heading?: 'h2' | 'h3' } = $props();
 </script>
 

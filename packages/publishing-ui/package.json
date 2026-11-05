@@ -1,0 +1,28 @@
+{
+  "name": "@voidreg/publishing-ui",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Reader components and sanitizer shared by the public site and the admin preview.",
+  "exports": {
+    "./api": "./src/api.ts",
+    "./renderers": "./src/renderers.ts",
+    "./publication-html": "./src/publication-html.ts",
+    "./ArticleBody.svelte": {
+      "svelte": "./src/ArticleBody.svelte",
+      "default": "./src/ArticleBody.svelte"
+    },
+    "./Counter.svelte": {
+      "svelte": "./src/Counter.svelte",
+      "default": "./src/Counter.svelte"
+    }
+  },
+  "dependencies": {
+    "@publisle/adapter-core": "catalog:",
+    "@publisle/adapter-svelte": "catalog:",
+    "isomorphic-dompurify": "^2.36.0"
+  },
+  "peerDependencies": {
+    "svelte": "^5.0.0"
+  }
+}

@@ -6,8 +6,13 @@
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "types": ["node"],
+    "types": [
+      "node"
+    ],
     "allowImportingTsExtensions": true
   },
-  "include": ["./*.ts", "../src/lib/authoring.ts"]
+  "include": [
+    "./*.ts",
+    "../../packages/authoring/src/svelte.d.ts"
+  ]
 }

@@ -3,7 +3,7 @@
   import { page } from '$app/state';
   import { adminUrl } from '$lib/navigation';
   import { adminRequest } from './api';
-  import type { Page } from './publishing/api';
+  import type { Page } from '@voidreg/publishing-ui/api';
   type Collection = 'comments' | 'users' | 'sources' | 'blocks' | 'events' | 'audit';
   type Entry = {
     id?: string;

@@ -1,7 +1,7 @@
 import { toMarkdown, type MarkdownExportPolicy } from '@publisle/markdown';
 import { parseDocument } from '@publisle/schema';
 import { error } from '@sveltejs/kit';
-import type { Article } from '$lib/publishing/api';
+import type { Article } from '@voidreg/publishing-ui/api';
 const cache = new Map<string, { source: string; notes: string[] }>();
 export function markdownSource(article: Article, archival = false) {
   const key = (article.id ?? article.slug) + article.content_hash + String(archival);

@@ -1,0 +1,34 @@
+{
+  "name": "voidreg-mcp",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx index.ts",
+    "build": "esbuild index.ts --bundle --platform=node --format=esm --packages=external --alias:@voidreg/authoring=../../packages/authoring/src --alias:@voidreg/publishing-ui=../../packages/publishing-ui/src --external:*.svelte --outfile=dist/server.mjs",
+    "check": "tsc -p tsconfig.json",
+    "test": "tsx --test --test-concurrency=1 *.test.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/node": "2.1.1",
+    "@modelcontextprotocol/server": "2.3.1",
+    "@publisle/adapter-core": "catalog:",
+    "@publisle/block-sdk": "catalog:",
+    "@publisle/blocks-core": "catalog:",
+    "@publisle/blocks-technical": "catalog:",
+    "@publisle/core": "catalog:",
+    "@publisle/markdown": "catalog:",
+    "@publisle/playground": "catalog:",
+    "@publisle/profiles": "catalog:",
+    "@publisle/schema": "catalog:",
+    "@voidreg/authoring": "workspace:*",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "typescript": "^6.0.3",
+    "tsx": "^4.23.15",
+    "esbuild": "^0.28.2",
+    "@modelcontextprotocol/client": "2.3.1"
+  }
+}

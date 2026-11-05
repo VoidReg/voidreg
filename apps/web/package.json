@@ -13,7 +13,8 @@
     "lint": "prettier --check . && eslint .",
     "compliance": "pnpm lint && pnpm check",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "test": "tsx --test scripts/*.test.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -35,16 +36,14 @@
     "svelte": "^5.56.1",
     "svelte-check": "^4.6.0",
     "tailwindcss": "^4.3.0",
+    "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.60.1",
     "vite": "^8.0.16"
   },
   "dependencies": {
-    "@publisle/adapter-core": "file:vendor/publisle-adapter-core-0.1.1.tgz",
-    "@publisle/adapter-svelte": "file:vendor/publisle-adapter-svelte-0.1.1.tgz",
-    "@publisle/markdown": "file:vendor/publisle-markdown-0.1.1.tgz",
-    "@publisle/schema": "file:vendor/publisle-schema-0.1.0.tgz",
-    "dompurify": "^3.3.0",
-    "isomorphic-dompurify": "^2.36.0"
+    "@publisle/markdown": "catalog:",
+    "@publisle/schema": "catalog:",
+    "@voidreg/publishing-ui": "workspace:*"
   }
 }

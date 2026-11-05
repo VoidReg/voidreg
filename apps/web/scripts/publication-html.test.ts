@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { sanitizePublicationHtml } from '../src/lib/publishing/publication-html';
+import { sanitizePublicationHtml } from '@voidreg/publishing-ui/publication-html';
 
 test('preserves numeric KaTeX geometry needed for fractions and aligned equations', () => {
   const result = sanitizePublicationHtml(

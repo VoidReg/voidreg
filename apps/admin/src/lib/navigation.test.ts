@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { adminRoute, adminUrl, editorIdentity } from '../src/lib/navigation';
+import { adminRoute, adminUrl, editorIdentity } from './navigation';
 const url = (query = '') => new URL('https://example.test/admin/' + query);
 test('legacy article deep links restore editor without list membership', () => {
   const route = adminRoute(url('?article=older-article&mode=preview&panel=settings'));

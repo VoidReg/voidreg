@@ -10,7 +10,7 @@ import { accessibilityProfile, interactivePublicationProfile } from '@publisle/p
 import { fromMarkdown, toMarkdown } from '@publisle/markdown';
 import { registry, extensions } from './blocks';
 import { defaultData, blockFields, blockLabels } from '@publisle/playground';
-import { rendererRegistry } from './publishing/renderers';
+import { rendererRegistry } from '@voidreg/publishing-ui/renderers';
 
 export function compileDocument(
   input: unknown,

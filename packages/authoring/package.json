@@ -1,0 +1,23 @@
+{
+  "name": "@voidreg/authoring",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Block definitions and document compilation shared by the admin editor, MCP service and publishing compiler.",
+  "exports": {
+    "." : "./src/index.ts",
+    "./blocks": "./src/blocks.ts"
+  },
+  "dependencies": {
+    "@publisle/adapter-core": "catalog:",
+    "@publisle/block-sdk": "catalog:",
+    "@publisle/blocks-core": "catalog:",
+    "@publisle/blocks-technical": "catalog:",
+    "@publisle/core": "catalog:",
+    "@publisle/markdown": "catalog:",
+    "@publisle/playground": "catalog:",
+    "@publisle/profiles": "catalog:",
+    "@publisle/schema": "catalog:",
+    "@voidreg/publishing-ui": "workspace:*"
+  }
+}

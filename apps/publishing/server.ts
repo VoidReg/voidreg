@@ -5,7 +5,7 @@ import { resolve, dirname, extname } from 'node:path';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { chromium, type Browser, type Page } from 'playwright-core';
-import { compileDocument } from '../src/lib/authoring';
+import { compileDocument } from '@voidreg/authoring';
 import type {
   DiagramRenderer,
   PublicationArtifact,
@@ -16,7 +16,8 @@ import type { Diagnostic } from '@publisle/schema';
 const require = createRequire(import.meta.url);
 const wave = require('wavedrom');
 const directory = resolve(process.env.COMPILER_DATA_PATH ?? 'data/publishing');
-const sourceRoot = resolve(process.env.COMPILER_SOURCE_ROOT ?? 'publishing');
+const sourceRoot = resolve(process.env.COMPILER_SOURCE_ROOT ?? '.');
+const cssPath = resolve(process.env.COMPILER_CSS_PATH ?? resolve(sourceRoot, '../admin/src/app.css'));
 const token = process.env.COMPILER_TOKEN;
 if (!token) throw Error('COMPILER_TOKEN is required.');
 const build = 'png-v1-2026-10-20';
@@ -86,7 +87,7 @@ async function find(id: string) {
   return job;
 }
 async function palette(dark: boolean) {
-  const css = await readFile(resolve(sourceRoot, '../src/app.css'), 'utf8');
+  const css = await readFile(cssPath, 'utf8');
   const selector = dark ? '\n.dark {' : '\n.light {';
   const body = css.slice(css.indexOf(selector) + selector.length).split('}')[0];
   const values = Object.fromEntries(

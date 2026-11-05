@@ -7,7 +7,7 @@ import {
   safeMarkdown,
   archivalMarkdown,
   blockCatalog
-} from '../src/lib/authoring';
+} from '@voidreg/authoring';
 
 export type Bridge = (
   path: string,

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { adminRequest } from './api';
-  import type { Article, ContentMeta } from './publishing/api';
+  import type { Article, ContentMeta } from '@voidreg/publishing-ui/api';
   let {
     meta = $bindable(),
     tags = $bindable(),

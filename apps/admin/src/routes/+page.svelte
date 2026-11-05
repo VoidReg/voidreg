@@ -7,16 +7,16 @@
   import { DocumentEditor } from '@publisle/playground';
   import type { PublicationArtifact } from '@publisle/adapter-core';
   import { parseDocument, type Document, type Diagnostic } from '@publisle/schema';
-  import { compileDocument, importMarkdown, archivalMarkdown } from '$lib/authoring';
+  import { compileDocument, importMarkdown, archivalMarkdown } from '@voidreg/authoring';
   import ContentSettings from '$lib/ContentSettings.svelte';
   import MediaLibrary from '$lib/MediaLibrary.svelte';
   import ModerationDashboard from '$lib/ModerationDashboard.svelte';
-  import type { ContentMeta } from '$lib/publishing/api';
+  import type { ContentMeta } from '@voidreg/publishing-ui/api';
   import McpConnections from '$lib/McpConnections.svelte';
-  import type { Article, Page } from '$lib/publishing/api';
+  import type { Article, Page } from '@voidreg/publishing-ui/api';
   import { ApiError, adminRequest } from '$lib/api';
   import EditorWorkspace from '$lib/editor/EditorWorkspace.svelte';
-  import { extensions, registry } from '$lib/blocks';
+  import { extensions, registry } from '@voidreg/authoring/blocks';
 
   let restoring = $state(true),
     loggedIn = $state(false),

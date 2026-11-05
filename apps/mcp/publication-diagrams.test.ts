@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { compileDocument } from '../src/lib/authoring';
+import { compileDocument } from '@voidreg/authoring';
 const block = (type: string, data: unknown) => ({
   id: '018fabc0-0000-4000-8000-000000000001',
   type: 'publisle:' + type,

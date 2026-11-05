@@ -1,7 +1,7 @@
 import { redirect } from '@sveltejs/kit';
 import { publicContent, pageNumber, normalizePagination } from '$lib/server/content';
 import type { Project } from '$lib/data/projects';
-import type { Article, Page } from '$lib/publishing/api';
+import type { Article, Page } from '@voidreg/publishing-ui/api';
 export async function load({ params, fetch, url }) {
   const project = await publicContent<Project>(
     '/projects/' + encodeURIComponent(params.slug),

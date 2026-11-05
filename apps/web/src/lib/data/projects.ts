@@ -1,4 +1,4 @@
-import type { Article, ContentMeta } from '$lib/publishing/api';
+import type { Article, ContentMeta } from '@voidreg/publishing-ui/api';
 export type Project = ContentMeta & {
   slug: string;
   title: string;

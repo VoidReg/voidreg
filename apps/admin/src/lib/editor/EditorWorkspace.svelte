@@ -6,10 +6,10 @@
   import BlockEditor from '@publisle/playground/BlockEditor.svelte';
   import MathBlockEditor from '@publisle/playground/MathBlockEditor.svelte';
   import type { Document, Diagnostic, BlockId } from '@publisle/schema';
-  import ArticleBody from '$lib/publishing/ArticleBody.svelte';
-  import type { Article } from '$lib/publishing/api';
+  import ArticleBody from '@voidreg/publishing-ui/ArticleBody.svelte';
+  import type { Article } from '@voidreg/publishing-ui/api';
   import SchemaPayload from '$lib/SchemaPayload.svelte';
-  import { counterDefinition, extensions, registry } from '$lib/blocks';
+  import { counterDefinition, extensions, registry } from '@voidreg/authoring/blocks';
   import BlockSummary from './BlockSummary.svelte';
   import BlockInserter from './BlockInserter.svelte';
   import './workspace.css';

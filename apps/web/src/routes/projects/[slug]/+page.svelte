@@ -1,10 +1,10 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import ReadingColumn from '$lib/components/ReadingColumn.svelte';
-  import ArticleBody from '$lib/publishing/ArticleBody.svelte';
+  import ArticleBody from '@voidreg/publishing-ui/ArticleBody.svelte';
   import ArticleCard from '$lib/publishing/ArticleCard.svelte';
   import Seo from '$lib/Seo.svelte';
-  import type { Article } from '$lib/publishing/api';
+  import type { Article } from '@voidreg/publishing-ui/api';
   let { data } = $props();
   const project = $derived(data.project);
 </script>

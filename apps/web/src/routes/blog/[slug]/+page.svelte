@@ -1,7 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import ReadingColumn from '$lib/components/ReadingColumn.svelte';
-  import ArticleBody from '$lib/publishing/ArticleBody.svelte';
+  import ArticleBody from '@voidreg/publishing-ui/ArticleBody.svelte';
   import Comments from '$lib/publishing/Comments.svelte';
   import Seo from '$lib/Seo.svelte';
   let { data } = $props();

@@ -1,7 +1,7 @@
 <script lang="ts">
   import Icon from '$lib/components/Icon.svelte';
   import { blockTypes, blockLabels } from '@publisle/playground';
-  import { extensions } from '$lib/blocks';
+  import { extensions } from '@voidreg/authoring/blocks';
   let { oninsert }: { oninsert: (type: string) => void } = $props();
   let search = $state('');
   let menu: HTMLDetailsElement;

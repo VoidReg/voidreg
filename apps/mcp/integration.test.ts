@@ -4,13 +4,13 @@ import { createServer, type Server } from 'node:http';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { createHttpServer } from './http';
 import { defaultData } from '@publisle/playground';
-import { extensions } from '../src/lib/blocks';
+import { extensions } from '@voidreg/authoring/blocks';
 import {
   compileDocument,
   safeMarkdown,
   archivalMarkdown,
   importMarkdown
-} from '../src/lib/authoring';
+} from '@voidreg/authoring';
 
 async function listen(server: Server) {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));

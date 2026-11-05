@@ -1,6 +1,6 @@
 import { publicContent } from '$lib/server/content';
 import { markdownSource } from '$lib/server/markdown';
-import type { Article } from '$lib/publishing/api';
+import type { Article } from '@voidreg/publishing-ui/api';
 import { redirect } from '@sveltejs/kit';
 export async function GET({ params, url, fetch }) {
   const article = await publicContent<Article>('/blogs/' + encodeURIComponent(params.slug), fetch);

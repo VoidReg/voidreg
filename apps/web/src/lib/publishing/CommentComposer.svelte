@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { request } from './api';
+  import { request } from '@voidreg/publishing-ui/api';
   import type { DiscussionComment } from './discussion';
   let {
     slug,
