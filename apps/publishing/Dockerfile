@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Build context is the repository root: docker build -f apps/publishing/Dockerfile .
-FROM node:24-bookworm-slim AS build
+FROM node:25-bookworm-slim AS build
 WORKDIR /repo
 RUN npm install --global pnpm@11.17.0
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
@@ -15,7 +15,7 @@ RUN pnpm --filter voidreg-publishing build \
     && pnpm --filter voidreg-publishing deploy --prod --legacy /out \
     && cp -r apps/publishing/dist /out/dist
 
-FROM node:24-bookworm-slim
+FROM node:25-bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends chromium graphviz default-jre-headless fonts-dejavu-core curl ca-certificates tini && rm -rf /var/lib/apt/lists/*
 RUN mkdir -p /opt/plantuml && curl -fsSL https://github.com/plantuml/plantuml/releases/download/v1.2026.9/plantuml.jar -o /opt/plantuml/plantuml.jar && echo 'aa4a1d06f8911c4b842beff4828dd955be431692b631a312d04c0e9fab9581de  /opt/plantuml/plantuml.jar' | sha256sum -c -
 WORKDIR /app
