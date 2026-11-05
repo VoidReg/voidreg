@@ -27,7 +27,7 @@
     "wavedrom": "3.5.0"
   },
   "devDependencies": {
-    "@types/node": "^22",
+    "@types/node": "^26",
     "typescript": "^6.0.3",
     "tsx": "^4.23.15",
     "esbuild": "^0.28.2"
