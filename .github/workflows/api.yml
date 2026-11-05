@@ -74,7 +74,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Deploy SHA-pinned API image
-        uses: appleboy/ssh-action@v1.2.2
+        uses: appleboy/ssh-action@v1.2.5
         env:
           SHA: ${{ github.sha }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
