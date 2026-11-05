@@ -10,8 +10,8 @@
     "test": "tsx --test --test-concurrency=1 *.test.ts"
   },
   "dependencies": {
-    "@modelcontextprotocol/node": "2.1.1",
-    "@modelcontextprotocol/server": "2.3.1",
+    "@modelcontextprotocol/node": "2.1.2",
+    "@modelcontextprotocol/server": "2.4.0",
     "@publisle/adapter-core": "catalog:",
     "@publisle/block-sdk": "catalog:",
     "@publisle/blocks-core": "catalog:",
@@ -29,6 +29,6 @@
     "typescript": "^6.0.3",
     "tsx": "^4.23.15",
     "esbuild": "^0.28.2",
-    "@modelcontextprotocol/client": "2.3.1"
+    "@modelcontextprotocol/client": "2.4.0"
   }
 }
