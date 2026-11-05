@@ -28,6 +28,10 @@ export default defineConfig({
   plugins: [
     publislePlaygroundDistImports(),
     tailwindcss(),
-    sveltekit({ adapter: adapter({ fallback: 'index.html' }), paths: { base: '/admin' } })
+    sveltekit({
+      alias: { $lib: 'src/lib' },
+      adapter: adapter({ fallback: 'index.html' }),
+      paths: { base: '/admin' }
+    })
   ]
 });

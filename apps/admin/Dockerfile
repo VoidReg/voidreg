@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Static admin build. Build context is the repository root. Export the files with:
 #   docker build -f apps/admin/Dockerfile --target export --output type=local,dest=apps/admin/build .
-FROM node:24-bookworm-slim AS build
+FROM node:25-bookworm-slim AS build
 WORKDIR /repo
 RUN npm install --global pnpm@11.17.0
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./

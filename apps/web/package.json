@@ -20,11 +20,11 @@
     "@eslint/js": "^10.0.1",
     "@fontsource/ibm-plex-mono": "^5.3.0",
     "@fontsource/ibm-plex-sans": "^5.3.0",
-    "@sveltejs/adapter-node": "^5.5.0",
-    "@sveltejs/kit": "^2.63.0",
+    "@sveltejs/adapter-node": "^6.0.1",
+    "@sveltejs/kit": "^3.1.1",
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
     "@tailwindcss/vite": "^4.3.0",
-    "@types/node": "^22",
+    "@types/node": "^26.6.6",
     "eslint": "^10.4.1",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-svelte": "^3.19.0",
@@ -45,6 +45,6 @@
     "@publisle/markdown": "catalog:",
     "@publisle/schema": "catalog:",
     "@voidreg/publishing-ui": "workspace:*",
-    "isomorphic-dompurify": "^2.36.0"
+    "isomorphic-dompurify": "^4.6.0"
   }
 }

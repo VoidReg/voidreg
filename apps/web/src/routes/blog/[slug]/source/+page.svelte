@@ -35,7 +35,7 @@
       download>Download Markdown</a
     ><a
       class="button button-secondary"
-      href={resolve(`/blog/${data.article.slug}/source.md?format=archival`)}
+      href={resolve('/blog/[slug]/source.md?format=archival', { slug: data.article.slug })}
       download>Download complete archival Markdown</a
     >
   </div>

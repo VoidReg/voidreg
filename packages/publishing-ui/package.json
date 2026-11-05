@@ -20,7 +20,7 @@
   "dependencies": {
     "@publisle/adapter-core": "catalog:",
     "@publisle/adapter-svelte": "catalog:",
-    "isomorphic-dompurify": "^2.36.0"
+    "isomorphic-dompurify": "^4.6.0"
   },
   "peerDependencies": {
     "svelte": "^5.0.0"

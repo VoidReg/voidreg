@@ -5,7 +5,11 @@ export type EditorView = {
   inspector: 'article' | 'block';
   block: string | null;
 };
-export function adminRoute(url: URL) {
+// SvelteKit's `page.url` is a readonly view of URL, so helpers take only what they read.
+export type UrlLike = Pick<URL, 'href' | 'pathname' | 'search' | 'hash'> & {
+  searchParams: Pick<URLSearchParams, 'get' | 'has'>;
+};
+export function adminRoute(url: UrlLike) {
   const p = url.searchParams;
   const requested = p.get('tab') ?? (p.has('project') ? 'projects' : 'articles');
   const tab: AdminTab = ['articles', 'projects', 'media', 'comments', 'mcp'].includes(requested)
@@ -30,15 +34,18 @@ export function adminRoute(url: URL) {
     inspector: p.get('inspector') === 'block' ? ('block' as const) : ('article' as const)
   };
 }
-export function adminUrl(url: URL, changes: Record<string, string | number | null | undefined>) {
-  const next = new URL(url);
+export function adminUrl(
+  url: UrlLike,
+  changes: Record<string, string | number | null | undefined>
+) {
+  const next = new URL(url.href);
   for (const [key, value] of Object.entries(changes)) {
     if (value === null || value === undefined || value === '') next.searchParams.delete(key);
     else next.searchParams.set(key, String(value));
   }
   return next.pathname + next.search + next.hash;
 }
-export function editorIdentity(url: URL) {
+export function editorIdentity(url: UrlLike) {
   const r = adminRoute(url);
   return r.editing ? r.tab + ':' + (r.item ?? '$new') : '';
 }

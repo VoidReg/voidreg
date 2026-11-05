@@ -63,9 +63,11 @@
           />{/each}
         <nav class="button-row" aria-label="Related post pages">
           {#if data.posts.page > 1}<a
-              href={resolve(`/projects/${project.slug}?page=${data.posts.page - 1}`)}>Previous</a
+              href={resolve(`/projects/[slug]?page=${data.posts.page - 1}`, { slug: project.slug })}
+              >Previous</a
             >{/if}{#if data.posts.page * data.posts.per_page < data.posts.total}<a
-              href={resolve(`/projects/${project.slug}?page=${data.posts.page + 1}`)}>Next</a
+              href={resolve(`/projects/[slug]?page=${data.posts.page + 1}`, { slug: project.slug })}
+              >Next</a
             >{/if}
         </nav>
       </section>

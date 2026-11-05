@@ -107,7 +107,7 @@
         m_since: since,
         m_until: until
       }),
-      { noScroll: true, keepFocus: true }
+      { reset: false }
     );
   }
   function restoreRoute() {

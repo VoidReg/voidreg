@@ -1,12 +1,14 @@
-import { env } from '$env/dynamic/private';
 import { error, redirect } from '@sveltejs/kit';
 export const site = 'https://www.voidreg.xyz';
 export async function publicContent<T>(path: string, fetcher: typeof fetch): Promise<T> {
   let response: Response;
   try {
-    response = await fetcher((env.VOIDREG_API_URL ?? 'http://127.0.0.1:8080') + '/api/v1' + path, {
-      signal: AbortSignal.timeout(10000)
-    });
+    response = await fetcher(
+      (process.env.VOIDREG_API_URL ?? 'http://127.0.0.1:8080') + '/api/v1' + path,
+      {
+        signal: AbortSignal.timeout(10000)
+      }
+    );
   } catch {
     error(503, 'Content is temporarily unavailable. Please try again.');
   }

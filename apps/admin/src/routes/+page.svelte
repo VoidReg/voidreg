@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { afterNavigate, beforeNavigate, goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { base } from '$app/paths';
+  import { resolve } from '$app/paths';
   import { adminRoute, adminUrl, editorIdentity, type EditorView } from '$lib/navigation';
   import { DocumentEditor } from '@publisle/playground';
   import type { PublicationArtifact } from '@publisle/adapter-core';
@@ -43,8 +43,7 @@
   function navigate(changes: Record<string, string | number | null | undefined>, replace = false) {
     return goto(adminUrl(page.url, changes), {
       replaceState: replace,
-      noScroll: true,
-      keepFocus: true
+      reset: false
     });
   }
   function editorLink(item?: Article) {
@@ -327,7 +326,7 @@
         window.location.pathname + (params.size ? '?' + params : '') + window.location.hash;
       // Initial mount runs before SvelteKit finishes initializing its router.
       setTimeout(() => {
-        void goto(cleanUrl, { replaceState: true, noScroll: true });
+        void goto(cleanUrl, { replaceState: true, reset: false });
       }, 0);
     }
     void loadLoginOptions();
@@ -734,7 +733,7 @@
           <a
             class="button button-secondary"
             aria-current={tab === section ? 'page' : undefined}
-            href={base + '/?tab=' + section}>{label}</a
+            href={resolve('/') + '?tab=' + section}>{label}</a
           >
         {/each}
       </nav>
@@ -750,7 +749,7 @@
             <button
               class="button"
               disabled={busy}
-              onclick={() => goto(editorLink(), { noScroll: true })}
+              onclick={() => goto(editorLink(), { reset: false })}
               >New {contentKind === 'projects' ? 'project' : 'article'}</button
             >
           </div>
@@ -787,7 +786,7 @@
                   {#if !article.archived}<button
                       class="button button-secondary"
                       disabled={busy}
-                      onclick={() => goto(editorLink(article), { noScroll: true })}>Edit</button
+                      onclick={() => goto(editorLink(article), { reset: false })}>Edit</button
                     >{/if}
                   <button
                     class="button button-secondary"

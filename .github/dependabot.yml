@@ -7,6 +7,11 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    ignore:
+      # SvelteKit, svelte-check and typescript-eslint need the classic TypeScript JS API,
+      # which TypeScript 7 (native compiler) does not provide yet. Revisit when they do.
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
     groups:
       # Publisle is a separate project published to npm. One grouped PR per release wave.
       publisle:
@@ -42,6 +47,7 @@ updates:
   - package-ecosystem: docker
     directories:
       - /apps/web
+      - /apps/admin
       - /apps/mcp
       - /apps/publishing
       - /apps/api
