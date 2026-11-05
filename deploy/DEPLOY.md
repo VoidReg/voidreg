@@ -13,7 +13,7 @@ DEPLOY_HOST=<ssh alias>
 DEPLOY_PATH=<absolute path of the checkout on the server>
 ```
 
-The server needs Docker with Compose, `and `rsync` (`apt install rsync`).
+The server needs Docker with Compose and `rsync` (`apt install rsync`).
 The deploy user must be in the `docker` group.
 
 ## Deploy
