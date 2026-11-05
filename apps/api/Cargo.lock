@@ -3894,9 +3894,9 @@ dependencies = [
  "index_vec",
  "indexmap",
  "inventory",
- "toasty-core",
+ "toasty-core 0.10.0",
  "toasty-driver-mysql",
- "toasty-driver-turso",
+ "toasty-driver-turso 0.10.0",
  "toasty-macros",
  "tokio",
  "tokio-stream",
@@ -3926,6 +3926,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "toasty-core"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06ce722358481c0ad55b7b5edaaf9d0669ee5de6e9c737a73ca4c27621003732"
+dependencies = [
+ "async-trait",
+ "bit-set",
+ "fluent-uri",
+ "form_urlencoded",
+ "hashbrown 0.17.1",
+ "heck",
+ "indexmap",
+ "percent-encoding",
+ "tokio-stream",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "toasty-driver-mysql"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3935,8 +3954,8 @@ dependencies = [
  "sqlx-core",
  "sqlx-mysql",
  "time",
- "toasty-core",
- "toasty-sql",
+ "toasty-core 0.10.0",
+ "toasty-sql 0.10.0",
  "tokio",
  "tracing",
  "uuid",
@@ -3950,8 +3969,24 @@ checksum = "ec35095292c40a0b42f7886055bd8e3f4a161a257a422328d7617255a9ced220"
 dependencies = [
  "async-trait",
  "serde",
- "toasty-core",
- "toasty-sql",
+ "toasty-core 0.10.0",
+ "toasty-sql 0.10.0",
+ "tokio",
+ "tracing",
+ "turso",
+ "uuid",
+]
+
+[[package]]
+name = "toasty-driver-turso"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "27f3d4680ddf5e6ec2ba584ec91763420b572d0d818e10ca105a85d312d6f10a"
+dependencies = [
+ "async-trait",
+ "serde",
+ "toasty-core 0.11.0",
+ "toasty-sql 0.11.0",
  "tokio",
  "tracing",
  "turso",
@@ -3970,7 +4005,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.6",
- "toasty-core",
+ "toasty-core 0.10.0",
 ]
 
 [[package]]
@@ -3981,7 +4016,18 @@ checksum = "7b44b08035efcf8e087c6377ae18942066b1f8e976cd3821571e45463ecf3d6f"
 dependencies = [
  "serde",
  "serde_json",
- "toasty-core",
+ "toasty-core 0.10.0",
+]
+
+[[package]]
+name = "toasty-sql"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29b50cee2799bc54257ba202a9497f07b59df7e446b6df27fbf801cffe4b1b8a"
+dependencies = [
+ "serde",
+ "serde_json",
+ "toasty-core 0.11.0",
 ]
 
 [[package]]
@@ -4680,8 +4726,8 @@ dependencies = [
  "thiserror",
  "time",
  "toasty",
- "toasty-core",
- "toasty-driver-turso",
+ "toasty-core 0.10.0",
+ "toasty-driver-turso 0.11.0",
  "tokio",
  "toml 0.9.12+spec-1.1.0",
  "tracing",
