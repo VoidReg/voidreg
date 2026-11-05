@@ -18,6 +18,11 @@ fn main() -> io::Result<()> {
 
 async fn migrate() -> io::Result<()> {
     let seed = std::env::args().any(|arg| arg == "--seed");
+    if seed && !cfg!(debug_assertions) {
+        return Err(io::Error::other(
+            "sample seeding is disabled in release builds; use a development database",
+        ));
+    }
     let config = Config::from_env().map_err(|err| io::Error::other(err.to_string()))?;
     let db = Db::connect(&config)
         .await

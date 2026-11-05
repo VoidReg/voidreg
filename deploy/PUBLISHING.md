@@ -1,11 +1,12 @@
 # Publishing deployment
 
-Build `voidreg-web` and `voidreg-admin` with `pnpm install --frozen-lockfile` and
-`pnpm build` before starting compose. nginx mounts their static `build` directories
-read-only at `/srv/web` and `/srv/admin`. Existing API routes retain `/api/v1`.
-The admin app is available at `/admin/`, dynamic article shells at `/blog/*`, and
-the live sitemap at `/sitemap-blogs.xml`. Static hashed assets cache immutably;
-HTML revalidates and admin HTML uses no-store. gzip is enabled for text formats.
+Build the admin static assets with `pnpm install --frozen-lockfile` and
+`pnpm build`. Build the reader using `docker compose build web`; it is now a
+Node SSR service, not a static nginx mount. nginx routes `/admin/` to static
+admin assets, `/api/` and `/media/` to the API, and public pages to the reader.
+The combined sitemap is `/sitemap.xml`; `/sitemap-blogs.xml` remains compatible.
+Follow `CONTENT-MANAGEMENT.md` for database/media backups, coordinated rollout,
+health checks, and rollback. The media-data volume must persist across updates.
 
 The API container entrypoint runs the idempotent migration before starting the
 service. Back up the database and configuration before replacing its image.
@@ -22,8 +23,8 @@ never expose the API directly to untrusted clients when using forwarded-IP limit
 The API permits 7 MiB JSON requests and nginx matches that upload limit.
 
 Production uses the API repository workflow to build and deploy a SHA-pinned
-image. Deploy static app build directories alongside this repository before
-recreating nginx. Reload nginx after replacing the API container so its upstream
+image. Deploy admin static assets and build the Node reader image alongside this
+repository before recreating nginx. Reload nginx after replacing the API container so its upstream
 address refreshes. Keep production backups under the ignored `backups/` directory.
 
 OAuth callbacks still require Google/GitHub application credentials and an external
@@ -61,3 +62,22 @@ can remain. Monitor service health, HTTP error counts, and 409 conflicts, withou
 logging bearer tokens or draft bodies. After deployment verify public bridge denial,
 unauthenticated MCP 401 responses, token issuance/revocation, and a temporary draft
 created and edited through an MCP client. Remove test drafts and revoke test tokens.
+
+## Persistent production data
+
+Production volumes are external and explicitly named: `voidreg_api-data`,
+`voidreg_media-data`, and `voidreg_publishing-data`. Provision missing volumes
+once with `docker volume create NAME`, separately from deployment. Never replace
+an existing volume. Compose must fail if a production volume is missing rather
+than silently start with an empty database. Local overrides use separate
+`voidreg-local_*` volumes.
+
+Deploy with `docker compose -f compose.yaml pull api` followed by
+`docker compose -f compose.yaml up -d --no-deps --wait api`. This replaces the
+container while preserving its data mounts. Do not run volume removal, volume
+pruning, database resets, restore commands, or sample seeding during deployment.
+External volumes survive Compose teardown, including `down --volumes`.
+Keep `.env`, certificates, uploads, and backups outside build output cleanup.
+Back up database and media together before schema changes; restore is a separate
+operator action. API startup applies additive, idempotent migrations only.
+Release builds reject `migrate --seed` before connecting to the database.

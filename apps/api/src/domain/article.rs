@@ -27,9 +27,11 @@ impl ArticleStatus {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "swagger", derive(utoipa::ToSchema))]
 pub struct Article {
+    #[serde(flatten)]
+    pub meta: super::ContentMeta,
     pub revision: i64,
     pub slug: String,
     pub title: String,
@@ -51,7 +53,7 @@ pub struct Article {
     pub content_hash: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "swagger", derive(utoipa::ToSchema))]
 pub struct ArticleListResponse {
     pub items: Vec<Article>,

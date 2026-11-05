@@ -36,6 +36,8 @@ pub fn build(
         .service(v1::health::healthz)
         .service(v1::health::readyz)
         .service(v1::sitemap::sitemap_blogs)
+        .service(v1::media::diagram)
+        .service(v1::media::show)
         .service(web::scope("/api/v1").configure(v1::configure));
 
     #[cfg(feature = "swagger")]

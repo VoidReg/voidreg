@@ -15,9 +15,19 @@ pub struct MediaPlaceholder {
     pub text: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "swagger", derive(utoipa::ToSchema))]
 pub struct Project {
+    #[serde(flatten)]
+    pub meta: super::ContentMeta,
+    #[serde(default = "initial_revision")]
+    pub revision: i64,
+    #[serde(default)]
+    pub document: Option<serde_json::Value>,
+    #[serde(default)]
+    pub compiled: Option<serde_json::Value>,
+    #[serde(default = "published")]
+    pub status: String,
     pub slug: String,
     pub title: String,
     pub category: String,
@@ -32,7 +42,7 @@ pub struct Project {
     pub repo_url: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "swagger", derive(utoipa::ToSchema))]
 pub struct ProjectListResponse {
     pub items: Vec<Project>,
@@ -41,6 +51,8 @@ pub struct ProjectListResponse {
 impl Project {
     pub fn as_card(&self) -> Project {
         Self {
+            document: None,
+            compiled: None,
             sections: Vec::new(),
             hero: None,
             related_slugs: Vec::new(),
@@ -48,4 +60,11 @@ impl Project {
             ..self.clone()
         }
     }
+}
+
+fn initial_revision() -> i64 {
+    1
+}
+fn published() -> String {
+    "published".into()
 }

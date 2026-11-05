@@ -20,7 +20,7 @@
         })}</time
       >{/if}
     {#if article.published_at && article.reading_time_minutes}<span aria-hidden="true">
-        ·
+        |
       </span>{/if}
     {#if article.reading_time_minutes}{article.reading_time_minutes} min read{/if}
   </p>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$lib/components/Icon.svelte';
   import { blockTypes, blockLabels } from '@publisle/playground';
   import { extensions } from '$lib/blocks';
   let { oninsert }: { oninsert: (type: string) => void } = $props();
@@ -27,13 +28,13 @@
     if (!menu.open) search = '';
   }}
 >
-  <summary class="insert-trigger"><span aria-hidden="true">＋</span> Add block</summary>
+  <summary class="insert-trigger"><Icon name="plus" size={16} /> Add block</summary>
   <div class="insert-menu">
     <label class="editor-field"
       >Find a block<input
         type="search"
         bind:value={search}
-        placeholder="Paragraph, code, math…"
+        placeholder="Paragraph, code, math..."
       /></label
     >
     <div class="insert-options">

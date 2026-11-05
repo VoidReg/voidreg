@@ -1,26 +1,23 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { beforeNavigate, replaceState } from '$app/navigation';
+  import { afterNavigate, beforeNavigate, goto } from '$app/navigation';
+  import { page } from '$app/state';
+  import { base } from '$app/paths';
+  import { adminRoute, adminUrl, editorIdentity, type EditorView } from '$lib/navigation';
   import { DocumentEditor } from '@publisle/playground';
   import type { PublicationArtifact } from '@publisle/adapter-core';
   import { parseDocument, type Document, type Diagnostic } from '@publisle/schema';
-  import { compileDocument } from '$lib/authoring';
+  import { compileDocument, importMarkdown, archivalMarkdown } from '$lib/authoring';
+  import ContentSettings from '$lib/ContentSettings.svelte';
+  import MediaLibrary from '$lib/MediaLibrary.svelte';
+  import ModerationDashboard from '$lib/ModerationDashboard.svelte';
+  import type { ContentMeta } from '$lib/publishing/api';
   import McpConnections from '$lib/McpConnections.svelte';
   import type { Article, Page } from '$lib/publishing/api';
   import { ApiError, adminRequest } from '$lib/api';
   import EditorWorkspace from '$lib/editor/EditorWorkspace.svelte';
   import { extensions, registry } from '$lib/blocks';
 
-  type Comment = {
-    parent_id: string | null;
-    parent_author: string | null;
-    parent_body: string | null;
-    id: string;
-    article_slug: string;
-    author_name: string;
-    body: string;
-    status: string;
-  };
   let restoring = $state(true),
     loggedIn = $state(false),
     password = $state(''),
@@ -30,12 +27,110 @@
     error = $state(''),
     message = $state(''),
     busy = $state(false);
-  let articles = $state<Article[]>([]),
-    comments = $state<Page<Comment>>({ items: [], page: 1, per_page: 20, total: 0 }),
-    commentStatus = $state('pending');
-  let tab = $state<'articles' | 'comments' | 'mcp'>('articles'),
+  let articles = $state<Article[]>([]);
+  let tab = $state<'articles' | 'projects' | 'media' | 'comments' | 'mcp'>('articles'),
     editing = $state(false),
     storedSlug = $state('');
+  let editorView = $state<EditorView>({
+    mode: 'write',
+    panel: 'document',
+    inspector: 'article',
+    block: null
+  });
+  let loadedEditor = '';
+  let routeRequest = 0;
+  let routeLoading = $state(false);
+  function navigate(changes: Record<string, string | number | null | undefined>, replace = false) {
+    return goto(adminUrl(page.url, changes), {
+      replaceState: replace,
+      noScroll: true,
+      keepFocus: true
+    });
+  }
+  function editorLink(item?: Article) {
+    return adminUrl(page.url, {
+      article: contentKind === 'articles' ? item?.slug : null,
+      project: contentKind === 'projects' ? item?.slug : null,
+      new: item ? null : '1',
+      mode: null,
+      panel: null,
+      inspector: null,
+      block: null
+    });
+  }
+  function backToList() {
+    return navigate({
+      article: null,
+      project: null,
+      new: null,
+      mode: null,
+      panel: null,
+      inspector: null,
+      block: null
+    });
+  }
+  async function navigateView(view: Partial<EditorView>) {
+    await navigate(view);
+  }
+  async function applyRoute() {
+    if (!loggedIn) return;
+    const request = ++routeRequest;
+    const route = adminRoute(page.url);
+    const identity = editorIdentity(page.url);
+    routeLoading = true;
+    error = '';
+    try {
+      if (identity !== loadedEditor) busy = false;
+      tab = route.tab;
+      listPage = route.page;
+      listQuery = route.query;
+      listStatus = route.status;
+      editorView = {
+        mode: route.mode,
+        panel: route.panel,
+        inspector: route.inspector,
+        block: route.block
+      };
+      if (route.editing) {
+        if (loadedEditor !== identity) {
+          editing = false;
+          savedRevision = revision;
+          const opened = await open(
+            route.item ? ({ slug: route.item } as Article) : undefined,
+            request
+          );
+          if (!opened || request !== routeRequest) return;
+          loadedEditor = identity;
+        }
+        if (request !== routeRequest) return;
+        if (allProjects.length === 0) await dashboard();
+        if (route.mode === 'preview' && request === routeRequest) await compileSaved();
+      } else {
+        loadedEditor = '';
+        editing = false;
+        savedRevision = revision;
+        if (route.tab === 'articles' || route.tab === 'projects') await dashboard();
+      }
+    } catch (cause) {
+      if (request === routeRequest) report(cause);
+    } finally {
+      if (request === routeRequest) routeLoading = false;
+    }
+  }
+  afterNavigate(() => {
+    void applyRoute();
+  });
+  let allProjects = $state<Article[]>([]),
+    meta = $state<ContentMeta>({}),
+    tagsText = $state(''),
+    repoUrl = $state('');
+  let listQuery = $state(''),
+    listStatus = $state(''),
+    listPage = $state(1),
+    listTotal = $state(0),
+    listPerPage = $state(20),
+    listLoading = $state(false);
+  const contentKind = $derived(tab === 'projects' ? 'projects' : 'articles');
   let serverRevision = $state(1),
     conflict = $state(false);
   let slug = $state(''),
@@ -54,11 +149,96 @@
     error = '';
     revision++;
   });
-  const preview = $derived.by(
+  let renderedPreview = $state<PublicationArtifact>();
+  let renderedAt = $state(-1);
+  let renderedServerRevision = $state(-1);
+  let compilationId = $state('');
+  let compilationDiagnostics = $state<Diagnostic[]>([]);
+  let compiling = $state(false);
+  const localPreview = $derived.by(
     (): { artifact?: PublicationArtifact; diagnostics: readonly Diagnostic[] } => {
       return compileDocument(JSON.parse(JSON.stringify(doc)), title);
     }
   );
+  const preview = $derived.by(() => {
+    const diagnostics = [
+      ...localPreview.diagnostics,
+      ...(renderedAt === revision ? compilationDiagnostics : [])
+    ];
+    return {
+      diagnostics,
+      artifact: diagnostics.some((d) => d.level === 'error')
+        ? undefined
+        : renderedAt === revision && renderedPreview
+          ? renderedPreview
+          : localPreview.artifact
+    };
+  });
+  async function compileSaved(): Promise<boolean> {
+    if (busy || conflict || compiling) return false;
+    if ((dirty || !storedSlug) && !(await save())) return false;
+    if (localPreview.diagnostics.some((d) => d.level === 'error')) {
+      error = 'Resolve validation errors before compiling. Your draft is saved.';
+      return false;
+    }
+    if (
+      renderedAt === revision &&
+      renderedServerRevision === serverRevision &&
+      compilationId &&
+      renderedPreview
+    )
+      return true;
+    const compilingRevision = revision;
+    const saved = serverRevision;
+    compiling = true;
+    error = '';
+    message = 'Compiling publication...';
+    try {
+      const started = await adminRequest<{ id: string }>(
+        `/${contentKind}/${storedSlug}/compile`,
+        'POST',
+        { expected_revision: saved }
+      );
+      const deadline = Date.now() + 240000;
+      while (Date.now() < deadline) {
+        const job = await adminRequest<{
+          state: string;
+          artifact?: PublicationArtifact;
+          diagnostics: Diagnostic[];
+          progress: number;
+          total: number;
+        }>(`/compilations/${started.id}`);
+        if (compilingRevision !== revision || saved !== serverRevision) {
+          message = 'Draft changed. Open Preview again to compile the latest version.';
+          return false;
+        }
+        if (job.state === 'ready' || job.state === 'failed') {
+          renderedAt = compilingRevision;
+          renderedServerRevision = saved;
+          renderedPreview = job.artifact;
+          compilationDiagnostics = job.diagnostics;
+          compilationId = job.state === 'ready' ? started.id : '';
+          message =
+            job.state === 'ready'
+              ? 'Preview ready. Changes remain a draft.'
+              : 'Compilation needs attention. Your draft is saved.';
+          return job.state === 'ready';
+        }
+        message = job.total
+          ? `Compiling diagrams: ${job.progress} of ${job.total}`
+          : 'Compiling publication...';
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+      throw new Error(
+        'Compilation is taking longer than expected. Your draft is saved; retry Preview.'
+      );
+    } catch (cause) {
+      report(cause);
+      return false;
+    } finally {
+      compiling = false;
+    }
+  }
   const previewArticle = $derived<Article>({
     slug: slug || 'preview',
     title,
@@ -91,14 +271,37 @@
       message = 'Your session expired. Sign in to keep editing.';
     }
   }
+  let dashboardRequest = 0;
   async function dashboard() {
-    articles = (await adminRequest<{ items: Article[] }>('/articles')).items;
-  }
-  async function loadComments(page = 1) {
+    const requestId = ++dashboardRequest;
+    listLoading = true;
     try {
-      comments = await adminRequest(`/comments?status=${commentStatus}&page=${page}`);
-    } catch (e) {
-      report(e);
+      const result = await adminRequest<Page<Article>>(
+        '/' +
+          contentKind +
+          '?page=' +
+          listPage +
+          '&q=' +
+          encodeURIComponent(listQuery) +
+          '&status=' +
+          listStatus
+      );
+      if (requestId !== dashboardRequest) return;
+      articles = result.items;
+      listPage = result.page;
+      listPerPage = result.per_page;
+      listTotal = result.total;
+      const catalog: Article[] = [];
+      let page = 1;
+      while (true) {
+        const result = await adminRequest<Page<Article>>('/projects?per_page=100&page=' + page);
+        catalog.push(...result.items);
+        if (page * result.per_page >= result.total) break;
+        page++;
+      }
+      if (requestId === dashboardRequest) allProjects = catalog;
+    } finally {
+      if (requestId === dashboardRequest) listLoading = false;
     }
   }
   async function loadLoginOptions() {
@@ -123,16 +326,15 @@
       const cleanUrl =
         window.location.pathname + (params.size ? '?' + params : '') + window.location.hash;
       // Initial mount runs before SvelteKit finishes initializing its router.
-      setTimeout(() => replaceState(cleanUrl, {}), 0);
+      setTimeout(() => {
+        void goto(cleanUrl, { replaceState: true, noScroll: true });
+      }, 0);
     }
     void loadLoginOptions();
     void adminRequest('/session')
       .then(async () => {
         loggedIn = true;
-        await dashboard();
-        const selected = new URLSearchParams(window.location.search).get('article');
-        const article = articles.find((a) => a.slug === selected);
-        if (article) await open(article);
+        await applyRoute();
       })
       .catch((e) => {
         if (!(e instanceof ApiError && e.status === 401)) report(e);
@@ -147,22 +349,16 @@
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
   });
-  beforeNavigate(({ cancel }) => {
-    if (dirty && !confirm('Leave with unsaved changes?')) cancel();
+  beforeNavigate(({ cancel, to }) => {
+    const leavesEditor = !to || editorIdentity(to.url) !== loadedEditor;
+    if (editing && (busy || compiling) && leavesEditor) {
+      cancel();
+      return;
+    }
+    if (editing && dirty && leavesEditor && !confirm('Leave with unsaved changes?')) cancel();
   });
   $effect(() => {
-    if (
-      !loggedIn ||
-      conflict ||
-      !editing ||
-      !dirty ||
-      busy ||
-      error ||
-      !title.trim() ||
-      !category.trim() ||
-      !summary.trim()
-    )
-      return;
+    if (!loggedIn || conflict || !editing || !dirty || busy || error || routeLoading) return;
     const timer = setTimeout(() => {
       void save();
     }, 1500);
@@ -176,7 +372,7 @@
       await adminRequest('/session', 'POST', { password });
       password = '';
       loggedIn = true;
-      await dashboard();
+      await applyRoute();
     } catch (e) {
       report(e);
     } finally {
@@ -190,27 +386,39 @@
       await adminRequest('/session', 'DELETE');
       loggedIn = false;
       editing = false;
+      loadedEditor = '';
+      savedRevision = revision;
     } catch (e) {
       report(e);
     } finally {
       busy = false;
     }
   }
-  async function open(article?: Article) {
-    if (dirty && !confirm('Discard unsaved changes?')) return;
+  async function open(article?: Article, request?: number) {
     busy = true;
     error = '';
     message = '';
     try {
-      let value = article ? await adminRequest<Article>(`/articles/${article.slug}`) : undefined;
+      let value = article
+        ? await adminRequest<Article>(`/${contentKind}/${article.slug}`)
+        : undefined;
+      if (request !== undefined && request !== routeRequest) return false;
       if (value && !value.document)
-        value = await adminRequest<Article>(`/articles/${value.slug}`, 'PUT', {
+        value = await adminRequest<Article>(`/${contentKind}/${value.slug}`, 'PUT', {
           expected_revision: value.revision
         });
+      if (request !== undefined && request !== routeRequest) return false;
+      renderedPreview = undefined;
+      renderedAt = -1;
+      compilationId = '';
+      compilationDiagnostics = [];
       storedSlug = value?.slug ?? '';
       serverRevision = value?.revision ?? 1;
       conflict = false;
-      slug = storedSlug;
+      slug = value?.pending_slug || storedSlug;
+      meta = value ?? {};
+      tagsText = value?.tags?.join(', ') ?? '';
+      repoUrl = value?.repo_url ?? '';
       title = value?.title ?? '';
       category = value?.category ?? '';
       summary = value?.summary ?? '';
@@ -224,10 +432,12 @@
       );
       savedRevision = revision;
       editing = true;
+      return true;
     } catch (e) {
-      report(e);
+      if (request === undefined || request === routeRequest) report(e);
+      return false;
     } finally {
-      busy = false;
+      if (request === undefined || request === routeRequest) busy = false;
     }
   }
   async function save(): Promise<boolean> {
@@ -236,16 +446,23 @@
     error = '';
     const saving = revision;
     try {
-      const compiled = preview.diagnostics.some((d) => d.level === 'error')
-        ? undefined
-        : preview.artifact;
       const document = {
         ...doc,
         metadata: { ...doc.metadata, title, language: doc.metadata?.language ?? 'en' }
       };
       const payload = {
         expected_revision: storedSlug ? serverRevision : undefined,
-        slug: slug || undefined,
+        ...(contentKind === 'projects'
+          ? {
+              ...meta,
+              tags: tagsText
+                .split(',')
+                .map((t) => t.trim())
+                .filter(Boolean),
+              repo_url: repoUrl || null
+            }
+          : { meta }),
+        slug: slug || (storedSlug ? undefined : 'draft-' + crypto.randomUUID()),
         title,
         category,
         summary,
@@ -253,17 +470,24 @@
         sort_order: Number(sortOrder),
         document,
         document_version: document.schemaVersion,
-        compiled
+        compiled: undefined
       };
       const value = await adminRequest<Article>(
-        storedSlug ? `/articles/${storedSlug}` : '/articles',
+        storedSlug ? `/${contentKind}/${storedSlug}` : '/' + contentKind,
         storedSlug ? 'PUT' : 'POST',
         payload
       );
       storedSlug = value.slug;
       serverRevision = value.revision ?? 1;
-      slug = value.slug;
+      slug = value.pending_slug || value.slug;
       savedRevision = saving;
+      loadedEditor = contentKind + ':' + storedSlug;
+      if (editorIdentity(page.url) !== loadedEditor) {
+        await navigate(
+          { new: null, [contentKind === 'projects' ? 'project' : 'article']: storedSlug },
+          true
+        );
+      }
       message = 'Saved.';
       await dashboard();
       return true;
@@ -279,20 +503,25 @@
       error = 'Resolve validation errors before publishing.';
       return;
     }
-    if (!(await save())) return;
+    if (!(await compileSaved())) return;
     if (dirty) {
       error = 'The document changed while saving. Save again before publishing.';
       return;
     }
     busy = true;
     try {
-      const result = await adminRequest<{ revision: number }>(
-        `/articles/${storedSlug}/publish`,
+      const result = await adminRequest<{ revision: number; slug: string }>(
+        `/${contentKind}/${storedSlug}/publish`,
         'POST',
-        { expected_revision: serverRevision }
+        { expected_revision: serverRevision, compilation_id: compilationId }
       );
       serverRevision = result.revision;
+      storedSlug = result.slug;
+      slug = result.slug;
+      meta = { ...meta, pending_slug: null };
       status = 'published';
+      loadedEditor = contentKind + ':' + storedSlug;
+      await navigate({ [contentKind === 'projects' ? 'project' : 'article']: storedSlug }, true);
       message = 'Published.';
       await dashboard();
     } catch (e) {
@@ -305,7 +534,7 @@
     busy = true;
     try {
       const result = await adminRequest<{ revision: number }>(
-        `/articles/${storedSlug}/unpublish`,
+        `/${contentKind}/${storedSlug}/unpublish`,
         'POST',
         { expected_revision: serverRevision }
       );
@@ -320,30 +549,39 @@
     }
   }
   async function removeArticle() {
-    if (!confirm(`Delete “${title}”? This cannot be undone.`)) return;
+    if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
     busy = true;
     try {
-      await adminRequest(`/articles/${storedSlug}`, 'DELETE', {
+      await adminRequest(`/${contentKind}/${storedSlug}`, 'DELETE', {
         expected_revision: serverRevision
       });
       editing = false;
       savedRevision = revision;
-      await dashboard();
+      await backToList();
     } catch (e) {
       report(e);
     } finally {
       busy = false;
     }
   }
-  async function moderate(comment: Comment, approve: boolean) {
-    if (!approve && !confirm('Delete this comment?')) return;
+  async function lifecycle(article: Article, action: string) {
+    if (
+      action !== 'restore' &&
+      !confirm(
+        action === 'delete'
+          ? `Permanently delete "${article.title}"? This cannot be undone.`
+          : 'Archive this content and remove it from public pages?'
+      )
+    )
+      return;
     busy = true;
     try {
       await adminRequest(
-        `/comments/${comment.id}${approve ? '/approve' : ''}`,
-        approve ? 'POST' : 'DELETE'
+        '/' + contentKind + '/' + article.slug + (action === 'delete' ? '' : '/' + action),
+        action === 'delete' ? 'DELETE' : 'POST',
+        { expected_revision: article.revision }
       );
-      await loadComments(comments.page);
+      await dashboard();
     } catch (e) {
       report(e);
     } finally {
@@ -352,11 +590,18 @@
   }
   function importDocument(source: string, format: string) {
     if (!confirm('Replace the current blocks with the imported document?')) return;
-    const result = format === 'json' ? editor.fromJson(source) : editor.importMarkdown(source);
-    error = result.diagnostics.map((d) => d.message).join('\n');
+    if (format === 'json') {
+      const result = editor.fromJson(source);
+      error = result.diagnostics.map((d) => d.message).join('\n');
+    } else {
+      const result = importMarkdown(source);
+      if (result.document && !result.diagnostics.some((d) => d.level === 'error'))
+        editor.setDocument(result.document);
+      error = result.diagnostics.map((d) => d.message).join('\n');
+    }
   }
   function download(format: 'json' | 'markdown') {
-    const result = format === 'markdown' ? editor.exportMarkdown() : undefined;
+    const result = format === 'markdown' ? archivalMarkdown(doc) : undefined;
     if (result?.diagnostics.some((d) => d.level === 'error')) {
       error = result.diagnostics.map((d) => d.message).join('\n');
       return;
@@ -374,6 +619,14 @@
   }
 </script>
 
+{#snippet contentSettings()}<ContentSettings
+    bind:meta
+    bind:tags={tagsText}
+    bind:repo={repoUrl}
+    kind={contentKind}
+    projects={allProjects}
+    onchange={changed}
+  />{/snippet}
 <svelte:head
   ><title>Publishing | Voidreg Admin</title><meta
     name="robots"
@@ -382,12 +635,14 @@
 >
 <main
   id="main-content"
-  class={loggedIn && editing && tab === 'articles'
+  class={loggedIn && editing && (tab === 'articles' || tab === 'projects')
     ? 'editor-root admin'
     : 'site-container page-shell admin'}
 >
-  {#if loggedIn && editing && tab === 'articles'}
+  {#if loggedIn && editing && (tab === 'articles' || tab === 'projects')}
     <EditorWorkspace
+      kind={contentKind}
+      settings={contentSettings}
       {doc}
       {editor}
       bind:title
@@ -398,9 +653,14 @@
       bind:sortOrder
       {storedSlug}
       {status}
-      {busy}
+      busy={busy || compiling}
       {dirty}
       {conflict}
+      mode={editorView.mode}
+      panel={editorView.panel}
+      inspector={editorView.inspector}
+      selectedBlock={editorView.block}
+      onnavigate={navigateView}
       onreload={() => open({ slug: storedSlug } as Article)}
       {message}
       {error}
@@ -413,15 +673,10 @@
       ondelete={removeArticle}
       onimport={importDocument}
       onexport={download}
-      onback={() => {
-        if (!dirty || confirm('Discard unsaved changes?')) {
-          editing = false;
-          savedRevision = revision;
-        }
-      }}
+      onback={backToList}
     />
   {:else}
-    <header class="admin-bar">
+    <header class="admin-bar admin-header">
       <div>
         <p class="eyebrow">Voidreg</p>
         <h1>Publishing</h1>
@@ -431,8 +686,10 @@
         >{/if}
     </header>
     {#if error}<p role="alert" class="feedback">{error}</p>{/if}
-    <p role="status">{message}</p>
-    {#if restoring}<p role="status">Restoring session…</p>
+    {#if message}<p role="status" class="admin-message">{message}</p>{/if}
+    {#if restoring || (routeLoading && !editing)}<p role="status">
+        {restoring ? 'Restoring session...' : 'Loading view...'}
+      </p>
     {:else if !loggedIn}
       <section class="publishing-form" aria-labelledby="sign-in-title">
         <h2 id="sign-in-title">Sign in</h2>
@@ -442,7 +699,7 @@
           <p role="alert">{loginOptionsError}</p>
           <button class="button button-secondary" onclick={loadLoginOptions}>Retry</button>
         {:else if !loginOptions}
-          <p role="status">Loading sign-in options…</p>
+          <p role="status">Loading sign-in options...</p>
         {:else}
           <div class="button-row">
             {#each loginOptions.providers as provider}
@@ -465,93 +722,104 @@
                 /></label
               >
               <button class="button button-secondary" disabled={busy}
-                >{busy ? 'Signing in…' : 'Sign in with password'}</button
+                >{busy ? 'Signing in...' : 'Sign in with password'}</button
               >
             </form>
           {/if}
         {/if}
       </section>
     {:else}
-      <nav class="button-row" aria-label="Admin sections">
-        <button
-          class="button button-secondary"
-          aria-pressed={tab === 'articles'}
-          onclick={() => (tab = 'articles')}>Articles</button
-        ><button
-          class="button button-secondary"
-          aria-pressed={tab === 'comments'}
-          onclick={() => {
-            tab = 'comments';
-            void loadComments();
-          }}>Comments</button
-        >
-        <button
-          class="button button-secondary"
-          aria-pressed={tab === 'mcp'}
-          onclick={() => (tab = 'mcp')}>MCP connections</button
-        >
+      <nav class="admin-navigation" aria-label="Admin sections">
+        {#each [['articles', 'Articles'], ['projects', 'Projects'], ['media', 'Media'], ['comments', 'Comments'], ['mcp', 'MCP connections']] as [section, label]}
+          <a
+            class="button button-secondary"
+            aria-current={tab === section ? 'page' : undefined}
+            href={base + '/?tab=' + section}>{label}</a
+          >
+        {/each}
       </nav>
-      {#if tab === 'mcp'}
+      {#if tab === 'media'}<MediaLibrary />
+      {:else if tab === 'mcp'}
         <McpConnections />
       {:else if tab === 'comments'}
-        <section class="section-stack">
-          <h2>Moderation queue</h2>
-          <label
-            >Status <select bind:value={commentStatus} onchange={() => loadComments()}
-              ><option value="pending">Pending</option><option value="approved">Approved</option
-              ><option value="">All</option></select
-            ></label
-          >
-          {#if comments.items.length === 0}<p>No comments in this queue.</p>{/if}
-          {#each comments.items as comment (comment.id)}<article class="moderation-row">
-              <h3>{comment.author_name}</h3>
-              <p>{comment.article_slug} · {comment.status}</p>
-              {#if comment.parent_id}<p>Reply to {comment.parent_author ?? 'another reader'}</p>
-                {#if comment.parent_body}<blockquote class="comment-body">
-                    {comment.parent_body}
-                  </blockquote>{/if}
-              {/if}
-              <p class="comment-body">{comment.body}</p>
-              <div class="button-row">
-                {#if comment.status === 'pending'}<button
-                    class="button"
-                    disabled={busy}
-                    onclick={() => moderate(comment, true)}>Approve</button
-                  >{/if}<button
-                  class="button button-secondary"
-                  disabled={busy}
-                  onclick={() => moderate(comment, false)}>Delete comment</button
-                >
-              </div>
-            </article>{/each}
-          <nav class="button-row" aria-label="Moderation pages">
-            <button
-              class="button button-secondary"
-              disabled={comments.page <= 1 || busy}
-              onclick={() => loadComments(comments.page - 1)}>Previous</button
-            ><button
-              class="button button-secondary"
-              disabled={comments.page * comments.per_page >= comments.total || busy}
-              onclick={() => loadComments(comments.page + 1)}>Next</button
-            >
-          </nav>
-        </section>
+        <ModerationDashboard />
       {:else}
         <section class="section-stack">
           <div class="admin-bar">
-            <h2>Articles</h2>
-            <button class="button" disabled={busy} onclick={() => open()}>New article</button>
+            <h2>{contentKind === 'projects' ? 'Projects' : 'Articles'}</h2>
+            <button
+              class="button"
+              disabled={busy}
+              onclick={() => goto(editorLink(), { noScroll: true })}
+              >New {contentKind === 'projects' ? 'project' : 'article'}</button
+            >
           </div>
-          {#if articles.length === 0}<p>No articles yet. Create your first draft.</p>{/if}
-          {#each articles as article (article.slug)}<article class="article-row">
-              <div>
-                <h3>{article.title}</h3>
-                <p>{article.status} · {article.category}{article.featured ? ' · Featured' : ''}</p>
-              </div>
-              <button class="button button-secondary" disabled={busy} onclick={() => open(article)}
-                >Edit</button
-              >
-            </article>{/each}
+          <form
+            class="content-filters"
+            onsubmit={(event) => {
+              event.preventDefault();
+              void navigate({ page: null, q: listQuery, status: listStatus });
+            }}
+          >
+            <label>Search<input type="search" bind:value={listQuery} /></label><label
+              >Status<select bind:value={listStatus}
+                ><option value="">All</option><option value="draft">Draft</option><option
+                  value="published">Published</option
+                ><option value="archived">Archived</option></select
+              ></label
+            ><button class="button button-secondary">Filter</button>
+          </form>
+          {#if listLoading}<p role="status">Loading content...</p>{:else if articles.length === 0}<p
+            >
+              No content matches. Create a draft or adjust the filters.
+            </p>{/if}
+          <div class="content-list">
+            {#each articles as article (article.slug)}<article class="article-row">
+                <div class="content-row-details">
+                  <h3>{article.title}</h3>
+                  <p>
+                    {article.archived ? 'Archived' : article.status} | {article.category}{article.featured
+                      ? ' | Featured'
+                      : ''}{article.has_unpublished_changes ? ' | Unpublished changes' : ''}
+                  </p>
+                </div>
+                <div class="button-row">
+                  {#if !article.archived}<button
+                      class="button button-secondary"
+                      disabled={busy}
+                      onclick={() => goto(editorLink(article), { noScroll: true })}>Edit</button
+                    >{/if}
+                  <button
+                    class="button button-secondary"
+                    disabled={busy}
+                    onclick={() => lifecycle(article, article.archived ? 'restore' : 'archive')}
+                    >{article.archived ? 'Restore' : 'Archive'}</button
+                  >
+                  <button
+                    class="button button-secondary"
+                    disabled={busy}
+                    aria-label={`Delete "${article.title}" permanently`}
+                    onclick={() => lifecycle(article, 'delete')}>Delete permanently</button
+                  >
+                </div>
+              </article>{/each}
+          </div>
+          <nav class="button-row content-pagination" aria-label="Content pages">
+            <button
+              class="button button-secondary"
+              disabled={busy || listLoading || listPage <= 1}
+              onclick={() => {
+                void navigate({ page: listPage - 1 });
+              }}>Previous</button
+            ><span>Page {listPage} of {Math.max(1, Math.ceil(listTotal / listPerPage))}</span
+            ><button
+              class="button button-secondary"
+              disabled={busy || listLoading || listPage * listPerPage >= listTotal}
+              onclick={() => {
+                void navigate({ page: listPage + 1 });
+              }}>Next</button
+            >
+          </nav>
         </section>
       {/if}
     {/if}
@@ -562,6 +830,92 @@
   .admin {
     gap: 2rem;
   }
+  .admin-header {
+    padding-block-end: 1.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .admin-header h1 {
+    font-size: 2.25rem;
+  }
+  .admin-navigation {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding-block-end: 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .admin-navigation .button {
+    background: transparent;
+    color: var(--muted-foreground);
+    border: 1px solid transparent;
+    border-bottom-width: 2px;
+    padding-inline: 1rem;
+  }
+  .admin-navigation .button:hover {
+    background: var(--muted);
+    color: var(--foreground);
+  }
+  .admin-navigation [aria-current='page'] {
+    background: var(--card);
+    border-bottom-color: var(--primary);
+    color: var(--foreground);
+  }
+  .content-filters {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(10rem, 12rem) auto;
+    align-items: end;
+    gap: 1rem;
+    padding: 1.5rem;
+    background: var(--card);
+    border: 1px solid var(--border);
+  }
+  .content-list {
+    display: grid;
+    gap: 1rem;
+  }
+  .content-row-details {
+    display: grid;
+    gap: 0.5rem;
+    min-width: 0;
+    flex: 1 1 20rem;
+  }
+  .content-row-details p {
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
+  }
+  .content-pagination {
+    align-items: center;
+    padding-block-start: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+  .admin-message {
+    padding: 1rem;
+    border-inline-start: 3px solid var(--primary);
+    background: var(--card);
+  }
+  @media (max-width: 47.999rem) {
+    .admin-navigation {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .admin-navigation .button {
+      justify-content: start;
+    }
+    .content-filters {
+      grid-template-columns: minmax(0, 1fr);
+      padding: 1rem;
+    }
+    .content-list .article-row {
+      padding: 1rem;
+      gap: 1.5rem;
+    }
+    .article-row > .button-row {
+      width: 100%;
+    }
+    .article-row > .button-row .button {
+      flex: 1 1 auto;
+    }
+  }
   .admin-bar,
   .article-row {
     display: flex;
@@ -570,7 +924,6 @@
     gap: 1rem;
     flex-wrap: wrap;
   }
-  .moderation-row,
   .article-row {
     padding: 1.5rem;
     border: 1px solid var(--border);
@@ -582,15 +935,5 @@
     padding: 1rem;
     background: var(--card);
     border-inline-start: 3px solid var(--primary);
-  }
-  select {
-    max-width: 100%;
-    min-height: 2.875rem;
-    color: var(--foreground);
-    background: var(--background);
-    border: 1px solid var(--input);
-    border-radius: var(--radius);
-    padding: 0.75rem;
-    font: inherit;
   }
 </style>

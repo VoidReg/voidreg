@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth::extract::AdminSession;
 use crate::db::Db;
-use crate::domain::{COMMENT_STATUS_APPROVED, CommentAdminListResponse, CommentAdminView};
+use crate::domain::{CommentAdminListResponse, CommentAdminView};
 use crate::error::AppError;
 
 #[derive(Debug, Deserialize)]
@@ -119,16 +119,15 @@ pub async fn approve_comment(
         .get_comment(&id)
         .await?
         .ok_or_else(|| AppError::NotFound(format!("comment '{id}' not found")))?;
-    if comment.status == "removed" {
-        return Err(AppError::Unprocessable(
-            "removed comments cannot be approved".to_owned(),
-        ));
-    }
-    db.approve_comment(&id).await?;
-    Ok(HttpResponse::Ok().json(CommentMutationResponse {
-        id: comment.id,
-        status: COMMENT_STATUS_APPROVED.to_owned(),
-    }))
+    let result = db
+        .moderate_comment(
+            &comment.id,
+            "approve",
+            &format!("session:{}", &crate::auth::hash_token(&session.token)[..16]),
+            "Approved through moderation queue",
+        )
+        .await?;
+    Ok(HttpResponse::Ok().json(result))
 }
 
 #[cfg_attr(feature = "swagger", utoipa::path(
@@ -153,6 +152,12 @@ pub async fn delete_comment(
     db.get_comment(&id)
         .await?
         .ok_or_else(|| AppError::NotFound(format!("comment '{id}' not found")))?;
-    db.delete_comment(&id).await?;
+    db.moderate_comment(
+        &id,
+        "remove",
+        &format!("session:{}", &crate::auth::hash_token(&session.token)[..16]),
+        "Removed through moderation queue",
+    )
+    .await?;
     Ok(HttpResponse::Ok().json(serde_json::json!({ "deleted": id })))
 }

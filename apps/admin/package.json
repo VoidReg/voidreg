@@ -12,12 +12,15 @@
     "mcp:dev": "tsx mcp/index.ts",
     "mcp:build": "esbuild mcp/index.ts --bundle --platform=node --format=esm --packages=external --external:*.svelte --outfile=dist-mcp/server.mjs",
     "mcp:check": "tsc -p mcp/tsconfig.json",
-    "mcp:test": "tsx --test --test-concurrency=1 mcp/*.test.ts"
+    "mcp:test": "tsx --test --test-concurrency=1 mcp/*.test.ts",
+    "publishing:build": "esbuild publishing/server.ts --bundle --platform=node --format=esm --packages=external --external:*.svelte --outfile=dist-publishing/server.mjs",
+    "publishing:dev": "tsx publishing/server.ts",
+    "publishing:check": "tsc -p publishing/tsconfig.json",
+    "publishing:test": "node publishing/smoke.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@fontsource/ibm-plex-mono": "^5.3.0",
-    "@fontsource/ibm-plex-sans": "^5.3.0",
     "@modelcontextprotocol/client": "2.3.1",
     "@sveltejs/adapter-static": "^3.0.10",
     "@sveltejs/kit": "^2.63.0",
@@ -42,6 +45,7 @@
     "vite": "^8.0.16"
   },
   "dependencies": {
+    "@fontsource/ibm-plex-sans": "^5.3.0",
     "@modelcontextprotocol/node": "2.1.1",
     "@modelcontextprotocol/server": "2.3.1",
     "@publisle/adapter-core": "file:vendor/publisle-adapter-core-0.1.1.tgz",
@@ -56,6 +60,10 @@
     "@publisle/profiles": "file:vendor/publisle-profiles-0.1.1.tgz",
     "@publisle/schema": "file:vendor/publisle-schema-0.1.0.tgz",
     "dompurify": "^3.3.0",
+    "katex": "0.16.47",
+    "mermaid": "12.2.0",
+    "playwright-core": "1.58.2",
+    "wavedrom": "3.5.0",
     "zod": "^4.6.7"
   }
 }

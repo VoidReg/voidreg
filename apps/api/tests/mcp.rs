@@ -1,3 +1,5 @@
+#[path = "support/compiler.rs"]
+mod compiler;
 use actix_web::{cookie::Cookie, http::StatusCode, test};
 use serde_json::{Value, json};
 use voidreg_api::{
@@ -12,7 +14,9 @@ async fn tokens_draft_permissions_revisions_revocation_and_owner_isolation() {
     let db = Db::memory().await.unwrap();
     db.migrate().await.unwrap();
     db.migrate().await.unwrap();
+    let compiler = compiler::Compiler::start();
     let mut config = Config::for_test();
+    compiler.configure(&mut config);
     config.admin_github_ids = vec!["owner".into(), "second".into()];
     let owner = db
         .upsert_identity("github", "owner", "", "Owner", None)
@@ -123,12 +127,22 @@ async fn tokens_draft_permissions_revisions_revocation_and_owner_isolation() {
         (left.status(), right.status()),
         (StatusCode::OK, StatusCode::CONFLICT) | (StatusCode::CONFLICT, StatusCode::OK)
     ));
+    let compilation: Value = test::call_and_read_body_json(
+        &app,
+        test::TestRequest::post()
+            .uri("/api/v1/admin/articles/mcp-draft/compile")
+            .cookie(cookie.clone())
+            .insert_header(("X-CSRF-Token", csrf.clone()))
+            .set_json(json!({"expected_revision":2}))
+            .to_request(),
+    )
+    .await;
     let publish = |revision| {
         test::TestRequest::post()
             .uri("/api/v1/admin/articles/mcp-draft/publish")
             .cookie(cookie.clone())
             .insert_header(("X-CSRF-Token", csrf.clone()))
-            .set_json(json!({"expected_revision":revision}))
+            .set_json(json!({"expected_revision":revision,"compilation_id":compilation["id"]}))
             .to_request()
     };
     assert_eq!(
@@ -237,6 +251,7 @@ async fn conditional_write_prevents_publish_races_and_requires_draft_status() {
     let db = Db::memory().await.unwrap();
     db.migrate().await.unwrap();
     let draft = ArticleFields {
+        meta: Default::default(),
         revision: 1,
         slug: "racing-draft".into(),
         title: "Original".into(),
@@ -248,18 +263,16 @@ async fn conditional_write_prevents_publish_races_and_requires_draft_status() {
         published_at: None,
         reading_time_minutes: None,
         sections: "[]".into(),
-        document: String::new(),
+        document: json!({"schemaVersion":1,"blocks":[]}).to_string(),
         document_version: 0,
-        compiled: String::new(),
+        compiled: json!({"format":"publisle:publication","formatVersion":1,"identity":"fixture","rendererBuild":"1","html":"<p>Hello</p>","styles":[],"modules":[],"islands":[],"diagnostics":[]}).to_string(),
         content_hash: String::new(),
     };
     db.insert_article(draft.clone()).await.unwrap();
-    let mut published = draft.clone();
-    published.status = "published".into();
     let mut edited = draft.clone();
     edited.title = "MCP edit".into();
     let (publish, edit) = tokio::join!(
-        db.save_article(&published, false),
+        db.publish_article_snapshot("racing-draft", 1),
         db.save_article(&edited, true)
     );
     assert_ne!(publish.is_ok(), edit.is_ok());

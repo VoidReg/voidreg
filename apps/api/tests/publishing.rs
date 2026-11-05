@@ -1,3 +1,5 @@
+#[path = "support/compiler.rs"]
+mod compiler;
 use actix_web::{
     cookie::Cookie,
     http::{StatusCode, header},
@@ -22,7 +24,10 @@ fn compiled() -> Value {
 
 #[actix_web::test]
 async fn publishing_lifecycle_cache_csrf_and_moderation() {
-    let app = test::init_service(build(database().await, Config::for_test())).await;
+    let compiler = compiler::Compiler::start();
+    let mut config = Config::for_test();
+    compiler.configure(&mut config);
+    let app = test::init_service(build(database().await, config)).await;
     let req = test::TestRequest::get()
         .uri("/api/v1/admin/articles")
         .to_request();
@@ -78,9 +83,19 @@ async fn publishing_lifecycle_cache_csrf_and_moderation() {
         test::call_service(&app, req).await.status(),
         StatusCode::NOT_FOUND
     );
+    let compilation: Value = test::call_and_read_body_json(
+        &app,
+        test::TestRequest::post()
+            .uri("/api/v1/admin/articles/test-article/compile")
+            .cookie(session.clone())
+            .insert_header(("X-CSRF-Token", csrf.clone()))
+            .set_json(json!({"expected_revision":1}))
+            .to_request(),
+    )
+    .await;
     let req = test::TestRequest::post()
         .uri("/api/v1/admin/articles/test-article/publish")
-        .set_json(json!({"expected_revision":1}))
+        .set_json(json!({"expected_revision":1,"compilation_id":compilation["id"]}))
         .cookie(session.clone())
         .insert_header(("X-CSRF-Token", csrf.clone()))
         .to_request();
@@ -97,10 +112,10 @@ async fn publishing_lifecycle_cache_csrf_and_moderation() {
             .unwrap()
             .to_str()
             .unwrap()
-            .contains("stale-while-revalidate")
+            .contains("no-cache")
     );
     let body: Value = test::read_body_json(response).await;
-    assert!(body.get("document").is_none());
+    assert_eq!(body["document"]["schemaVersion"], 1);
     assert_eq!(body["compiled"]["format"], "publisle:publication");
     let req = test::TestRequest::get()
         .uri("/api/v1/blogs/test-article")
@@ -123,16 +138,24 @@ async fn publishing_lifecycle_cache_csrf_and_moderation() {
     let xml = std::str::from_utf8(&xml).unwrap();
     assert!(xml.contains("/blog/test-article"));
     assert!(!xml.contains("how-to-validate"));
-    // Published edits must include compilation; a failed update keeps the current article.
+    // A working copy can be incomplete without changing the public snapshot.
     let req = test::TestRequest::put()
         .uri("/api/v1/admin/articles/test-article")
         .cookie(session.clone())
         .insert_header(("X-CSRF-Token", csrf.clone()))
         .set_json(json!({"document":document("Edited"),"expected_revision":2}))
         .to_request();
+    assert_eq!(test::call_service(&app, req).await.status(), StatusCode::OK);
+    let public: Value = test::call_and_read_body_json(
+        &app,
+        test::TestRequest::get()
+            .uri("/api/v1/blogs/test-article")
+            .to_request(),
+    )
+    .await;
     assert_eq!(
-        test::call_service(&app, req).await.status(),
-        StatusCode::UNPROCESSABLE_ENTITY
+        public["document"]["blocks"][0]["data"]["content"][0]["value"],
+        "Hello"
     );
     let req = test::TestRequest::post()
         .uri("/api/v1/blogs/test-article/comments")
@@ -161,7 +184,7 @@ async fn publishing_lifecycle_cache_csrf_and_moderation() {
     assert!(body["items"][0].get("ip_hash").is_none());
     let req = test::TestRequest::post()
         .uri("/api/v1/admin/articles/test-article/unpublish")
-        .set_json(json!({"expected_revision":2}))
+        .set_json(json!({"expected_revision":3}))
         .cookie(session.clone())
         .insert_header(("X-CSRF-Token", csrf.clone()))
         .to_request();
@@ -170,13 +193,13 @@ async fn publishing_lifecycle_cache_csrf_and_moderation() {
         .uri("/api/v1/admin/articles/test-article")
         .cookie(session.clone())
         .insert_header(("X-CSRF-Token", csrf.clone()))
-        .set_json(json!({"document":document("Edited"),"expected_revision":3}))
+        .set_json(json!({"document":document("Edited"),"expected_revision":4}))
         .to_request();
     let body: Value = test::call_and_read_body_json(&app, req).await;
     assert!(body.get("compiled").is_none());
     let req = test::TestRequest::post()
         .uri("/api/v1/admin/articles/test-article/publish")
-        .set_json(json!({"expected_revision":4}))
+        .set_json(json!({"expected_revision":5}))
         .cookie(session.clone())
         .insert_header(("X-CSRF-Token", csrf.clone()))
         .to_request();

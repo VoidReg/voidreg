@@ -1,5 +1,4 @@
 use actix_web::{HttpResponse, delete, get, post, put, web};
-use serde::Serialize;
 
 use crate::auth::extract::AdminSession;
 use crate::db::{ArticleFields, Db, compute_content_hash};
@@ -13,18 +12,12 @@ const MAX_CATEGORY_LEN: usize = 80;
 const MAX_SUMMARY_LEN: usize = 500;
 const MAX_SLUG_LEN: usize = 120;
 
-#[derive(Debug, Serialize)]
-#[cfg_attr(feature = "swagger", derive(utoipa::ToSchema))]
-pub struct AdminArticleListResponse {
-    pub items: Vec<Article>,
-}
-
 #[cfg_attr(feature = "swagger", utoipa::path(
     get,
     path = "/api/v1/admin/articles",
     tag = "admin",
     responses(
-        (status = 200, description = "All articles, cards only", body = AdminArticleListResponse),
+        (status = 200, description = "All articles, cards only", body = serde_json::Value),
         (status = 401, description = "Not signed in", body = crate::error::ErrorBody)
     )
 ))]
@@ -32,10 +25,10 @@ pub struct AdminArticleListResponse {
 pub async fn list_articles(
     db: web::Data<Db>,
     session: AdminSession,
+    query: web::Query<crate::db::content::ContentQuery>,
 ) -> Result<HttpResponse, AppError> {
     session.validate(&db).await?;
-    let items = db.admin_list_articles().await?;
-    Ok(HttpResponse::Ok().json(AdminArticleListResponse { items }))
+    Ok(HttpResponse::Ok().json(db.content_page("article", false, &query).await?))
 }
 
 #[cfg_attr(feature = "swagger", utoipa::path(
@@ -61,9 +54,12 @@ pub async fn create_article(
 }
 
 pub(crate) async fn create(db: &Db, input: ArticleWriteRequest) -> Result<HttpResponse, AppError> {
-    let title = required(&input.title, "title", MAX_TITLE_LEN)?;
-    let category = required(&input.category, "category", MAX_CATEGORY_LEN)?;
-    let summary = required(&input.summary, "summary", MAX_SUMMARY_LEN)?;
+    let title = input
+        .title
+        .clone()
+        .unwrap_or_else(|| "Untitled article".into());
+    let category = input.category.clone().unwrap_or_default();
+    let summary = input.summary.clone().unwrap_or_default();
     let slug = match input
         .slug
         .as_deref()
@@ -83,6 +79,7 @@ pub(crate) async fn create(db: &Db, input: ArticleWriteRequest) -> Result<HttpRe
     let compiled_json = prepare_compiled(input.compiled.as_ref())?;
 
     let fields = ArticleFields {
+        meta: input.meta.clone().unwrap_or_default(),
         revision: 1,
         slug,
         title,
@@ -160,32 +157,29 @@ pub(crate) async fn update(
     input: ArticleWriteRequest,
     draft_only: bool,
 ) -> Result<HttpResponse, AppError> {
-    if let Some(requested) = input
-        .slug
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        && requested != slug
-    {
-        return Err(AppError::Unprocessable(
-            "slugs are immutable; create a new article to rename".to_owned(),
-        ));
-    }
-
     let mut current_fields = article_fields(db.admin_get_article(&slug).await?)?;
     check_revision(input.expected_revision, current_fields.revision)?;
+    if let Some(meta) = input.meta {
+        current_fields.meta = meta;
+    }
+    if let Some(requested) = input.slug.as_deref().filter(|s| !s.is_empty()) {
+        validate_slug(requested)?;
+        if requested != slug {
+            current_fields.meta.pending_slug = Some(requested.into());
+        }
+    }
     if draft_only && current_fields.status != "draft" {
         return Err(AppError::Forbidden("MCP can only edit drafts".into()));
     }
 
     if let Some(title) = &input.title {
-        current_fields.title = bounded(title, "title", MAX_TITLE_LEN)?;
+        current_fields.title = draft_text(title, "title", MAX_TITLE_LEN)?;
     }
     if let Some(category) = &input.category {
-        current_fields.category = bounded(category, "category", MAX_CATEGORY_LEN)?;
+        current_fields.category = draft_text(category, "category", MAX_CATEGORY_LEN)?;
     }
     if let Some(summary) = &input.summary {
-        current_fields.summary = bounded(summary, "summary", MAX_SUMMARY_LEN)?;
+        current_fields.summary = draft_text(summary, "summary", MAX_SUMMARY_LEN)?;
     }
     if let Some(featured) = input.featured {
         current_fields.featured = featured;
@@ -218,12 +212,6 @@ pub(crate) async fn update(
         current_fields.compiled = prepare_compiled(input.compiled.as_ref())?;
     }
 
-    if current_fields.status == "published" && current_fields.compiled.is_empty() {
-        return Err(AppError::Unprocessable(
-            "published document updates require a compiled artifact; unpublish to save a draft"
-                .to_owned(),
-        ));
-    }
     current_fields.content_hash = compute_content_hash(&current_fields);
     let article = db.save_article(&current_fields, draft_only).await?;
     Ok(HttpResponse::Ok().json(article))
@@ -242,16 +230,19 @@ pub(crate) async fn update(
 ))]
 #[post("/articles/{slug}/publish")]
 pub async fn publish_article(
+    config: web::Data<crate::config::Config>,
     db: web::Data<Db>,
     path: web::Path<String>,
     session: AdminSession,
     payload: web::Json<ArticleWriteRequest>,
 ) -> Result<HttpResponse, AppError> {
     set_status(
+        config,
         db,
         path,
         session,
         payload.expected_revision,
+        payload.compilation_id.clone(),
         crate::domain::ArticleStatus::Published,
     )
     .await
@@ -270,16 +261,19 @@ pub async fn publish_article(
 ))]
 #[post("/articles/{slug}/unpublish")]
 pub async fn unpublish_article(
+    config: web::Data<crate::config::Config>,
     db: web::Data<Db>,
     path: web::Path<String>,
     session: AdminSession,
     payload: web::Json<ArticleWriteRequest>,
 ) -> Result<HttpResponse, AppError> {
     set_status(
+        config,
         db,
         path,
         session,
         payload.expected_revision,
+        None,
         crate::domain::ArticleStatus::Draft,
     )
     .await
@@ -315,10 +309,12 @@ pub async fn delete_article(
 }
 
 async fn set_status(
+    config: web::Data<crate::config::Config>,
     db: web::Data<Db>,
     path: web::Path<String>,
     session: AdminSession,
     expected_revision: Option<i64>,
+    compilation_id: Option<String>,
     status: crate::domain::ArticleStatus,
 ) -> Result<HttpResponse, AppError> {
     session.validate(&db).await?;
@@ -326,20 +322,46 @@ async fn set_status(
     let mut fields = article_fields(db.admin_get_article(&slug).await?)?;
     check_revision(expected_revision, fields.revision)?;
     if status == crate::domain::ArticleStatus::Published {
+        bounded(&fields.title, "title", MAX_TITLE_LEN)?;
+        bounded(&fields.summary, "summary", MAX_SUMMARY_LEN)?;
         document::validate_document(&fields.document)?;
-        document::validate_compiled(&fields.compiled)?;
     }
     fields.status = status.as_str().to_owned();
     if status == crate::domain::ArticleStatus::Published && fields.published_at.is_none() {
         fields.published_at = Some(now_rfc3339());
     }
     fields.content_hash = compute_content_hash(&fields);
-    let saved = db.save_article(&fields, false).await?;
+    let saved: Article = if status == crate::domain::ArticleStatus::Published {
+        let compiled = crate::publishing::verified(
+            &config,
+            &db,
+            "article",
+            &slug,
+            fields.revision,
+            compilation_id.as_deref(),
+        )
+        .await?;
+        serde_json::from_value(
+            db.content_action_compiled(
+                "article",
+                &slug,
+                fields.revision,
+                "publish",
+                Some(compiled),
+            )
+            .await?,
+        )?
+    } else {
+        serde_json::from_value(
+            db.content_action("article", &slug, fields.revision, "unpublish")
+                .await?,
+        )?
+    };
     Ok(HttpResponse::Ok().json(ArticleMutationResponse {
         revision: saved.revision,
-        slug: fields.slug,
-        status: fields.status,
-        content_hash: fields.content_hash,
+        slug: saved.slug,
+        status: saved.status.as_str().into(),
+        content_hash: saved.content_hash,
     }))
 }
 
@@ -355,6 +377,7 @@ fn article_fields(article: Article) -> Result<ArticleFields, AppError> {
         None => String::new(),
     };
     Ok(ArticleFields {
+        meta: article.meta,
         revision: article.revision,
         slug: article.slug,
         title: article.title,
@@ -416,6 +439,7 @@ fn prepare_compiled(compiled: Option<&serde_json::Value>) -> Result<String, AppE
     }
 }
 
+#[allow(dead_code)]
 fn required(value: &Option<String>, name: &str, max: usize) -> Result<String, AppError> {
     let trimmed = value
         .as_deref()
@@ -478,6 +502,15 @@ fn check_revision(expected: Option<i64>, current: i64) -> Result<(), AppError> {
         ));
     }
     Ok(())
+}
+
+fn draft_text(value: &str, name: &str, max: usize) -> Result<String, AppError> {
+    if value.chars().count() > max {
+        return Err(AppError::Unprocessable(format!(
+            "{name} exceeds {max} characters"
+        )));
+    }
+    Ok(value.trim().to_owned())
 }
 
 #[cfg(test)]

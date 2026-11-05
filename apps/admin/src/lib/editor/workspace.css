@@ -5,7 +5,7 @@
 }
 .publishing-workspace {
   --outline-width: 12rem;
-  --inspector-width: 18rem;
+  --inspector-width: 20rem;
   min-height: 100dvh;
   background: var(--muted);
   color: var(--foreground);
@@ -326,6 +326,7 @@
   border-color: var(--primary);
 }
 .document-block-label {
+  margin-block-end: 0.75rem;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
@@ -458,7 +459,7 @@
 }
 .inspector-section {
   display: grid;
-  gap: 1rem;
+  gap: 1.5rem;
   padding: 1.5rem;
   border-bottom: 1px solid var(--border);
 }
@@ -490,6 +491,7 @@
   resize: vertical;
 }
 .editor-checkbox {
+  padding-block: 0.5rem;
   display: grid;
   grid-template-columns: 1.25rem minmax(0, 1fr);
   align-items: center;
@@ -590,6 +592,14 @@
 .publishing-workspace select:focus-visible {
   outline: 3px solid var(--ring);
   outline-offset: 3px;
+}
+@container (min-width: 80rem) {
+  .publishing-workspace:not(.settings-visible) .workspace-columns {
+    grid-template-columns: var(--outline-width) minmax(0, 1fr);
+  }
+  .publishing-workspace:not(.settings-visible) .editor-inspector {
+    display: none;
+  }
 }
 @container (max-width: 79.999rem) {
   .workspace-columns {
@@ -832,4 +842,143 @@
 .article-preview .article-prose ol {
   list-style: decimal;
   padding-inline-start: 1.5rem;
+}
+
+.inspector-section fieldset {
+  display: grid;
+  gap: 0.5rem;
+}
+.inspector-section fieldset > .editor-help {
+  margin-block-end: 0.5rem;
+}
+.inspector-details[open] > summary {
+  margin-block-end: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.inspector-details > .editor-field + .editor-help {
+  margin-block-start: 0.5rem;
+}
+.focused-block-editor {
+  padding-block-start: 0.75rem;
+}
+.focused-block-editor .field--segments {
+  gap: 1.5rem;
+}
+
+.editor-field-group {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.block-validation-error,
+.math-editor__error {
+  padding: 0.75rem;
+  border-inline-start: 3px solid var(--primary);
+  background: var(--muted);
+  color: var(--foreground);
+  overflow-wrap: anywhere;
+}
+.math-editor {
+  min-width: 0;
+  border: 1px solid var(--border);
+}
+.math-editor__preview {
+  padding: 1rem;
+  min-height: 4rem;
+  overflow-x: auto;
+}
+.math-editor__source {
+  position: relative;
+  min-width: 0;
+  background: var(--card);
+}
+.admin .block-editor .math-editor__highlight,
+.admin .block-editor .math-editor__input {
+  margin: 0;
+  width: 100%;
+  border: 0;
+  padding: 0.75rem;
+  font: 400 0.875rem/1.5 var(--font-code);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 2;
+}
+.admin .block-editor .math-editor__highlight {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: transparent;
+  color: var(--foreground);
+}
+.admin .block-editor .math-editor__input {
+  position: relative;
+  display: block;
+  resize: vertical;
+  min-height: 8rem;
+  field-sizing: fixed;
+  color: transparent;
+  caret-color: var(--foreground);
+  background: transparent;
+}
+.math-editor__tabs,
+.math-editor__snippets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.75rem;
+}
+.math-editor__tabs {
+  border-block: 1px solid var(--border);
+}
+.math-editor__tab[aria-selected='true'] {
+  border-color: var(--primary);
+  color: var(--link);
+}
+.math-editor__fields {
+  display: grid;
+  gap: 1rem;
+}
+.math-editor__empty {
+  color: var(--muted-foreground);
+}
+.math-editor__toggle {
+  margin: 0.75rem;
+}
+.math-tok-command {
+  color: var(--link);
+  font-weight: 600;
+}
+.math-tok-brace,
+.math-tok-script {
+  color: var(--muted-foreground);
+}
+.math-tok-number {
+  color: var(--foreground);
+}
+.math-editor__preview .katex-display {
+  margin: 0.5rem 0;
+}
+.math-editor__preview .katex {
+  overflow-wrap: normal;
+}
+
+.validation-error-list {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 0.5rem;
+  padding: 0;
+  list-style: none;
+}
+.validation-error-link {
+  text-align: start;
+  min-height: 2.75rem;
+  color: var(--link);
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.math-editor__preview {
+  max-height: 24rem;
+  overflow: auto;
 }

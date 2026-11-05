@@ -2,11 +2,25 @@ use actix_web::web::ServiceConfig;
 
 pub mod articles;
 pub mod comments;
+pub mod compilations;
+pub mod content;
 pub mod mcp;
+pub mod media;
+pub mod moderation;
 pub mod session;
 
 pub fn configure(cfg: &mut ServiceConfig) {
-    cfg.service(mcp::list)
+    cfg.service(compilations::start)
+        .service(compilations::show)
+        .service(compilations::refresh)
+        .service(compilations::asset)
+        .service(moderation::summary)
+        .service(moderation::preview)
+        .service(moderation::list)
+        .service(moderation::block)
+        .service(moderation::revoke)
+        .service(moderation::moderate)
+        .service(mcp::list)
         .service(mcp::create)
         .service(mcp::revoke)
         .service(session::login_options)
@@ -22,5 +36,15 @@ pub fn configure(cfg: &mut ServiceConfig) {
         .service(articles::delete_article)
         .service(comments::list_comments)
         .service(comments::approve_comment)
-        .service(comments::delete_comment);
+        .service(comments::delete_comment)
+        .service(content::list)
+        .service(content::get_one)
+        .service(content::create)
+        .service(content::update)
+        .service(content::remove)
+        .service(content::action)
+        .service(media::list)
+        .service(media::upload)
+        .service(media::update)
+        .service(media::remove);
 }

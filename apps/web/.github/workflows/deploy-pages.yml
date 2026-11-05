@@ -1,57 +1,21 @@
-name: Deploy to GitHub Pages
-
+name: Build server artifact
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
-
-concurrency:
-  group: pages
-  cancel-in-progress: false
-
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: pnpm/action-setup@v4
         with:
           version: 11
-
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
-
       - run: pnpm install --frozen-lockfile
-
-      - name: Lint and format
-        run: pnpm lint
-
-      - name: Type check
-        run: pnpm check
-
-      - name: Build site and generate sitemap
-        run: pnpm build
-        env:
-          NODE_ENV: production
-
-      - uses: actions/configure-pages@v5
-
-      - uses: actions/upload-pages-artifact@v3
+      - run: pnpm check && pnpm build
+      - uses: actions/upload-artifact@v4
         with:
+          name: voidreg-node-build
           path: build/
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4

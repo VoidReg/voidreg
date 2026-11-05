@@ -114,3 +114,38 @@ pub struct McpToken {
     pub expires_at: String,
     pub last_used_at: Option<String>,
 }
+
+#[derive(Debug, toasty::Model)]
+pub struct ContentEntry {
+    #[key]
+    #[auto]
+    pub id: uuid::Uuid,
+    #[unique]
+    pub name: String,
+    pub kind: String,
+    pub working: String,
+    pub published: Option<String>,
+    pub revision: i64,
+    pub archived: bool,
+    pub deleted: bool,
+    pub public_order: i64,
+    pub public_date: String,
+}
+#[derive(Debug, toasty::Model)]
+pub struct ContentAlias {
+    #[key]
+    #[auto]
+    pub id: uuid::Uuid,
+    #[unique]
+    pub name: String,
+    pub owner: String,
+}
+#[derive(Debug, toasty::Model)]
+pub struct MediaAsset {
+    #[key]
+    #[auto]
+    pub id: uuid::Uuid,
+    #[unique]
+    pub filename: String,
+    pub metadata: String,
+}

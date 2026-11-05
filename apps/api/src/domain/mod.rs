@@ -21,3 +21,6 @@ pub use health::HealthResponse;
 pub use identity::{CommenterIdentity, CommenterSessionResponse};
 pub use newsletter::{NewsletterRequest, NewsletterResponse};
 pub use project::{ContentSection, MediaPlaceholder, Project, ProjectListResponse};
+
+pub mod content;
+pub use content::ContentMeta;

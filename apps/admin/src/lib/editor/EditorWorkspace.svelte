@@ -1,7 +1,10 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import type { EditorView } from '$lib/navigation';
+  import Icon from '$lib/components/Icon.svelte';
+  import { tick, type Snippet } from 'svelte';
   import { blockLabels, type DocumentEditor } from '@publisle/playground';
   import BlockEditor from '@publisle/playground/BlockEditor.svelte';
+  import MathBlockEditor from '@publisle/playground/MathBlockEditor.svelte';
   import type { Document, Diagnostic, BlockId } from '@publisle/schema';
   import ArticleBody from '$lib/publishing/ArticleBody.svelte';
   import type { Article } from '$lib/publishing/api';
@@ -12,6 +15,13 @@
   import './workspace.css';
 
   interface Props {
+    kind?: string;
+    mode: EditorView['mode'];
+    panel: EditorView['panel'];
+    inspector: EditorView['inspector'];
+    selectedBlock: string | null;
+    onnavigate: (view: Partial<EditorView>) => Promise<void>;
+    settings?: Snippet;
     doc: Document;
     editor: DocumentEditor;
     title: string;
@@ -40,6 +50,13 @@
     onexport: (format: 'json' | 'markdown') => void;
   }
   let {
+    kind = 'articles',
+    mode,
+    panel,
+    inspector,
+    selectedBlock,
+    onnavigate,
+    settings,
     doc,
     editor,
     title = $bindable(),
@@ -67,10 +84,7 @@
     onimport,
     onexport
   }: Props = $props();
-  let mode = $state<'write' | 'preview'>('write');
-  let panel = $state<'document' | 'outline' | 'settings'>('document');
-  let inspector = $state<'block' | 'article'>('article');
-  let selectedId = $state<BlockId | undefined>();
+  const selectedId = $derived(doc.blocks.find((block) => block.id === selectedBlock)?.id);
   let dragging = $state<BlockId | undefined>();
   let importText = $state(''),
     importFormat = $state('markdown');
@@ -78,12 +92,12 @@
   const selected = $derived(doc.blocks.find((block) => block.id === selectedId));
   const selectedIndex = $derived(doc.blocks.findIndex((block) => block.id === selectedId));
   const errors = $derived(diagnostics.filter((item) => item.level === 'error'));
-  const readyToSave = $derived(Boolean(title.trim() && summary.trim() && category.trim()));
+  const readyToSave = $derived(true);
   const saveStatus = $derived(
     conflict
       ? 'Autosave paused. Resolve the editing conflict.'
       : busy
-        ? 'Saving…'
+        ? 'Saving...'
         : dirty && !readyToSave
           ? 'Complete title, summary, and category to enable autosave.'
           : dirty
@@ -92,14 +106,8 @@
   );
   const wordCount = $derived(outlineText(doc.blocks).trim().match(/\S+/g)?.length ?? 0);
 
-  $effect(() => {
-    if (selectedId && !doc.blocks.some((block) => block.id === selectedId)) selectedId = undefined;
-  });
   async function select(id: BlockId) {
-    selectedId = id;
-    mode = 'write';
-    panel = 'document';
-    inspector = 'block';
+    await onnavigate({ mode: 'write', panel: 'document', inspector: 'block', block: id });
     await tick();
     const element = document.getElementById(`editing-${id}`);
     element?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
@@ -131,7 +139,7 @@
     void select(block.id);
   }
   async function finish(id: BlockId) {
-    selectedId = undefined;
+    await onnavigate({ block: null });
     await tick();
     document
       .getElementById(`editing-${id}`)
@@ -145,8 +153,7 @@
     const next = editor.document.blocks[Math.min(index, editor.document.blocks.length - 1)];
     if (next) await select(next.id);
     else {
-      selectedId = undefined;
-      panel = 'document';
+      await onnavigate({ panel: 'document', block: null });
       await tick();
       document.querySelector<HTMLElement>('.document-empty button')?.focus();
     }
@@ -163,18 +170,26 @@
     dragging = undefined;
   }
   function showSettings(tab: 'block' | 'article') {
-    panel = panel === 'settings' && inspector === tab ? 'document' : 'settings';
-    inspector = tab;
+    void onnavigate({
+      panel: panel === 'settings' && inspector === tab ? 'document' : 'settings',
+      inspector: tab
+    });
   }
 </script>
 
-<div class="publishing-workspace" class:preview-mode={mode === 'preview'} data-panel={panel}>
+<div
+  class="publishing-workspace"
+  class:preview-mode={mode === 'preview'}
+  class:settings-visible={panel === 'settings' || (inspector === 'block' && !!selected)}
+  data-panel={panel}
+>
   <header class="editor-topbar">
     <div class="editor-location">
       <button class="editor-back" disabled={busy} onclick={onback}
-        ><span aria-hidden="true">←</span> Articles</button
+        ><Icon name="arrow-left" size={16} />
+        {kind === 'projects' ? 'Projects' : 'Articles'}</button
       ><span class="location-divider" aria-hidden="true">/</span>
-      <h1 class="workspace-title">Article editor</h1>
+      <h1 class="workspace-title">{kind === 'projects' ? 'Project editor' : 'Article editor'}</h1>
     </div>
     <div class="editor-primary-actions">
       <button class="editor-button secondary" disabled={busy || conflict} onclick={onsave}
@@ -191,15 +206,12 @@
       <button
         aria-pressed={mode === 'write' && panel === 'document'}
         onclick={() => {
-          mode = 'write';
-          panel = 'document';
+          void onnavigate({ mode: 'write', panel: 'document' });
         }}>Write</button
       ><button
         aria-pressed={mode === 'preview' && panel === 'document'}
         onclick={() => {
-          mode = 'preview';
-          panel = 'document';
-          inspector = 'article';
+          void onnavigate({ mode: 'preview', panel: 'document', inspector: 'article' });
         }}>Preview</button
       >
     </nav>
@@ -207,16 +219,19 @@
       <button
         class="outline-toggle"
         aria-pressed={panel === 'outline'}
-        onclick={() => (panel = panel === 'outline' ? 'document' : 'outline')}>Outline</button
-      ><button aria-pressed={panel === 'settings'} onclick={() => showSettings('article')}
-        >Article settings</button
+        onclick={() => onnavigate({ panel: panel === 'outline' ? 'document' : 'outline' })}
+        >Outline</button
+      ><button
+        aria-pressed={panel === 'settings' && inspector === 'article'}
+        onclick={() => showSettings('article')}
+        >{kind === 'projects' ? 'Project settings' : 'Article settings'}</button
       >
     </div>
   </div>
   <div class="editor-statusbar">
     <span class="article-state">{status === 'published' ? 'Published' : 'Draft'}</span>
     <p role="status">{saveStatus}</p>
-    <span class="document-count">{doc.blocks.length} blocks · {wordCount} words</span>
+    <span class="document-count">{doc.blocks.length} blocks | {wordCount} words</span>
   </div>
   {#if conflict}
     <section class="editor-notice" aria-label="Resolve editing conflict">
@@ -238,11 +253,25 @@
           ? 'error'
           : 'errors'}.
       </p>
+      <ul class="validation-error-list">
+        {#each errors as diagnostic}
+          <li>
+            <button
+              class="validation-error-link"
+              onclick={() => {
+                if (diagnostic.blockId) void select(diagnostic.blockId as BlockId);
+              }}
+              >{diagnostic.blockId
+                ? 'Block ' + (doc.blocks.findIndex((b) => b.id === diagnostic.blockId) + 1) + ': '
+                : ''}{diagnostic.message}</button
+            >
+          </li>
+        {/each}
+      </ul>
       <button
         class="block-settings-link"
         onclick={() => {
-          inspector = 'article';
-          panel = 'settings';
+          void onnavigate({ inspector: 'article', panel: 'settings' });
         }}>Review checks</button
       >
     </div>{/if}
@@ -255,13 +284,10 @@
       <button
         class="outline-title"
         onclick={async () => {
-          selectedId = undefined;
-          inspector = 'article';
-          panel = 'document';
-          mode = 'write';
+          await onnavigate({ inspector: 'article', panel: 'document', mode: 'write', block: null });
           await tick();
           document.getElementById('article-title')?.focus();
-        }}>{title || 'Untitled article'}</button
+        }}>{title || (kind === 'projects' ? 'Untitled project' : 'Untitled article')}</button
       >
       {#if doc.blocks.length === 0}<p class="editor-help outline-empty">
           Your blocks will appear here as you write.
@@ -285,9 +311,8 @@
               ><span class="outline-number">{String(index + 1).padStart(2, '0')}</span><span
                 ><span class="outline-label">{labels[block.type] ?? block.type}</span><span
                   class="outline-description"
-                  >{outlineText(block.data).split(/\s+/).slice(0, 10).join(' ') +
-                    (outlineText(block.data).split(/\s+/).length > 10 ? '…' : '') ||
-                    'No content yet'}</span
+                  >{outlineText(block.data).slice(0, 80) +
+                    (outlineText(block.data).length > 80 ? '...' : '') || 'No content yet'}</span
                 ></span
               ></button
             >
@@ -306,13 +331,13 @@
       {#if mode === 'write'}
         <div class="document-sheet">
           <div class="document-heading">
-            <p class="editor-kicker">Article</p>
+            <p class="editor-kicker">{kind === 'projects' ? 'Project' : 'Article'}</p>
             <label class="sr-only" for="article-title">Title</label><textarea
               id="article-title"
               class="document-title"
               bind:value={title}
               oninput={onchange}
-              placeholder="Untitled article"
+              placeholder={kind === 'projects' ? 'Untitled project' : 'Untitled article'}
               rows="2"
               maxlength="200"></textarea><label class="sr-only" for="article-summary">Summary</label
             ><textarea
@@ -320,7 +345,7 @@
               class="document-summary"
               bind:value={summary}
               oninput={onchange}
-              placeholder="Add a short summary for your readers…"
+              placeholder="Add a short summary for your readers..."
               rows="2"
               maxlength="500"></textarea>
           </div>
@@ -331,7 +356,7 @@
             >
           </div>
           {#if doc.blocks.length === 0}<div class="document-empty">
-              <h3>Start your article</h3>
+              <h3>Start your {kind === 'projects' ? 'project' : 'article'}</h3>
               <p>Add a paragraph, heading, or another block to begin.</p>
               <button class="editor-button secondary" onclick={() => add('publisle:paragraph')}
                 >Add paragraph</button
@@ -353,15 +378,48 @@
                       onclick={() => finish(block.id)}>Done</button
                     >{/if}
                 </div>
+                {#if selectedId !== block.id}
+                  {#each diagnostics.filter((d) => d.blockId === block.id && d.level === 'error') as diagnostic}
+                    <button
+                      class="block-validation-error validation-error-link"
+                      onclick={() => select(block.id)}>{diagnostic.message}</button
+                    >
+                  {/each}
+                {/if}
                 {#if selectedId === block.id}
-                  <div class="focused-block-editor">
-                    <BlockEditor
-                      {block}
-                      {extensions}
-                      onRemove={removeSelected}
-                      onMove={(id, direction) => editor.moveBlock(id, direction)}
-                      onUpdate={(id, data) => editor.updateBlock(id, data)}
-                    />
+                  <div
+                    class="focused-block-editor"
+                    onscrollcapture={(event) => {
+                      const input = event.target as HTMLTextAreaElement;
+                      if (input.matches?.('.math-editor__input')) {
+                        const highlight =
+                          input.parentElement?.querySelector<HTMLElement>(
+                            '.math-editor__highlight'
+                          );
+                        if (highlight) {
+                          highlight.scrollTop = input.scrollTop;
+                          highlight.scrollLeft = input.scrollLeft;
+                        }
+                      }
+                    }}
+                  >
+                    {#if block.type === 'publisle:math'}
+                      <MathBlockEditor
+                        {block}
+                        onUpdate={(id, data) => editor.updateBlock(id, data)}
+                      />
+                    {:else}
+                      <BlockEditor
+                        {block}
+                        {extensions}
+                        onRemove={removeSelected}
+                        onMove={(id, direction) => editor.moveBlock(id, direction)}
+                        onUpdate={(id, data) => editor.updateBlock(id, data)}
+                      />
+                    {/if}
+                    {#each diagnostics.filter((d) => d.blockId === block.id && d.level === 'error' && !(block.type === 'publisle:math' && d.code === 'invalid-math')) as diagnostic}
+                      <p class="block-validation-error" role="alert">{diagnostic.message}</p>
+                    {/each}
                   </div>
                   {#if block.type === 'voidreg:counter'}<SchemaPayload
                       schema={counterDefinition.descriptor.payloadSchema}
@@ -372,13 +430,12 @@
                   <div class="block-footer">
                     <span class="editor-help"
                       >{readyToSave
-                        ? 'Changes save automatically.'
+                        ? 'Changes save as a draft. Update publishes them.'
                         : 'Complete article details to enable autosave.'}</span
                     ><button
                       class="block-settings-link"
                       onclick={() => {
-                        inspector = 'block';
-                        panel = 'settings';
+                        void onnavigate({ inspector: 'block', panel: 'settings' });
                       }}>Block settings</button
                     >
                   </div>
@@ -395,7 +452,7 @@
           <div class="document-insert">
             <BlockInserter oninsert={add} />
             <p class="editor-help">
-              {selected ? 'Inserts after the selected block.' : 'Adds to the end of your article.'}
+              {selected ? 'Inserts after the selected block.' : 'Adds to the end of your document.'}
             </p>
           </div>
         </div>
@@ -405,7 +462,9 @@
             <p class="editor-kicker">Reader preview</p>
             <span class="editor-help">{category || 'Uncategorized'}</span>
           </div>
-          <h2 class="preview-article-title">{title || 'Untitled article'}</h2>
+          <h2 class="preview-article-title">
+            {title || (kind === 'projects' ? 'Untitled project' : 'Untitled article')}
+          </h2>
           <p class="preview-summary">{summary || 'Add a summary in Write mode.'}</p>
           {#if errors.length}<div class="editor-notice">
               Resolve document errors to preview.
@@ -416,12 +475,15 @@
 
     <aside class="editor-inspector" aria-label="Editor settings">
       <div class="inspector-tabs" aria-label="Settings category">
-        <button aria-pressed={inspector === 'article'} onclick={() => (inspector = 'article')}
-          >Article</button
+        <button
+          aria-pressed={inspector === 'article'}
+          onclick={() => {
+            void onnavigate({ inspector: 'article', panel: 'settings' });
+          }}>{kind === 'projects' ? 'Project' : 'Article'}</button
         ><button
           aria-pressed={inspector === 'block'}
           disabled={!selected}
-          onclick={() => (inspector = 'block')}>Block</button
+          onclick={() => onnavigate({ inspector: 'block', panel: 'settings' })}>Block</button
         >
       </div>
       {#if inspector === 'block' && selected}
@@ -443,7 +505,6 @@
           <button
             class="editor-button secondary"
             onclick={() => {
-              panel = 'document';
               void select(selected!.id);
             }}>Edit content</button
           >
@@ -469,7 +530,7 @@
         </section>
         <section class="inspector-section">
           <button class="editor-button danger" onclick={removeSelected}>Remove block</button>
-          <p class="editor-help">Removes this block from the article.</p>
+          <p class="editor-help">Removes this block from the document.</p>
         </section>
       {:else}
         <form
@@ -480,41 +541,45 @@
             void onsave();
           }}
         >
-          <h2 class="sidebar-heading">Article details</h2>
+          <h2 class="sidebar-heading">Publishing details</h2>
           <label class="editor-field"
             >Category<input
               bind:value={category}
               maxlength="80"
               placeholder="Choose a category"
-              required
-            /></label
-          ><label class="editor-field"
-            >Slug<input
-              bind:value={slug}
-              readonly={!!storedSlug}
-              placeholder="Generated from title"
-              pattern="[a-z0-9]+(-[a-z0-9]+)*"
             /></label
           >
-          <p class="editor-help">
-            {storedSlug
-              ? 'The URL is fixed after the first save.'
-              : 'Leave blank to use the article title.'}
-          </p>
+          <div class="editor-field-group">
+            <label class="editor-field"
+              >Slug<input
+                bind:value={slug}
+                placeholder="Generated from title"
+                pattern="[a-z0-9]+(-[a-z0-9]+)*"
+              /></label
+            >
+            <p class="editor-help">
+              {storedSlug
+                ? 'URL changes take effect on Publish or Update. Previous URLs redirect automatically.'
+                : 'Leave blank to use the article title.'}
+            </p>
+          </div>
           <label class="editor-checkbox"
-            ><input type="checkbox" bind:checked={featured} />Feature this article</label
+            ><input type="checkbox" bind:checked={featured} />Feature this {kind === 'projects'
+              ? 'project'
+              : 'article'}</label
           ><label class="editor-field"
             >Sort order<input type="number" bind:value={sortOrder} step="1" /></label
           >
         </form>
+        {#if settings}{@render settings()}{/if}
         <section class="inspector-section">
           <h2 class="sidebar-heading">Publishing check</h2>
           <ul class="publishing-checks">
-            <li>{title.trim() ? '✓' : '○'} Title</li>
-            <li>{summary.trim() ? '✓' : '○'} Summary</li>
-            <li>{category.trim() ? '✓' : '○'} Category</li>
+            <li>{title.trim() ? 'Title provided' : 'Title missing'}</li>
+            <li>{summary.trim() ? 'Summary provided' : 'Summary missing'}</li>
+            <li>Category is optional</li>
             <li>
-              {errors.length === 0 ? '✓ Ready to compile' : `${errors.length} validation errors`}
+              {errors.length === 0 ? 'Ready to compile' : `${errors.length} validation errors`}
             </li>
           </ul>
           {#each diagnostics as diagnostic, index (index)}<p class="inspector-diagnostic">
@@ -549,14 +614,15 @@
         </section>
         {#if storedSlug}<section class="inspector-section">
             <details class="inspector-details">
-              <summary>Article actions</summary>
+              <summary>Content actions</summary>
               <div class="inspector-fields">
                 <button
                   class="editor-button secondary"
                   disabled={busy || conflict || status === 'draft'}
-                  onclick={onunpublish}>Unpublish article</button
+                  onclick={onunpublish}
+                  >Unpublish {kind === 'projects' ? 'project' : 'article'}</button
                 ><button class="editor-button danger" disabled={busy || conflict} onclick={ondelete}
-                  >Delete article</button
+                  >Delete {kind === 'projects' ? 'project' : 'article'}</button
                 >
               </div>
             </details>
@@ -564,7 +630,7 @@
       {/if}
       <button
         class="return-to-document editor-button secondary"
-        onclick={() => (panel = 'document')}>Back to document</button
+        onclick={() => onnavigate({ panel: 'document' })}>Back to document</button
       >
     </aside>
   </div>

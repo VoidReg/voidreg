@@ -7,6 +7,7 @@ pub mod comments;
 pub mod contact;
 pub mod health;
 pub mod mcp;
+pub mod media;
 pub mod newsletter;
 pub mod projects;
 pub mod sitemap;
@@ -21,9 +22,13 @@ pub fn configure(cfg: &mut ServiceConfig) {
     .service(projects::get_project)
     .service(blogs::list_blogs)
     .service(blogs::get_blog)
-    .service(comments::list_comments)
+    .service(
+        actix_web::web::resource("/blogs/{slug}/comments")
+            .app_data(actix_web::web::JsonConfig::default().limit(8192))
+            .route(actix_web::web::get().to(comments::list_comments))
+            .route(actix_web::web::post().to(comments::create_comment)),
+    )
     .service(comments::list_replies)
-    .service(comments::create_comment)
     .service(contact::create_contact)
     .service(newsletter::subscribe)
     .service(auth::providers)

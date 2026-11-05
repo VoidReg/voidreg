@@ -117,7 +117,8 @@ async fn get(
     Ok(HttpResponse::Ok().json(db.admin_get_article(&slug).await?))
 }
 fn restrict(input: &ArticleWriteRequest) -> Result<(), AppError> {
-    if input.featured.is_some()
+    if input.meta.is_some()
+        || input.featured.is_some()
         || input.sort_order.is_some()
         || input.reading_time_minutes.is_some()
     {
@@ -152,8 +153,41 @@ async fn update(
     restrict(&input)?;
     super::admin::articles::update(&db, slug.into_inner(), input.into_inner(), true).await
 }
+#[post("/compilations")]
+async fn compile(
+    request: HttpRequest,
+    db: web::Data<Db>,
+    config: web::Data<Config>,
+    limiter: web::Data<RateLimiter>,
+    input: web::Json<serde_json::Value>,
+) -> Result<HttpResponse, AppError> {
+    authorize(&request, &db, &config, &limiter).await?;
+    let document = &input["document"];
+    crate::domain::document::validate_document(&document.to_string())?;
+    Ok(HttpResponse::Accepted().json(crate::publishing::request(&config,"/jobs", Some(&serde_json::json!({"kind":"article","slug":"mcp-validation","revision":0,"title":input["title"],"document":document}))).await?))
+}
+#[get("/compilations/{id}")]
+async fn compilation(
+    request: HttpRequest,
+    db: web::Data<Db>,
+    config: web::Data<Config>,
+    limiter: web::Data<RateLimiter>,
+    id: web::Path<String>,
+) -> Result<HttpResponse, AppError> {
+    authorize(&request, &db, &config, &limiter).await?;
+    crate::publishing::valid_id(&id)?;
+    let mut job = crate::publishing::request(&config, &format!("/jobs/{id}"), None).await?;
+    // Validation results never expose preview files or a publication artifact.
+    if let Some(value) = job.as_object_mut() {
+        value.remove("document");
+        value.remove("artifact");
+    }
+    Ok(HttpResponse::Ok().json(job))
+}
 pub fn configure(cfg: &mut web::ServiceConfig) {
-    cfg.service(session)
+    cfg.service(compile)
+        .service(compilation)
+        .service(session)
         .service(list)
         .service(get)
         .service(create)

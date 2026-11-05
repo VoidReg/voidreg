@@ -13,6 +13,7 @@ async fn database() -> Db {
     db.migrate().await.unwrap();
     for slug in ["discussion", "other"] {
         db.insert_article(ArticleFields {
+            meta: Default::default(),
             revision: 1,
             slug: slug.into(),
             title: slug.into(),
@@ -57,7 +58,9 @@ async fn discussion_replies_pagination_moderation_and_removal() {
     db.create_session("admin", &hash, None, 1).await.unwrap();
     let csrf = voidreg_api::api::v1::admin::session::csrf_for(&admin);
     let admin = Cookie::new("voidreg_admin_session", admin);
-    let app = test::init_service(build(db.clone(), Config::for_test())).await;
+    let mut config = Config::for_test();
+    config.comment_burst = 100; // This lifecycle test intentionally submits many comments without waiting.
+    let app = test::init_service(build(db.clone(), config)).await;
     let body: Value = test::call_and_read_body_json(
         &app,
         test::TestRequest::post()
@@ -79,6 +82,7 @@ async fn discussion_replies_pagination_moderation_and_removal() {
             .to_request(),
     )
     .await;
+    assert!(body["id"].is_string(), "{body}");
     let reply = body["id"].as_str().unwrap().to_owned();
     assert_eq!(body["status"], "pending");
     let list: Value = test::call_and_read_body_json(
@@ -88,7 +92,7 @@ async fn discussion_replies_pagination_moderation_and_removal() {
             .to_request(),
     )
     .await;
-    assert_eq!(list["total"], 1);
+    assert_eq!(list["total"], 1, "{list}");
     assert_eq!(list["items"][0]["reply_count"], 0);
     assert_eq!(list["items"][0]["author_name"], "Verified Reader");
     let response = test::call_service(

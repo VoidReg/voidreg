@@ -1,6 +1,10 @@
 // Shared by the browser editor and the headless MCP service.
 import { prepare, assertPrepared } from '@publisle/core';
-import { compilePublication, type PublicationArtifact } from '@publisle/adapter-core';
+import {
+  compilePublication,
+  type PublicationArtifact,
+  type DiagramRenderer
+} from '@publisle/adapter-core';
 import { parseDocument, type Document, type Diagnostic } from '@publisle/schema';
 import { accessibilityProfile, interactivePublicationProfile } from '@publisle/profiles';
 import { fromMarkdown, toMarkdown } from '@publisle/markdown';
@@ -10,7 +14,8 @@ import { rendererRegistry } from './publishing/renderers';
 
 export function compileDocument(
   input: unknown,
-  title: string
+  title: string,
+  diagramRenderers?: Readonly<Record<string, DiagramRenderer>>
 ): {
   document?: Document;
   artifact?: PublicationArtifact;
@@ -29,9 +34,39 @@ export function compileDocument(
     });
     const artifact = compilePublication(assertPrepared(prepared), {
       renderers: rendererRegistry,
-      rawHtml: 'escape'
+      rawHtml: 'escape',
+      diagramRenderers:
+        diagramRenderers ??
+        Object.fromEntries(
+          ['mermaid', 'graphviz', 'plantuml', 'wavedrom'].map((engine) => [
+            engine,
+            ({ source, alt }: { source: string; alt: string }): ReturnType<DiagramRenderer> => ({
+              static: [
+                {
+                  kind: 'element',
+                  tag: 'p',
+                  attributes: {},
+                  children: [{ kind: 'text', value: alt }]
+                },
+                {
+                  kind: 'element',
+                  tag: 'pre',
+                  attributes: { class: 'diagram-source-preview' },
+                  children: [{ kind: 'text', value: source }]
+                }
+              ]
+            })
+          ])
+        )
     });
-    return { document, artifact, diagnostics: artifact.diagnostics };
+    const diagnostics = artifact.diagnostics.map((diagnostic) =>
+      diagnostic.code === 'invalid-math' ? { ...diagnostic, level: 'error' as const } : diagnostic
+    );
+    return {
+      document,
+      artifact: diagnostics.some((d) => d.level === 'error') ? undefined : artifact,
+      diagnostics
+    };
   } catch (error) {
     return {
       diagnostics: [{ level: 'error', code: 'validation', message: (error as Error).message }]
@@ -87,6 +122,10 @@ export function safeMarkdown(document: Document) {
       ]
     };
   }
+}
+
+export function archivalMarkdown(document: Document) {
+  return toMarkdown(document, { policy: 'archival' });
 }
 
 export function blockCatalog() {

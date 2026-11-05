@@ -1,6 +1,4 @@
-# allow crawling everything by default
 User-agent: *
-Disallow:
+Disallow: /admin/
 
 Sitemap: https://www.voidreg.xyz/sitemap.xml
-Sitemap: https://www.voidreg.xyz/sitemap-blogs.xml

@@ -92,7 +92,8 @@
     --font-ui: 'IBM Plex Sans', system-ui, sans-serif;
     --font-code: 'IBM Plex Mono', monospace;
     --content-width: 72rem;
-    --radius: 0.375rem;
+    --prose-width: 68ch;
+    --radius: 0;
     --duration-fast: 120ms;
     --ease-standard: cubic-bezier(0.2, 0, 0, 1);
     scroll-behavior: smooth;
@@ -276,7 +277,7 @@
     width: 2.5rem;
     height: 2.5rem;
     place-items: center;
-    border-radius: 999px;
+    border-radius: var(--radius);
     background: var(--secondary);
     color: var(--secondary-foreground);
   }
@@ -316,12 +317,14 @@
 
   .page-shell {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 4rem;
     padding-block: 3.5rem 5rem;
   }
 
   .breadcrumb {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 1rem;
     font-size: 0.8125rem;
@@ -419,6 +422,7 @@
 
   .section-stack {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 2rem;
   }
 
@@ -440,7 +444,7 @@
     padding: 1.5rem;
   }
 
-  .project-card h3 {
+  .project-card :is(h2, h3) {
     margin-top: 1rem;
     font-size: 1.5rem;
     line-height: 1.3;
@@ -459,7 +463,7 @@
 
   .tag {
     border: 1px solid var(--border);
-    border-radius: calc(var(--radius) - 2px);
+    border-radius: var(--radius);
     background: var(--background);
     color: var(--muted-foreground);
     padding: 0.15rem 0.6rem;
@@ -604,8 +608,25 @@
 }
 
 /* Publishing uses the existing Silicon tokens and spacing scale. */
+.detail-article {
+  gap: 1.5rem;
+}
+.detail-header {
+  gap: 1.5rem;
+  border-block-end: 1px solid var(--border);
+  padding-block-end: 1.5rem;
+}
+.detail-header .tags {
+  margin-block: 0;
+}
+.detail-article .article-prose .publisle-document > :first-child,
+.detail-article .article-prose > section:first-child > :first-child {
+  margin-block-start: 0;
+}
+
 .article-prose {
-  width: min(100%, 68ch);
+  min-width: 0;
+  width: min(100%, var(--prose-width));
   margin-inline: auto;
   font-size: 1.125rem;
   line-height: 1.5;
@@ -623,7 +644,7 @@
   line-height: 1.3;
 }
 .article-prose img,
-.article-prose svg {
+.article-prose svg:not(.katex svg) {
   max-width: 100%;
   height: auto;
 }
@@ -676,7 +697,7 @@
   cursor: not-allowed;
 }
 .comments {
-  width: min(100%, 68ch);
+  width: min(100%, var(--prose-width));
   margin-inline: auto;
 }
 .comment-list {
@@ -740,5 +761,75 @@
   }
   .mobile-only {
     display: inline-flex;
+  }
+}
+
+/* Preserve KaTeX glyph geometry and contain long expressions locally. */
+.article-prose .katex {
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.article-prose div.publisle-math {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-block: 0.5rem;
+  margin-block: 1.5rem;
+}
+.article-prose .publisle-math > .katex-display {
+  flex: 1 0 auto;
+  margin: 0;
+}
+.article-prose .publisle-equation-number {
+  flex: 0 0 auto;
+  padding-inline-end: 0.25rem;
+}
+
+.article-prose p > .katex {
+  display: inline-block;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  vertical-align: middle;
+  padding-block: 0.25em;
+}
+
+.article-prose .diagram-viewport {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.article-prose .diagram-static img {
+  max-width: 100%;
+  height: auto;
+}
+.article-prose .diagram-dark {
+  display: none;
+}
+.article-prose .diagram-light {
+  display: block;
+}
+.dark .article-prose .diagram-light {
+  display: none;
+}
+.dark .article-prose .diagram-dark {
+  display: block;
+}
+.article-prose .diagram-source {
+  margin-block-start: 1rem;
+}
+.article-prose .diagram-source summary {
+  cursor: pointer;
+  min-height: 2.75rem;
+}
+@media print {
+  .dark .article-prose .diagram-light {
+    display: block;
+  }
+  .article-prose .diagram-dark,
+  .dark .article-prose .diagram-dark {
+    display: none;
   }
 }

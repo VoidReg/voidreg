@@ -8,7 +8,10 @@ use crate::domain::{Article, ArticleStatus, MediaPlaceholder, Project};
 use crate::error::AppError;
 use crate::util::{now_rfc3339, sha256_hex};
 
+pub mod content;
+mod media;
 mod models;
+pub mod moderation;
 mod seed;
 
 #[derive(Clone)]
@@ -20,6 +23,7 @@ pub struct Db {
 #[derive(Debug, Clone)]
 pub struct ArticleFields {
     pub revision: i64,
+    pub meta: crate::domain::ContentMeta,
     pub slug: String,
     pub title: String,
     pub category: String,
@@ -67,6 +71,7 @@ pub struct CommentInfo {
     pub email: Option<String>,
 }
 
+#[derive(Clone, Copy)]
 pub struct NewComment<'a> {
     pub article_slug: &'a str,
     pub identity_id: Option<&'a str>,
@@ -96,12 +101,29 @@ impl Db {
 
     pub async fn migrate(&self) -> Result<(), AppError> {
         let mut db = self.inner.lock().await;
-        apply_schema(&mut db).await
+        apply_schema(&mut db).await?;
+        for statement in moderation::SCHEMA {
+            moderation::sql(&mut *db, (*statement).into(), vec![]).await?;
+        }
+        moderation::backfill_ancestors(&mut *db).await?;
+        let mut tx = db.transaction().await?;
+        Self::backfill(&mut tx).await?;
+        tx.commit().await?;
+        Ok(())
     }
 
     pub async fn seed_if_empty(&self) -> Result<(), AppError> {
         let mut db = self.inner.lock().await;
-        seed::seed_if_empty(&mut db).await
+        apply_schema(&mut db).await?;
+        for statement in moderation::SCHEMA {
+            moderation::sql(&mut *db, (*statement).into(), vec![]).await?;
+        }
+        seed::seed_if_empty(&mut db).await?;
+        moderation::backfill_ancestors(&mut *db).await?;
+        let mut tx = db.transaction().await?;
+        Self::backfill(&mut tx).await?;
+        tx.commit().await?;
+        Ok(())
     }
 
     pub async fn ping(&self) -> Result<(), AppError> {
@@ -111,215 +133,86 @@ impl Db {
     }
 
     pub async fn list_projects(&self, featured: Option<bool>) -> Result<Vec<Project>, AppError> {
-        let mut db = self.inner.lock().await;
-        let rows = if featured == Some(true) {
-            models::Project::filter(models::Project::fields().featured().eq(true))
-                .exec(&mut *db)
-                .await?
-        } else {
-            models::Project::all().exec(&mut *db).await?
-        };
-        let mut items = rows
-            .into_iter()
-            .map(project_from_row)
-            .collect::<Result<Vec<_>, _>>()?;
-        items.sort_by(|a, b| a.sort_order.cmp(&b.sort_order).then(a.slug.cmp(&b.slug)));
-        Ok(items.into_iter().map(|item| item.as_card()).collect())
-    }
-
-    pub async fn get_project(&self, slug: &str) -> Result<Project, AppError> {
-        let mut db = self.inner.lock().await;
-        let row = models::Project::filter_by_slug(slug)
-            .first()
-            .exec(&mut *db)
+        self.content_list("project", true)
             .await?
-            .ok_or_else(|| AppError::NotFound(format!("project '{slug}' not found")))?;
-        project_from_row(row)
+            .into_iter()
+            .map(serde_json::from_value::<Project>)
+            .map(|p| p.map_err(AppError::from))
+            .filter(|p| {
+                p.as_ref()
+                    .map_or(true, |p| featured.is_none_or(|f| p.featured == f))
+            })
+            .map(|p| p.map(|p| p.as_card()))
+            .collect()
     }
-
-    /// Published articles for the public blog index, newest first.
+    pub async fn get_project(&self, slug: &str) -> Result<Project, AppError> {
+        Ok(serde_json::from_value(
+            self.content_get("project", slug, true).await?,
+        )?)
+    }
     pub async fn list_published_articles(
         &self,
         featured: Option<bool>,
     ) -> Result<Vec<Article>, AppError> {
-        let mut db = self.inner.lock().await;
-        let rows = if featured == Some(true) {
-            models::Article::filter(toasty::stmt::Expr::and(
-                models::Article::fields()
-                    .status()
-                    .eq(ArticleStatus::Published.as_str()),
-                models::Article::fields().featured().eq(true),
-            ))
-            .exec(&mut *db)
+        let mut items: Vec<Article> = self
+            .content_list("article", true)
             .await?
-        } else {
-            models::Article::filter(
-                models::Article::fields()
-                    .status()
-                    .eq(ArticleStatus::Published.as_str()),
-            )
-            .exec(&mut *db)
-            .await?
-        };
-        let mut items = rows
             .into_iter()
-            .map(article_from_row)
-            .collect::<Result<Vec<_>, _>>()?;
+            .map(serde_json::from_value)
+            .collect::<Result<_, _>>()?;
+        items.retain(|a| featured.is_none_or(|f| a.featured == f));
         sort_articles_public(&mut items);
-        Ok(items.into_iter().map(|item| item.as_card()).collect())
+        Ok(items.into_iter().map(|a| a.as_card()).collect())
     }
-
-    /// Full published article for the public detail view.
     pub async fn get_published_article(&self, slug: &str) -> Result<Article, AppError> {
-        let mut db = self.inner.lock().await;
-        let row = models::Article::filter_by_slug(slug)
-            .first()
-            .exec(&mut *db)
-            .await?
-            .ok_or_else(|| AppError::NotFound(format!("article '{slug}' not found")))?;
-        let article = article_from_row(row)?;
-        if article.status != ArticleStatus::Published {
-            return Err(AppError::NotFound(format!("article '{slug}' not found")));
-        }
-        Ok(article)
+        Ok(serde_json::from_value(
+            self.content_get("article", slug, true).await?,
+        )?)
     }
-
-    /// All articles for the admin dashboard, cards only.
     pub async fn admin_list_articles(&self) -> Result<Vec<Article>, AppError> {
-        let mut db = self.inner.lock().await;
-        let rows = models::Article::all().exec(&mut *db).await?;
-        let mut items = rows
+        self.content_list("article", false)
+            .await?
             .into_iter()
-            .map(article_from_row)
-            .collect::<Result<Vec<_>, _>>()?;
-        items.sort_by(|a, b| a.sort_order.cmp(&b.sort_order).then(a.slug.cmp(&b.slug)));
-        Ok(items.into_iter().map(|item| item.as_card()).collect())
+            .map(|v| Ok(serde_json::from_value::<Article>(v)?.as_card()))
+            .collect()
     }
-
-    /// Full article (including document and compiled artifact) for the editor.
     pub async fn admin_get_article(&self, slug: &str) -> Result<Article, AppError> {
-        let mut db = self.inner.lock().await;
-        let row = models::Article::filter_by_slug(slug)
-            .first()
-            .exec(&mut *db)
-            .await?
-            .ok_or_else(|| AppError::NotFound(format!("article '{slug}' not found")))?;
-        article_from_row(row)
+        Ok(serde_json::from_value(
+            self.content_get("article", slug, false).await?,
+        )?)
     }
-
     pub async fn article_exists(&self, slug: &str) -> Result<bool, AppError> {
-        let mut db = self.inner.lock().await;
-        Ok(models::Article::filter_by_slug(slug)
-            .first()
-            .exec(&mut *db)
-            .await?
-            .is_some())
+        self.content_reserved("article", slug).await
     }
-
     pub async fn insert_article(&self, fields: ArticleFields) -> Result<Article, AppError> {
-        let mut db = self.inner.lock().await;
-        let row = toasty::create!(models::Article {
-            revision: 1,
-            slug: fields.slug,
-            title: fields.title,
-            category: fields.category,
-            summary: fields.summary,
-            status: fields.status,
-            featured: fields.featured,
-            sort_order: fields.sort_order,
-            published_at: fields.published_at,
-            reading_time_minutes: fields.reading_time_minutes,
-            sections: fields.sections,
-            document: fields.document,
-            document_version: fields.document_version,
-            compiled: fields.compiled,
-            content_hash: fields.content_hash,
-        })
-        .exec(&mut *db)
-        .await?;
-        article_from_row(row)
+        let value = fields.into_value()?;
+        Ok(serde_json::from_value(
+            self.content_create("article", value).await?,
+        )?)
     }
-
-    /// Saves every writable field of an article identified by its (current)
-    /// slug.
     pub async fn save_article(
         &self,
         fields: &ArticleFields,
         draft_only: bool,
     ) -> Result<Article, AppError> {
-        let mut db = self.inner.lock().await;
-        // Compare and update in the same SQL statement. A concurrent publish
-        // cannot turn an MCP draft write into a live article edit.
-        let mut predicate = toasty::stmt::Expr::and(
-            models::Article::fields().slug().eq(fields.slug.clone()),
-            models::Article::fields().revision().eq(fields.revision),
-        );
-        if draft_only {
-            predicate =
-                toasty::stmt::Expr::and(predicate, models::Article::fields().status().eq("draft"));
-        }
-        let query = models::Article::filter(predicate);
-        let revision = fields.revision + 1;
-        let title = fields.title.clone();
-        let category = fields.category.clone();
-        let summary = fields.summary.clone();
-        let status = fields.status.clone();
-        let featured = fields.featured;
-        let sort_order = fields.sort_order;
-        let published_at = fields.published_at.clone();
-        let reading_time_minutes = fields.reading_time_minutes;
-        let sections = fields.sections.clone();
-        let document = fields.document.clone();
-        let document_version = fields.document_version;
-        let compiled = fields.compiled.clone();
-        let content_hash = fields.content_hash.clone();
-        let update = toasty::update!(query {
-            revision,
-            title,
-            category,
-            summary,
-            status,
-            featured,
-            sort_order,
-            published_at,
-            reading_time_minutes,
-            sections,
-            document,
-            document_version,
-            compiled,
-            content_hash,
-        });
-        // The generated builder discards query results. Ask the typed statement
-        // for full updated rows so a failed compare-and-swap is unambiguous.
-        let mut statement = toasty::stmt::IntoStatement::into_statement(update).into_untyped();
-        if let toasty_core::stmt::Statement::Update(update) = &mut statement {
-            update.returning = Some(toasty_core::stmt::Returning::Model { include: vec![] });
-        }
-        let mut updated =
-            toasty::Statement::<toasty::stmt::List<models::Article>>::from_untyped_stmt(statement)
-                .exec(&mut *db)
-                .await?;
-        let row = updated
-            .pop()
-            .ok_or_else(|| AppError::Conflict("article changed; reload before saving".into()))?;
-        article_from_row(row)
+        let value = fields.clone().into_value()?;
+        Ok(serde_json::from_value(
+            self.content_save("article", &fields.slug, fields.revision, value, draft_only)
+                .await?,
+        )?)
     }
-
-    pub async fn delete_article(&self, slug: &str, expected_revision: i64) -> Result<(), AppError> {
-        let mut db = self.inner.lock().await;
-        let current = models::Article::filter_by_slug(slug)
-            .first()
-            .exec(&mut *db)
-            .await?
-            .ok_or_else(|| AppError::NotFound("article not found".into()))?;
-        if current.revision != expected_revision {
-            return Err(AppError::Conflict(
-                "article changed; reload before deleting".into(),
-            ));
-        }
-        models::Article::filter_by_slug(slug)
-            .delete()
-            .exec(&mut *db)
+    pub async fn publish_article_snapshot(
+        &self,
+        slug: &str,
+        revision: i64,
+    ) -> Result<Article, AppError> {
+        Ok(serde_json::from_value(
+            self.content_action("article", slug, revision, "publish")
+                .await?,
+        )?)
+    }
+    pub async fn delete_article(&self, slug: &str, revision: i64) -> Result<(), AppError> {
+        self.content_action("article", slug, revision, "delete")
             .await?;
         Ok(())
     }
@@ -387,6 +280,8 @@ impl Db {
         })
         .exec(&mut *db)
         .await?;
+        moderation::record_ancestors(&mut *db, &row.id.to_string(), row.parent_id.as_deref())
+            .await?;
         Ok(comment_from_row(row))
     }
 
@@ -823,6 +718,10 @@ async fn apply_schema(db: &mut toasty::Db) -> Result<(), AppError> {
 /// databases get the full schema; existing ones only gain missing tables and
 /// indexes.
 const SCHEMA_STATEMENTS: &[&str] = &[
+    r#"CREATE TABLE IF NOT EXISTS content_entries (id BLOB PRIMARY KEY NOT NULL, name TEXT NOT NULL UNIQUE, kind TEXT NOT NULL, working TEXT NOT NULL, published TEXT, revision BIGINT NOT NULL, archived BOOLEAN NOT NULL, deleted BOOLEAN NOT NULL, public_order BIGINT NOT NULL, public_date TEXT NOT NULL)"#,
+    r#"CREATE INDEX IF NOT EXISTS content_entries_listing ON content_entries(kind, deleted, archived, public_date, public_order)"#,
+    r#"CREATE TABLE IF NOT EXISTS content_aliases (id BLOB PRIMARY KEY NOT NULL, name TEXT NOT NULL UNIQUE, owner TEXT NOT NULL)"#,
+    r#"CREATE TABLE IF NOT EXISTS media_assets (id BLOB PRIMARY KEY NOT NULL, filename TEXT NOT NULL UNIQUE, metadata TEXT NOT NULL)"#,
     r#"CREATE TABLE IF NOT EXISTS "mcp_tokens" ("id" BLOB NOT NULL, "token_hash" TEXT NOT NULL, "identity_id" TEXT NOT NULL, "name" TEXT NOT NULL, "created_at" TEXT NOT NULL, "expires_at" TEXT NOT NULL, "last_used_at" TEXT, PRIMARY KEY ("id"))"#,
     r#"CREATE UNIQUE INDEX IF NOT EXISTS "index_mcp_tokens_by_token_hash" ON "mcp_tokens" ("token_hash")"#,
     r#"CREATE TABLE IF NOT EXISTS "projects" ("id" BLOB NOT NULL, "slug" TEXT NOT NULL, "title" TEXT NOT NULL, "category" TEXT NOT NULL, "summary" TEXT NOT NULL, "tags" TEXT NOT NULL, "sections" TEXT NOT NULL, "hero" TEXT, "has_detail_page" BOOLEAN NOT NULL, "featured" BOOLEAN NOT NULL, "sort_order" BIGINT NOT NULL, "repo_url" TEXT, "related_slugs" TEXT NOT NULL, PRIMARY KEY ("id"))"#,
@@ -924,12 +823,23 @@ fn model_set() -> toasty::ModelSet {
         crate::db::models::Comment,
         crate::db::models::Identity,
         crate::db::models::Session,
-        crate::db::models::McpToken
+        crate::db::models::McpToken,
+        crate::db::models::ContentEntry,
+        crate::db::models::ContentAlias,
+        crate::db::models::MediaAsset
     )
 }
 
 fn project_from_row(row: models::Project) -> Result<Project, AppError> {
     Ok(Project {
+        meta: crate::domain::ContentMeta {
+            id: row.id.to_string(),
+            ..Default::default()
+        },
+        revision: 1,
+        document: None,
+        compiled: None,
+        status: "published".into(),
         slug: row.slug,
         title: row.title,
         category: row.category,
@@ -961,6 +871,10 @@ fn article_from_row(row: models::Article) -> Result<Article, AppError> {
         Some(serde_json::from_str(&row.compiled)?)
     };
     Ok(Article {
+        meta: crate::domain::ContentMeta {
+            id: row.id.to_string(),
+            ..Default::default()
+        },
         revision: row.revision,
         slug: row.slug,
         title: row.title,

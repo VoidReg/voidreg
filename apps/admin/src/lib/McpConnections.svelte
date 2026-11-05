@@ -94,7 +94,7 @@
     <h3 id="mcp-setup">Connect your client</h3>
     <p>
       Choose Streamable HTTP in your client, enter this server URL, and set the Authorization header
-      to <code>Bearer YOUR_TOKEN</code>. Keep tokens in your client’s private settings or
+      to <code>Bearer YOUR_TOKEN</code>. Keep tokens in your client's private settings or
       environment.
     </p>
     <div class="publishing-form"><label>Server URL<input readonly value={serverUrl} /></label></div>
@@ -117,7 +117,7 @@
         /></label
       >
       <button class="button" disabled={busy || loading}
-        >{busy ? 'Working…' : 'Create access token'}</button
+        >{busy ? 'Working...' : 'Create access token'}</button
       >
     </form>
     {#if token}
@@ -141,7 +141,7 @@
   </section>
   <section class="section-stack" aria-labelledby="mcp-existing">
     <h3 id="mcp-existing">Your connections</h3>
-    {#if loading}<p role="status">Loading connections…</p>
+    {#if loading}<p role="status">Loading connections...</p>
     {:else if error && connections.length === 0}<div class="button-row">
         <button class="button button-secondary" onclick={load}>Retry</button>
       </div>
@@ -179,8 +179,15 @@
   .mcp-connections {
     max-width: var(--content-width);
   }
+  .mcp-connections > header {
+    display: grid;
+    gap: 0.75rem;
+  }
   .mcp-connections > section {
     max-width: 56rem;
+    gap: 1.5rem;
+    padding-block-start: 1.5rem;
+    border-top: 1px solid var(--border);
   }
   .connection-list {
     list-style: none;
@@ -207,7 +214,9 @@
     line-height: 1.35;
   }
   @media (min-width: 48rem) {
-    .connection-list h4 { font-size: 1.25rem; }
+    .connection-list h4 {
+      font-size: 1.25rem;
+    }
   }
   .connection-list p {
     margin-block: 0.5rem;

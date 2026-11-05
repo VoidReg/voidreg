@@ -9,8 +9,16 @@ services:
       HOST: 0.0.0.0
       PORT: "8080"
       TURSO_LOCAL_PATH: /data/voidreg.db
+      MEDIA_PATH: /media
+      COMPILER_URL: http://publishing:8092
+      COMPILER_TOKEN: ${COMPILER_TOKEN:?Set COMPILER_TOKEN in .env}
+      TRUSTED_PROXY_CIDRS: ${VOIDREG_PROXY_IP:-172.30.45.10}
     volumes:
       - api-data:/data
+      - media-data:/media
+    depends_on:
+      publishing:
+        condition: service_healthy
     expose:
       - "8080"
     networks:
@@ -21,6 +29,59 @@ services:
       timeout: 3s
       retries: 5
       start_period: 40s
+    restart: unless-stopped
+
+  publishing:
+    image: voidreg-publishing:${PUBLISHING_IMAGE_TAG:-local}
+    build:
+      context: ../voidreg-admin
+      dockerfile: publishing/Dockerfile
+    environment:
+      COMPILER_TOKEN: ${COMPILER_TOKEN:?Set COMPILER_TOKEN in .env}
+    expose:
+      - "8092"
+    networks:
+      - backend
+    volumes:
+      - publishing-data:/data/publishing
+    cpus: 1
+    mem_limit: 768m
+    pids_limit: 128
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8092/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+  web:
+    image: voidreg-web:${WEB_IMAGE_TAG:-local}
+    build:
+      context: ../voidreg-web
+    environment:
+      HOST: 0.0.0.0
+      PORT: "3000"
+      ORIGIN: https://www.voidreg.xyz
+      VOIDREG_API_URL: http://api:8080
+    expose:
+      - "3000"
+    networks:
+      - backend
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/privacy').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
 
   mcp:
@@ -67,21 +128,34 @@ services:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - ./certs:/etc/nginx/certs:ro
       - ./certbot:/var/www/certbot:ro
-      - ../voidreg-web/build:/srv/web:ro
       - ../voidreg-admin/build:/srv/admin:ro
     networks:
-      - edge
-      - backend
+      edge: {}
+      backend:
+        ipv4_address: ${VOIDREG_PROXY_IP:-172.30.45.10}
     depends_on:
       api:
         condition: service_healthy
       mcp:
         condition: service_healthy
+      web:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
+  publishing-data:
+    external: true
+    name: voidreg_publishing-data
   api-data:
+    external: true
+    name: voidreg_api-data
+  media-data:
+    external: true
+    name: voidreg_media-data
 
 networks:
   edge:
   backend:
+    ipam:
+      config:
+        - subnet: ${VOIDREG_BACKEND_SUBNET:-172.30.45.0/24}

@@ -37,7 +37,7 @@ body = "Parse a scene, construct camera rays, evaluate the closest intersection,
 [[projects.sections]]
 heading = "RAY-TRACING PIPELINE"
 kind = "diagram"
-body = "Camera → Primary rays → Closest hit → Surface + lighting → Pixel output"
+body = "Camera -> Primary rays -> Closest hit -> Surface + lighting -> Pixel output"
 
 [[projects.sections]]
 heading = "Render gallery"
@@ -108,7 +108,7 @@ kind = "prose"
 body = "Record the role pair, theme, state, and contrast result together. Test the same set after changing a token so regressions can be traced to a specific relationship."
 
 [[articles.sections]]
-heading = "CSS · illustrative excerpt"
+heading = "CSS | illustrative excerpt"
 kind = "code"
 body = """--background: #FFFFFF;
 --foreground: #17212B;

@@ -5,7 +5,12 @@ import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/cli
 import { createHttpServer } from './http';
 import { defaultData } from '@publisle/playground';
 import { extensions } from '../src/lib/blocks';
-import { compileDocument, safeMarkdown } from '../src/lib/authoring';
+import {
+  compileDocument,
+  safeMarkdown,
+  archivalMarkdown,
+  importMarkdown
+} from '../src/lib/authoring';
 
 async function listen(server: Server) {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -100,6 +105,7 @@ for (const mode of ['legacy', 'auto'] as const) {
         'create_draft',
         'get_article',
         'get_block_catalog',
+        'get_compilation',
         'list_articles',
         'update_draft',
         'validate_document'
@@ -125,6 +131,25 @@ for (const mode of ['legacy', 'auto'] as const) {
         document: { schemaVersion: 1, blocks: [] }
       });
       assert(ambiguous.isError);
+      const invalidMath = await call('create_draft', {
+        title: 'Incomplete math',
+        category: 'Math',
+        summary: 'Saved for editing',
+        slug: 'incomplete-math',
+        document: {
+          schemaVersion: 1,
+          blocks: [
+            {
+              id: '018fabc0-0000-4000-8000-000000000009',
+              type: 'publisle:math',
+              schemaVersion: 1,
+              data: { value: '\\frac{1}{', display: true }
+            }
+          ]
+        }
+      });
+      assert(!invalidMath.isError, JSON.stringify(invalidMath));
+      assert(JSON.stringify(invalidMath).includes('invalid-math'));
       const catalog = await call('get_block_catalog', {});
       assert(JSON.stringify(catalog).includes('voidreg:counter'));
       const created = await call('create_draft', {
@@ -247,4 +272,28 @@ test('shared authoring escapes raw HTML and refuses lossy custom Markdown export
   const document = compileDocument(counter, 'Counter').document!;
   const exported = safeMarkdown(document);
   assert(!exported.markdown || exported.diagnostics.some((d) => d.level === 'error'));
+});
+
+test('archival Markdown preserves custom payloads, IDs, and document metadata', () => {
+  const prepared = compileDocument(
+    {
+      schemaVersion: 1,
+      metadata: { language: 'en' },
+      extensions: { review: { version: 1 } },
+      blocks: [
+        {
+          id: '018fabc0-0000-4000-8000-000000000001',
+          type: 'voidreg:counter',
+          schemaVersion: 1,
+          data: defaultData('voidreg:counter', extensions)
+        }
+      ]
+    },
+    'Complete archival source'
+  );
+  assert(prepared.document, JSON.stringify(prepared.diagnostics));
+  const exported = archivalMarkdown(prepared.document);
+  assert(exported.markdown, JSON.stringify(exported.diagnostics));
+  const imported = importMarkdown(exported.markdown);
+  assert.deepEqual(imported.document, prepared.document);
 });

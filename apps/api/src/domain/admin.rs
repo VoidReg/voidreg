@@ -35,11 +35,14 @@ pub struct AdminLoginRequest {
 ///
 /// On create, `title`, `category`, and `summary` are required. On update,
 /// every field is optional and absent fields keep their current value.
-/// `slug` is only honored on create; slugs are immutable afterwards.
+/// Slug changes are staged until publication and preserve old URL aliases.
 #[derive(Debug, Default, Deserialize)]
 #[cfg_attr(feature = "swagger", derive(utoipa::ToSchema))]
 pub struct ArticleWriteRequest {
+    #[serde(default)]
+    pub meta: Option<super::ContentMeta>,
     pub expected_revision: Option<i64>,
+    pub compilation_id: Option<String>,
     #[serde(default)]
     pub slug: Option<String>,
     #[serde(default)]

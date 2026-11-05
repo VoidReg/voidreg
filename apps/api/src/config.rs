@@ -26,6 +26,14 @@ pub struct Config {
     pub github_client_secret: Option<String>,
     pub commenter_redirect_url: Option<String>,
     pub comment_ip_salt: String,
+    pub trusted_proxy_cidrs: Vec<String>,
+    pub comment_anon_hourly: i64,
+    pub comment_anon_article_hourly: i64,
+    pub comment_user_hourly: i64,
+    pub comment_user_article_hourly: i64,
+    pub comment_burst: i64,
+    pub compiler_url: String,
+    pub compiler_token: Option<String>,
 }
 
 #[derive(Debug, Error)]
@@ -36,6 +44,10 @@ pub enum ConfigError {
     InvalidPort,
     #[error("invalid ADMIN_SESSION_TTL_HOURS value")]
     InvalidSessionTtl,
+    #[error("comment limits must be integers between 1 and 10000")]
+    InvalidCommentLimit,
+    #[error("TRUSTED_PROXY_CIDRS contains an invalid address or CIDR")]
+    InvalidTrustedProxy,
 }
 
 fn optional_env(key: &str) -> Option<String> {
@@ -94,6 +106,27 @@ impl Config {
             return Err(ConfigError::InvalidSessionTtl);
         }
 
+        let comment_ip_salt = optional_env("COMMENT_IP_SALT").ok_or(ConfigError::Missing(
+            "COMMENT_IP_SALT must be a stable nonempty secret",
+        ))?;
+        let trusted_proxy_cidrs = env_list("TRUSTED_PROXY_CIDRS");
+        if trusted_proxy_cidrs
+            .iter()
+            .any(|v| crate::auth::parse_network(v).is_none())
+        {
+            return Err(ConfigError::InvalidTrustedProxy);
+        }
+        let limit = |key: &str, default: i64| -> Result<i64, ConfigError> {
+            let value = optional_env(key)
+                .map(|v| v.parse::<i64>())
+                .transpose()
+                .map_err(|_| ConfigError::InvalidCommentLimit)?
+                .unwrap_or(default);
+            if !(1..=10000).contains(&value) {
+                return Err(ConfigError::InvalidCommentLimit);
+            }
+            Ok(value)
+        };
         Ok(Self {
             host,
             port,
@@ -117,7 +150,16 @@ impl Config {
             github_client_id: optional_env("GITHUB_CLIENT_ID"),
             github_client_secret: optional_env("GITHUB_CLIENT_SECRET"),
             commenter_redirect_url: optional_env("COMMENTER_REDIRECT_URL"),
-            comment_ip_salt: optional_env("COMMENT_IP_SALT").unwrap_or_default(),
+            comment_ip_salt,
+            trusted_proxy_cidrs,
+            comment_anon_hourly: limit("COMMENT_ANON_HOURLY", 5)?,
+            comment_anon_article_hourly: limit("COMMENT_ANON_ARTICLE_HOURLY", 2)?,
+            comment_user_hourly: limit("COMMENT_USER_HOURLY", 60)?,
+            comment_user_article_hourly: limit("COMMENT_USER_ARTICLE_HOURLY", 30)?,
+            comment_burst: limit("COMMENT_BURST", 3)?,
+            compiler_url: env::var("COMPILER_URL")
+                .unwrap_or_else(|_| "http://127.0.0.1:18084".into()),
+            compiler_token: optional_env("COMPILER_TOKEN"),
         })
     }
 
@@ -145,6 +187,14 @@ impl Config {
             github_client_secret: None,
             commenter_redirect_url: None,
             comment_ip_salt: "test-comment-salt".to_owned(),
+            trusted_proxy_cidrs: vec![],
+            comment_anon_hourly: 5,
+            comment_anon_article_hourly: 2,
+            comment_user_hourly: 60,
+            comment_user_article_hourly: 30,
+            comment_burst: 3,
+            compiler_url: "http://127.0.0.1:18084".into(),
+            compiler_token: None,
         }
     }
 

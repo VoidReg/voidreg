@@ -21,7 +21,7 @@
     >
   </header>
   {#if comment.replying_to}<p class="reply-context">Replying to {comment.replying_to}</p>{/if}
-  <p class="comment-body">{comment.removed ? 'This comment was removed.' : comment.body}</p>
+  <p class="comment-body">{comment.removed ? 'This comment is unavailable.' : comment.body}</p>
   {#if !comment.removed}<button class="button button-secondary" onclick={() => onreply(comment)}
       >Reply<span class="sr-only"> to {comment.author_name}</span></button
     >{/if}

@@ -5,10 +5,24 @@ services:
   mcp:
     environment:
       PUBLIC_BASE_URL: http://localhost:8080
+  web:
+    environment:
+      ORIGIN: http://localhost:8080
   nginx:
     ports: !override
       - "127.0.0.1:8080:80"
     volumes: !override
       - ./nginx/local.conf:/etc/nginx/conf.d/default.conf:ro
-      - ../voidreg-web/build:/srv/web:ro
       - ../voidreg-admin/build:/srv/admin:ro
+
+# Development data is isolated from the production volumes.
+volumes:
+  api-data:
+    external: false
+    name: voidreg-local_api-data
+  media-data:
+    external: false
+    name: voidreg-local_media-data
+  publishing-data:
+    external: false
+    name: voidreg-local_publishing-data

@@ -7,12 +7,23 @@ export default defineConfig({
   // Packed playground dist/BlockEditor.svelte still imports ./index.ts.
   resolve: {
     alias: {
+      '@publisle/playground/MathBlockEditor.svelte': fileURLToPath(
+        new URL('./node_modules/@publisle/playground/src/MathBlockEditor.svelte', import.meta.url)
+      ),
+      '@publisle/playground/MathEditor.svelte': fileURLToPath(
+        new URL('./node_modules/@publisle/playground/src/MathEditor.svelte', import.meta.url)
+      ),
       '@publisle/playground/BlockEditor.svelte': fileURLToPath(
         new URL('./node_modules/@publisle/playground/src/BlockEditor.svelte', import.meta.url)
       )
     }
   },
-  server: { proxy: { '/api': process.env.VOIDREG_API_PROXY ?? 'http://127.0.0.1:8080' } },
+  server: {
+    proxy: {
+      '/api': process.env.VOIDREG_API_PROXY ?? 'http://127.0.0.1:8080',
+      '/media': process.env.VOIDREG_API_PROXY ?? 'http://127.0.0.1:8080'
+    }
+  },
   plugins: [
     tailwindcss(),
     sveltekit({ adapter: adapter({ fallback: 'index.html' }), paths: { base: '/admin' } })

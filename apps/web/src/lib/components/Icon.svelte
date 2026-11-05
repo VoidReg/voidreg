@@ -1,5 +1,11 @@
 <script lang="ts">
-  let { name, size = 24 }: { name: 'close' | 'menu' | 'moon' | 'sun'; size?: number } = $props();
+  let {
+    name,
+    size = 24
+  }: {
+    name: 'close' | 'menu' | 'moon' | 'sun' | 'arrow-right' | 'arrow-left' | 'plus';
+    size?: number;
+  } = $props();
 </script>
 
 <span class="icon" style:width={`${size}px`} style:height={`${size}px`} aria-hidden="true">
@@ -21,6 +27,12 @@
       />
     {:else if name === 'moon'}
       <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+    {:else if name === 'arrow-right'}
+      <path d="M4 12h16m-6-6 6 6-6 6" />
+    {:else if name === 'arrow-left'}
+      <path d="M20 12H4m6-6-6 6 6 6" />
+    {:else if name === 'plus'}
+      <path d="M12 5v14M5 12h14" />
     {:else if name === 'menu'}
       <path d="M4 8h16M4 16h16" />
     {:else}
@@ -32,6 +44,7 @@
 <style>
   .icon {
     display: inline-grid;
+    vertical-align: middle;
     flex: none;
     place-items: center;
     color: inherit;

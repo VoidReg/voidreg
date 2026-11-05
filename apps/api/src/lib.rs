@@ -24,7 +24,7 @@ pub async fn run(workers: usize) -> io::Result<()> {
     let db = Db::connect(&config)
         .await
         .map_err(|err| io::Error::other(err.to_string()))?;
-    db.seed_if_empty()
+    db.migrate()
         .await
         .map_err(|err| io::Error::other(err.to_string()))?;
 
@@ -91,5 +91,6 @@ pub mod error;
 pub mod mail;
 #[cfg(feature = "swagger")]
 pub mod openapi;
+pub mod publishing;
 pub mod telemetry;
 pub mod util;

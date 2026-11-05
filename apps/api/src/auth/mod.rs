@@ -162,24 +162,54 @@ pub fn cookie_token(request: &actix_web::HttpRequest, name: &str) -> Option<Stri
         .filter(|value| !value.is_empty())
 }
 
-/// Best-effort client IP for rate limiting: honors the final X-Forwarded-For
-/// hop (overwritten by the trusted edge nginx) and falls back to the peer address.
-pub fn client_ip(request: &actix_web::HttpRequest) -> String {
-    if let Some(forwarded) = request
-        .headers()
-        .get("X-Forwarded-For")
-        .and_then(|value| value.to_str().ok())
-        && let Some(first) = forwarded.split(',').next_back()
-    {
-        let ip = first.trim();
-        if let Ok(address) = ip.parse::<std::net::IpAddr>() {
-            return address.to_string();
+/// Parse an exact address or CIDR without accepting invalid prefix lengths.
+pub fn parse_network(value: &str) -> Option<(std::net::IpAddr, u32)> {
+    let (address, prefix) = value
+        .split_once('/')
+        .map_or((value, None), |(a, p)| (a, Some(p)));
+    let address = address.parse::<std::net::IpAddr>().ok()?;
+    let max = if address.is_ipv4() { 32 } else { 128 };
+    let prefix = prefix
+        .map(str::parse::<u32>)
+        .transpose()
+        .ok()?
+        .unwrap_or(max);
+    (prefix <= max).then_some((address, prefix))
+}
+fn trusted_peer(peer: std::net::IpAddr, network: &str) -> bool {
+    let Some((network, prefix)) = parse_network(network) else {
+        return false;
+    };
+    match (peer, network) {
+        (std::net::IpAddr::V4(a), std::net::IpAddr::V4(b)) => {
+            prefix == 0 || (u32::from(a) >> (32 - prefix)) == (u32::from(b) >> (32 - prefix))
         }
+        (std::net::IpAddr::V6(a), std::net::IpAddr::V6(b)) => {
+            prefix == 0 || (u128::from(a) >> (128 - prefix)) == (u128::from(b) >> (128 - prefix))
+        }
+        _ => false,
     }
-    request
-        .peer_addr()
-        .map(|addr| addr.ip().to_string())
-        .unwrap_or_else(|| "unknown".to_owned())
+}
+/// Only the final hop supplied by an explicitly trusted proxy may override the peer.
+pub fn client_ip(request: &actix_web::HttpRequest) -> String {
+    let peer = request.peer_addr().map(|v| v.ip());
+    let trusted = peer.is_some_and(|ip| {
+        request
+            .app_data::<actix_web::web::Data<Config>>()
+            .is_some_and(|c| c.trusted_proxy_cidrs.iter().any(|v| trusted_peer(ip, v)))
+    });
+    if trusted
+        && let Some(forwarded) = request
+            .headers()
+            .get("X-Forwarded-For")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.split(',').next_back())
+            .and_then(|v| v.trim().parse::<std::net::IpAddr>().ok())
+    {
+        return forwarded.to_string();
+    }
+    peer.map(|v| v.to_string())
+        .unwrap_or_else(|| "unknown".into())
 }
 
 /// Resolves the per-request CSRF check: on unsafe methods the CSRF header
@@ -205,5 +235,35 @@ pub fn csrf_check(request: &actix_web::HttpRequest) -> Result<(), AppError> {
         Ok(())
     } else {
         Err(AppError::Forbidden("CSRF token mismatch".to_owned()))
+    }
+}
+
+#[cfg(test)]
+mod proxy_tests {
+    use super::*;
+    use actix_web::{test, web};
+    #[actix_web::test]
+    async fn only_explicitly_trusted_peers_can_supply_addresses() {
+        let config = Config::for_test();
+        let request = test::TestRequest::default()
+            .peer_addr("192.0.2.5:1234".parse().unwrap())
+            .insert_header(("X-Forwarded-For", "198.51.100.20"))
+            .app_data(web::Data::new(config.clone()))
+            .to_http_request();
+        assert_eq!(client_ip(&request), "192.0.2.5");
+        let mut config = config;
+        config.trusted_proxy_cidrs = vec!["192.0.2.0/24".into()];
+        let request = test::TestRequest::default()
+            .peer_addr("192.0.2.5:1234".parse().unwrap())
+            .insert_header(("X-Forwarded-For", "203.0.113.1, 198.51.100.20"))
+            .app_data(web::Data::new(config))
+            .to_http_request();
+        assert_eq!(client_ip(&request), "198.51.100.20");
+        assert!(parse_network("192.0.2.5/33").is_none());
+        assert!(parse_network("::1/129").is_none());
+        assert!(trusted_peer(
+            "2001:db8::1".parse().unwrap(),
+            "2001:db8::/32"
+        ));
     }
 }

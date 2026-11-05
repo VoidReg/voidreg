@@ -1,13 +1,12 @@
 <script lang="ts">
+  import copy from '$lib/content/portfolio-copy.json';
+  import Icon from '$lib/components/Icon.svelte';
   import { resolve } from '$app/paths';
 </script>
 
 <svelte:head>
   <title>About | Voidreg</title>
-  <meta
-    name="description"
-    content="About the research engineer behind Voidreg: systems, graphics, RF, AI, and design engineering."
-  />
+  <meta name="description" content={copy.aboutDescription} />
 </svelte:head>
 
 <main id="main-content" class="site-container page-shell about-page">
@@ -18,19 +17,16 @@
   <section class="about-section overview">
     <p class="eyebrow">01 / Overview</p>
     <p class="eyebrow">About</p>
-    <h1 class="display-heading">Research Engineer</h1>
+    <h1 class="display-heading">{copy.aboutTitle}</h1>
     <p class="lead">
-      Hello everyone, I am a research engineer who likes to deep dive into a wide variety of topics
-      in computer science, from systems programming and geometry analysis to radio frequency
-      engineering and AI/ML. I like going behind the implementations to understand the deep, hidden
-      details.
+      {copy.aboutIntro}
     </p>
     <p class="project-disciplines">Independent projects and technical writing</p>
     <div class="button-row">
       <a class="button" href={resolve('/projects')}
-        >Explore projects <span aria-hidden="true">→</span></a
+        >Explore projects <Icon name="arrow-right" size={16} /></a
       ><a class="button button-secondary" href={resolve('/blog')}
-        >Read the blog <span aria-hidden="true">→</span></a
+        >Read the blog <Icon name="arrow-right" size={16} /></a
       >
     </div>
   </section>
@@ -52,13 +48,12 @@
   </section>
 
   <section class="about-section">
-    <p class="eyebrow">03 / Areas of Practice</p>
+    <p class="eyebrow">{copy.interestLabel}</p>
     <div class="practice-grid">
       <article>
         <h2>Systems</h2>
         <p>
-          I like working close to the metal. understanding constraints, protocols, and the quiet
-          details that decide how a system actually behaves.
+          {copy.systems}
         </p>
       </article>
       <article>
@@ -69,14 +64,13 @@
         </p>
       </article>
       <article>
-        <h2>Design engineering</h2>
+        <h2>{copy.hardwareTitle}</h2>
         <p>
-          I care about making technical ideas clear enough that someone else can reason about them
-          without having to reverse-engineer everything first.
+          {copy.hardware}
         </p>
       </article>
     </div>
-    <p class="lead technology-line">C · C++ · Python · TypeScript</p>
+    <p class="lead technology-line">{copy.tools}</p>
   </section>
 
   <section class="about-section">
@@ -89,7 +83,7 @@
           tools and technical interfaces.
         </p>
         <a class="button" href={resolve('/projects')}
-          >Explore projects <span aria-hidden="true">→</span></a
+          >Explore projects <Icon name="arrow-right" size={16} /></a
         >
       </article>
       <article>
@@ -99,7 +93,7 @@
           trade-offs are examined more closely.
         </p>
         <a class="button button-secondary" href={resolve('/blog')}
-          >Read the blog <span aria-hidden="true">→</span></a
+          >Read the blog <Icon name="arrow-right" size={16} /></a
         >
       </article>
     </div>
@@ -117,24 +111,24 @@
   </section>
 
   <section class="about-section">
-    <p class="eyebrow">06 / Current Focus</p>
+    <p class="eyebrow">{copy.focusLabel}</p>
     <div class="two-column focus-columns">
       <div>
-        <p class="eyebrow">Building</p>
+        <p class="eyebrow">{copy.buildingLabel}</p>
         <ul>
-          <li>Rendering</li>
-          <li>Developer tooling</li>
+          <li>{copy.fpga}</li>
+          <li>{copy.dsp}</li>
           <li>Systems programming</li>
-          <li>Technical interfaces</li>
+          <li>{copy.graphics}</li>
         </ul>
       </div>
       <div>
-        <p class="eyebrow">Writing</p>
+        <p class="eyebrow">{copy.writingLabel}</p>
         <ul>
           <li>Graphics and mathematics</li>
           <li>Protocol behaviour</li>
-          <li>Software architecture</li>
-          <li>Technical communication</li>
+          <li>{copy.ml}</li>
+          <li>{copy.connections}</li>
         </ul>
       </div>
     </div>
@@ -145,8 +139,7 @@
       <p class="eyebrow">07 / Contact</p>
       <h2 id="contact-heading">Want to compare notes?</h2>
       <p class="lead">
-        Technical discussions, project questions, responses or corrections to articles, and
-        collaboration are welcome.
+        {copy.contact}
       </p>
     </div>
     <form aria-describedby="contact-status">
@@ -163,13 +156,13 @@
           /></label
         >
         <label
-          >Message<textarea name="message" rows="4" placeholder="Write your message…"
+          >Message<textarea name="message" rows="4" placeholder="Write your message..."
           ></textarea></label
         >
         <button class="button" type="submit">Send Message</button>
       </fieldset>
       <p id="contact-status" class="placeholder-note">
-        Contact delivery is coming soon. Submission is currently disabled.
+        {copy.contactStatus}
       </p>
     </form>
   </section>

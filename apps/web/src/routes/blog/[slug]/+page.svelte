@@ -1,87 +1,72 @@
 <script lang="ts">
-  import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { getPublic, type Article } from '$lib/publishing/api';
+  import ReadingColumn from '$lib/components/ReadingColumn.svelte';
   import ArticleBody from '$lib/publishing/ArticleBody.svelte';
   import Comments from '$lib/publishing/Comments.svelte';
-  let article = $state<Article | undefined>(),
-    error = $state(''),
-    loading = $state(true),
-    revision = $state(0);
-  $effect(() => {
-    const slug = page.params.slug;
-    const refresh = revision;
-    const controller = new AbortController();
-    article = undefined;
-    error = '';
-    loading = true;
-    void getPublic<Article>(
-      `/blogs/${encodeURIComponent(slug ?? '')}`,
-      controller.signal,
-      refresh > 0
-    )
-      .then((value) => {
-        if (!controller.signal.aborted) article = value;
-      })
-      .catch((e) => {
-        if (!controller.signal.aborted) error = (e as Error).message;
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) loading = false;
-      });
-    return () => controller.abort();
-  });
-  const jsonLd = $derived(
-    article
-      ? JSON.stringify({
-          '@context': 'https://schema.org',
-          '@type': 'Article',
-          headline: article.title,
-          description: article.summary,
-          datePublished: article.published_at,
-          url: page.url.href
-        }).replaceAll('<', '\\u003c')
-      : ''
-  );
-  $effect(() => {
-    if (!jsonLd) return;
-    const element = document.createElement('script');
-    element.type = 'application/ld+json';
-    element.textContent = jsonLd;
-    document.head.append(element);
-    return () => element.remove();
-  });
+  import Seo from '$lib/Seo.svelte';
+  let { data } = $props();
+  const article = $derived(data.article);
 </script>
 
-<svelte:head
-  ><title>{article ? `${article.title} | Voidreg` : 'Article | Voidreg'}</title><meta
-    name="description"
-    content={article?.summary ?? 'Engineering notes from Voidreg.'}
-  /></svelte:head
->
+<Seo
+  title={(article.seo_title || article.title) + ' | Voidreg'}
+  description={article.seo_description || article.summary}
+  image={article.social_image || article.hero_image}
+  structured={{
+    '@context': 'https://schema.org',
+    '@type': 'BlogPosting',
+    headline: article.title,
+    description: article.summary,
+    datePublished: article.published_at,
+    dateModified: article.updated_at || article.published_at,
+    author: { '@type': 'Person', name: 'Voidreg', url: 'https://www.voidreg.xyz/about' },
+    mainEntityOfPage: 'https://www.voidreg.xyz/blog/' + article.slug
+  }}
+/>
 <main id="main-content" class="site-container page-shell">
-  <nav class="breadcrumb" aria-label="Breadcrumb">
-    <a href={resolve('/')}>Home</a><span>/</span><a href={resolve('/blog')}>Blog</a><span>/</span
-    ><span aria-current="page">Article</span>
-  </nav>
-  {#if loading}<div class="blog-skeleton" role="status">Loading article…</div>
-  {:else if error}<div class="section-stack">
-      <h1>Article unavailable</h1>
-      <p role="alert">{error}</p>
-      <button class="button" onclick={() => revision++}>Try again</button>
-    </div>
-  {:else if article}
-    <article class="section-stack">
-      <header class="section-stack">
+  <ReadingColumn>
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href={resolve('/')}>Home</a><span>/</span><a href={resolve('/blog')}>Blog</a><span>/</span
+      ><span aria-current="page">{article.title}</span>
+    </nav>
+  </ReadingColumn>
+  <article class="section-stack detail-article">
+    <ReadingColumn>
+      <header class="section-stack detail-header">
         <p class="eyebrow">{article.category}</p>
         <h1 class="display-heading">{article.title}</h1>
         <p class="lead">{article.summary}</p>
-        {#if article.published_at}<time datetime={article.published_at}
-            >{new Date(article.published_at).toLocaleDateString()}</time
-          >{/if}
+        <p>
+          {#if article.published_at}<time datetime={article.published_at}
+              >{new Date(article.published_at).toLocaleDateString('en', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                timeZone: 'UTC'
+              })}</time
+            >{/if}{#if article.reading_time_minutes}
+            | {article.reading_time_minutes} min read{/if}
+        </p>
+        <a class="text-link" href={resolve('/blog/[slug]/source', { slug: article.slug })}
+          >View Markdown source</a
+        >
+        {#if data.projects.length}<nav class="tags" aria-label="Mentioned projects">
+            {#each data.projects as project (project.id)}<a
+                class="tag"
+                href={resolve('/projects/[slug]', { slug: project.slug })}>{project.title}</a
+              >{/each}
+          </nav>{/if}
       </header>
-      <ArticleBody {article} />
-    </article>
-    {#key article.slug}<Comments slug={article.slug} />{/key}
-  {/if}
+    </ReadingColumn>
+    {#if article.hero_image}<figure>
+        <img
+          style="max-width:100%;height:auto"
+          src={article.hero_image}
+          alt={article.hero_alt ?? ''}
+        />{#if article.hero_caption}<figcaption>{article.hero_caption}</figcaption>{/if}
+      </figure>{/if}<ArticleBody {article} />
+  </article>
+  <ReadingColumn>
+    {#key article.id ?? article.slug}<Comments slug={article.slug} />{/key}
+  </ReadingColumn>
 </main>

@@ -18,6 +18,8 @@ pub enum AppError {
     Unprocessable(String),
     #[error("{0}")]
     TooManyRequests(String),
+    #[error("Too many comment attempts. Please wait before trying again.")]
+    CommentRateLimited(i64),
     #[error("{0}")]
     ServiceUnavailable(String),
     #[error("database error: {0}")]
@@ -48,7 +50,7 @@ impl AppError {
             Self::NotFound(_) => "not_found",
             Self::Conflict(_) => "conflict",
             Self::Unprocessable(_) => "unprocessable",
-            Self::TooManyRequests(_) => "rate_limited",
+            Self::TooManyRequests(_) | Self::CommentRateLimited(_) => "rate_limited",
             Self::ServiceUnavailable(_) => "unavailable",
             Self::Database(_) | Self::Internal(_) => "internal",
         }
@@ -64,7 +66,7 @@ impl ResponseError for AppError {
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::Conflict(_) => StatusCode::CONFLICT,
             Self::Unprocessable(_) => StatusCode::UNPROCESSABLE_ENTITY,
-            Self::TooManyRequests(_) => StatusCode::TOO_MANY_REQUESTS,
+            Self::TooManyRequests(_) | Self::CommentRateLimited(_) => StatusCode::TOO_MANY_REQUESTS,
             Self::ServiceUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
             Self::Database(_) | Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
@@ -75,10 +77,18 @@ impl ResponseError for AppError {
             tracing::error!(error = %self, "request failed");
         }
 
-        HttpResponse::build(self.status_code()).json(ErrorBody {
+        let mut response = HttpResponse::build(self.status_code());
+        if let Self::CommentRateLimited(seconds) = self {
+            response.insert_header(("Retry-After", seconds.to_string()));
+        }
+        response.json(ErrorBody {
             error: ErrorDetail {
                 code: self.code(),
-                message: self.to_string(),
+                message: if matches!(self, Self::Database(_) | Self::Internal(_)) {
+                    "The service is temporarily unavailable. Please try again.".to_owned()
+                } else {
+                    self.to_string()
+                },
             },
         })
     }

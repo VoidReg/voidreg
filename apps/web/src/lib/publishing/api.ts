@@ -1,5 +1,23 @@
 import type { PublicationArtifact } from '@publisle/adapter-core';
-export type Article = {
+export type ContentMeta = {
+  id?: string;
+  updated_at?: string;
+  archived?: boolean;
+  has_unpublished_changes?: boolean;
+  pending_slug?: string | null;
+  project_ids?: string[];
+  media_ids?: string[];
+  seo_title?: string;
+  seo_description?: string;
+  social_image?: string | null;
+  hero_image?: string | null;
+  hero_alt?: string;
+  hero_caption?: string;
+  demo_url?: string | null;
+};
+export type Article = ContentMeta & {
+  tags?: string[];
+  repo_url?: string | null;
   revision?: number;
   slug: string;
   title: string;

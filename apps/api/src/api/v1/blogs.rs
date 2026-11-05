@@ -1,21 +1,13 @@
 use actix_web::{HttpRequest, HttpResponse, get, http::header, web};
-use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
 use crate::db::Db;
-use crate::domain::ArticleListResponse;
 use crate::error::AppError;
 
-#[derive(Debug, Deserialize)]
-#[cfg_attr(feature = "swagger", derive(utoipa::IntoParams))]
-pub struct BlogQuery {
-    pub featured: Option<bool>,
-    pub page: Option<i64>,
-    pub per_page: Option<i64>,
-}
+pub type BlogQuery = crate::db::content::ContentQuery;
 
-const LIST_CACHE_CONTROL: &str = "public, max-age=60, stale-while-revalidate=300";
-const DETAIL_CACHE_CONTROL: &str = "public, max-age=300, stale-while-revalidate=600";
+const LIST_CACHE_CONTROL: &str = "public, no-cache";
+const DETAIL_CACHE_CONTROL: &str = "public, no-cache";
 
 #[cfg_attr(feature = "swagger", utoipa::path(
     get,
@@ -23,7 +15,7 @@ const DETAIL_CACHE_CONTROL: &str = "public, max-age=300, stale-while-revalidate=
     tag = "blogs",
     params(BlogQuery),
     responses(
-        (status = 200, description = "Published blog list", body = ArticleListResponse),
+        (status = 200, description = "Published blog list", body = serde_json::Value),
         (status = 304, description = "Not modified")
     )
 ))]
@@ -33,22 +25,7 @@ pub async fn list_blogs(
     query: web::Query<BlogQuery>,
     request: HttpRequest,
 ) -> Result<HttpResponse, AppError> {
-    let items = db.list_published_articles(query.featured).await?;
-    let page = query.page.unwrap_or(1).max(1);
-    let per_page = query.per_page.unwrap_or(20).clamp(1, 100);
-    let total = items.len() as i64;
-    let start = page.saturating_sub(1).saturating_mul(per_page) as usize;
-    let items = items
-        .into_iter()
-        .skip(start)
-        .take(per_page as usize)
-        .collect();
-    let body = serde_json::to_string(&ArticleListResponse {
-        items,
-        page,
-        per_page,
-        total,
-    })?;
+    let body = db.content_page("article", true, &query).await?.to_string();
     Ok(cached_response(&request, body, LIST_CACHE_CONTROL, None))
 }
 
@@ -69,8 +46,7 @@ pub async fn get_blog(
     path: web::Path<String>,
     request: HttpRequest,
 ) -> Result<HttpResponse, AppError> {
-    let mut article = db.get_published_article(&path).await?;
-    article.document = None;
+    let article = db.get_published_article(&path).await?;
     let etag = (!article.content_hash.is_empty()).then(|| article.content_hash.clone());
     let body = serde_json::to_string(&article)?;
     Ok(cached_response(&request, body, DETAIL_CACHE_CONTROL, etag))

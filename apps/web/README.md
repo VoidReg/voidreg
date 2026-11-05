@@ -2,27 +2,26 @@
 
 Personal Blog
 
-## Sitemap
+## Server-rendered projects and blog
 
-`pnpm build` generates `build/sitemap.xml` from SvelteKit's prerendered pages.
-New pages are included automatically; redirects and the generated 404 fallback
-are excluded. Pages with route parameters must provide prerender entries so
-SvelteKit can build their concrete URLs.
+Run `pnpm install --frozen-lockfile`, `pnpm check`, and `pnpm build`. The output
+is a SvelteKit Node server; start it with `node build` or build the supplied
+Dockerfile. Set `VOIDREG_API_URL` to the server-only API origin and `ORIGIN` to
+the public site origin. The site no longer deploys to GitHub Pages.
 
-The GitHub Pages workflow builds and uploads the site, including the sitemap
-and `robots.txt`, on every push to `main`.
+Home previews, project and blog indexes, and detail pages load database-backed
+published snapshots on the server. Titles, canonical URLs, social metadata,
+structured data, and article bodies are in the initial HTML. Publishing needs
+no rebuild. Missing content returns 404; upstream failures return 503.
 
-Submit `https://www.voidreg.xyz/sitemap.xml` to Google Search Console after
-deployment. The hostname matches the site's existing redirect to `www`.
+`/projects/[slug]` displays project details and paginated linked posts. Article
+pages link to associated published projects and provide a Markdown source view,
+readable download, and complete archival download. Source routes are noindex
+and never expose working drafts. Old slugs redirect permanently.
 
-## API-backed blog
-
-`/blog` is a prerendered shell. `/blog/[slug]` loads published API content in the
-browser, so newly published slugs need no rebuild. The static host must serve the
-SPA fallback (`404.html`) with status 200 for `/blog/*`. voidreg-solution provides
-this routing. Article metadata and JSON-LD update client-side; full server-rendered
-SEO is outside the static-shell architecture. robots.txt also points to the live
-API blog sitemap.
+`/sitemap.xml` is generated at request time from published projects/articles
+and static public routes. Submit its canonical www URL to Search Console.
+The manual workflow builds a Node artifact instead of deploying static Pages.
 
 Development proxies `/api` to localhost:8080. `VOIDREG_API_PROXY` overrides that
 target. Public reads use bounded memory caching and ETag revalidation; errors can
@@ -45,7 +44,7 @@ script; keep that snapshot current when renderer behavior changes.
 
 The home page and blog index share API-backed article previews with working
 reader links, publication dates, and reading times. Unpublished placeholders
-are removed. Loading, empty, and retry states reflect the live API.
+are removed. Empty and error states reflect the live API.
 
 Discussion threads have inline reply composers, replies to replies, separate
 reply pagination and parent context. Logical reply

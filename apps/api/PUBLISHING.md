@@ -2,7 +2,7 @@
 
 Run `cargo migrate` before starting the upgraded API. The migration adds document
 columns with defaults, comments, identities, and sessions without dropping existing
-tables. `cargo migrate -- --seed` also inserts seed drafts when empty. Migration
+tables. `cargo migrate --seed` also inserts seed drafts when empty. Migration
 can be rerun safely. Back up the database before deploying schema changes.
 
 Admin sign-in uses GitHub or Google OAuth. Configure the provider client ID and
@@ -39,7 +39,11 @@ password/hash from production configuration.
 Set a private `COMMENT_IP_SALT`. Use explicit `CORS_ORIGINS` including your
 primary site origin for credentialed requests.
 
-Article CRUD uses `/articles` and `/articles/{slug}`. Slugs are immutable.
+Article CRUD uses `/articles` and `/articles/{slug}`. Slug changes are staged until
+publication; previous URLs remain reserved aliases. Project CRUD uses `/projects`
+and `/projects/{slug}` with equivalent revision checks. Both types support archive
+and restore actions. The database owns working and published snapshots, metadata,
+and stable-ID project associations.
 `POST /articles/{slug}/publish` and `/unpublish` change visibility. Public queries
 never return drafts. Existing plain-text sections become canonical Publisle
 blocks on their first editor save. To publish, provide a schema-v1 document and a
@@ -47,16 +51,24 @@ format-v1 `publisle:publication` artifact compiled by the admin editor. Block
 payload schema validation belongs to Publisle in the editor. The server checks
 block envelopes, IDs, builtin allowlists, version, and payload size.
 
-Changing a document invalidates its compiled artifact. For a published article,
-upload the replacement document and compilation together, or unpublish first.
+Changing a document invalidates its compiled artifact in the working copy. Saving
+a published article never changes its public snapshot. Publish/Update validates
+and atomically replaces that snapshot; incomplete drafts can be saved privately.
 Compilation with error diagnostics cannot be published. The default JSON request
 limit is 7 MiB, the document limit is 2 MiB, and the artifact limit is 4 MiB.
 
 `GET /api/v1/blogs` supports `featured`, `page`, and `per_page` (maximum 100).
-It returns cards plus pagination metadata. Detail responses omit canonical
-editor documents and include compiled artifacts. Reads support ETag conditional
-requests, gzip, and Cache-Control. `/sitemap-blogs.xml` lists published slugs.
-Pagination currently occurs in memory after reading matching rows.
+It returns cards plus pagination metadata. Public details include published
+canonical documents for Markdown source access and compiled artifacts for rendering.
+Reads support ETag conditional requests, gzip, and revalidation. Project and blog
+list filtering/pagination run in SQL. Blog lists accept `project_id` for related
+posts; project lists accept `ids` for associated project cards.
+`/sitemap-blogs.xml` remains compatible; the reader generates the combined sitemap.
+
+Startup migrates but never seeds. Existing tables are retained as backfill inputs;
+`content_entries` and `content_aliases` become authoritative. Image files use
+`MEDIA_PATH`, with metadata in `media_assets`. See the solution repository
+`CONTENT-MANAGEMENT.md` for coordinated rollout and rollback instructions.
 
 Public comments use `/api/v1/blogs/{slug}/comments`. Anonymous submissions are
 pending until approved. OAuth comments are approved immediately, with the author

@@ -5,3 +5,6 @@ dist-mcp
 .git
 .env*
 exports
+
+dist-publishing
+data

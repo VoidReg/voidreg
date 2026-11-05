@@ -15,18 +15,26 @@
     notice = $state('');
   let target = $state<DiscussionComment | undefined>();
 
+  let commentRequest = 0;
+  const replyRequests: Record<string, number> = {};
   async function load(page = 1) {
+    const requestId = ++commentRequest;
     loading = true;
     error = '';
     try {
-      comments = await request(`/blogs/${encodeURIComponent(slug)}/comments?page=${page}`);
+      const next = await request<Page<DiscussionComment>>(
+        `/blogs/${encodeURIComponent(slug)}/comments?page=${page}`
+      );
+      if (requestId === commentRequest) comments = next;
     } catch (e) {
-      error = (e as Error).message;
+      if (requestId === commentRequest) error = (e as Error).message;
     } finally {
-      loading = false;
+      if (requestId === commentRequest) loading = false;
     }
   }
-  async function loadReplies(root: string, page = 1) {
+  async function loadReplies(root: string, page = replies[root]?.page || 1) {
+    const requestId = (replyRequests[root] ?? 0) + 1;
+    replyRequests[root] = requestId;
     const previous = replies[root];
     replies[root] = {
       items: previous?.items ?? [],
@@ -41,6 +49,7 @@
       const next = await request<Page<DiscussionComment>>(
         `/blogs/${encodeURIComponent(slug)}/comments/${encodeURIComponent(root)}/replies?page=${page}`
       );
+      if (replyRequests[root] !== requestId) return;
       replies[root] = {
         ...next,
         items: next.items,
@@ -49,6 +58,7 @@
         open: replies[root]?.open ?? true
       };
     } catch (e) {
+      if (replyRequests[root] !== requestId) return;
       replies[root].error = (e as Error).message;
       replies[root].loading = false;
     }
@@ -72,10 +82,12 @@
     return true;
   }
   function changeReplyPage(root: string, page: number) {
+    if (replies[root]?.loading) return;
     if (target?.thread_id === root && !discardReply()) return;
     void loadReplies(root, page);
   }
   function changeDiscussionPage(page: number) {
+    if (loading) return;
     if (!discardReply()) return;
     void load(page);
   }
@@ -96,7 +108,13 @@
       if (root)
         await loadReplies(
           root,
-          Math.max(1, Math.ceil((comments.items.find((c) => c.id === root)?.reply_count ?? 0) / 20))
+          Math.max(
+            1,
+            Math.ceil(
+              (comments.items.find((c) => c.id === root)?.reply_count ?? 0) /
+                (replies[root]?.per_page || 20)
+            )
+          )
         );
     }
     if (root) await closeReply();
@@ -141,7 +159,7 @@
     <button class="button button-secondary" onclick={() => load(comments.page)}
       >Retry loading discussion</button
     >{/if}
-  {#if loading}<p role="status">Loading discussion…</p>
+  {#if loading}<p role="status">Loading discussion...</p>
   {:else if !error && comments.items.length === 0}<p>No discussions yet. Start the conversation.</p>
   {:else if comments.items.length}
     <ol class="comment-list">
@@ -189,20 +207,21 @@
                         />{/key}{/if}
                   </li>{/each}
               </ol>
-              {#if replies[comment.id].loading}<p role="status">Loading replies…</p>
+              {#if replies[comment.id].loading}<p role="status">Loading replies...</p>
               {:else if replies[comment.id].total > replies[comment.id].per_page}
                 <nav class="button-row" aria-label={'Reply pages for ' + comment.author_name}>
                   <button
                     class="button button-secondary"
-                    disabled={replies[comment.id].page <= 1}
+                    disabled={replies[comment.id].loading || replies[comment.id].page <= 1}
                     onclick={() => changeReplyPage(comment.id, replies[comment.id].page - 1)}
                     >Previous replies</button
                   >
                   <span>Page {replies[comment.id].page}</span>
                   <button
                     class="button button-secondary"
-                    disabled={replies[comment.id].page * replies[comment.id].per_page >=
-                      replies[comment.id].total}
+                    disabled={replies[comment.id].loading ||
+                      replies[comment.id].page * replies[comment.id].per_page >=
+                        replies[comment.id].total}
                     onclick={() => changeReplyPage(comment.id, replies[comment.id].page + 1)}
                     >Next replies</button
                   >
@@ -216,11 +235,11 @@
     {#if comments.total > comments.per_page}<nav class="button-row" aria-label="Discussion pages">
         <button
           class="button button-secondary"
-          disabled={comments.page <= 1}
+          disabled={loading || comments.page <= 1}
           onclick={() => changeDiscussionPage(comments.page - 1)}>Previous</button
         ><span>Page {comments.page}</span><button
           class="button button-secondary"
-          disabled={comments.page * comments.per_page >= comments.total}
+          disabled={loading || comments.page * comments.per_page >= comments.total}
           onclick={() => changeDiscussionPage(comments.page + 1)}>Next</button
         >
       </nav>{/if}

@@ -1,7 +1,13 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { parseDocument, type Diagnostic } from '@publisle/schema';
-import { compileDocument, importMarkdown, safeMarkdown, blockCatalog } from '../src/lib/authoring';
+import {
+  compileDocument,
+  importMarkdown,
+  safeMarkdown,
+  archivalMarkdown,
+  blockCatalog
+} from '../src/lib/authoring';
 
 export type Bridge = (
   path: string,
@@ -148,6 +154,9 @@ export function createTools(bridge: Bridge, publicOrigin: string) {
       const exported = article.document ? safeMarkdown(parseDocument(article.document)) : undefined;
       return result({
         article,
+        ...(article.document
+          ? { archival_markdown: archivalMarkdown(parseDocument(article.document)).markdown }
+          : {}),
         ...(exported?.markdown ? { markdown: exported.markdown } : {}),
         diagnostics: exported?.diagnostics ?? []
       });
@@ -165,8 +174,24 @@ export function createTools(bridge: Bridge, publicOrigin: string) {
     'Validate and compile content without saving. Returns diagnostics and the canonical document.',
     z.object({ title: metadata.title, ...content }).strict(),
     true,
-    (input) => {
+    async (input) => {
       const validated = validateInput(input, input.title);
+      if (
+        validated.document &&
+        validated.document.blocks.some((b) => b.type === 'publisle:diagram') &&
+        !validated.diagnostics.some((d) => d.level === 'error')
+      ) {
+        const started = await bridge('/compilations', 'POST', {
+          title: input.title,
+          document: validated.document
+        });
+        return result({
+          document: validated.document,
+          diagnostics: validated.diagnostics,
+          compilation_id: started.id,
+          compilation_state: started.state
+        });
+      }
       return result(
         { document: validated.document, diagnostics: validated.diagnostics },
         validated.diagnostics.some((d) => d.level === 'error')
@@ -180,8 +205,7 @@ export function createTools(bridge: Bridge, publicOrigin: string) {
     false,
     async (input) => {
       const validated = validateInput(input, input.title);
-      if (!validated.document || validated.diagnostics.some((d) => d.level === 'error'))
-        return failed(validated.diagnostics);
+      if (!validated.document) return failed(validated.diagnostics);
       const { markdown: _, document: __, ...fields } = input;
       const article = await bridge('/articles', 'POST', {
         ...fields,
@@ -218,7 +242,11 @@ export function createTools(bridge: Bridge, publicOrigin: string) {
           'Article changed. Fetch the latest revision and reconcile your edits.',
           409
         );
-      if (input.markdown !== undefined && current.document) {
+      if (
+        input.markdown !== undefined &&
+        !input.markdown.trimStart().startsWith('::::publisle-document') &&
+        current.document
+      ) {
         const exported = safeMarkdown(parseDocument(current.document));
         if (!exported.markdown || exported.diagnostics.some((d) => d.level === 'error')) {
           throw new BridgeError(
@@ -246,8 +274,7 @@ export function createTools(bridge: Bridge, publicOrigin: string) {
         );
         Object.assign(validated, merged);
       }
-      if (!validated.document || validated.diagnostics.some((d) => d.level === 'error'))
-        return failed(validated.diagnostics);
+      if (!validated.document) return failed(validated.diagnostics);
       const { markdown: _, document: __, slug: ___, ...fields } = input;
       const article = await bridge('/articles/' + input.slug, 'PUT', {
         ...fields,
@@ -261,6 +288,13 @@ export function createTools(bridge: Bridge, publicOrigin: string) {
         admin_url: `${publicOrigin}/admin/?article=${article.slug}`
       });
     }
+  );
+  tool(
+    'get_compilation',
+    'Get server compilation progress and block diagnostics. Does not publish.',
+    z.object({ id: z.string().uuid() }).strict(),
+    true,
+    async ({ id }) => result(await bridge('/compilations/' + id))
   );
   return server;
 }

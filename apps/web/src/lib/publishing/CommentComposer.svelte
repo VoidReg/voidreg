@@ -78,7 +78,7 @@
   {#if error}<p role="alert">{error}</p>{/if}
   <div class="button-row">
     <button class="button" disabled={busy}
-      >{busy ? 'Submitting…' : target ? 'Post reply' : 'Post comment'}</button
+      >{busy ? 'Submitting...' : target ? 'Post reply' : 'Post comment'}</button
     >
     {#if oncancel}<button
         type="button"

@@ -1,47 +1,26 @@
 <script lang="ts">
+  import copy from '$lib/content/portfolio-copy.json';
+  import EmptyContent from '$lib/components/EmptyContent.svelte';
+  import Icon from '$lib/components/Icon.svelte';
   import { resolve } from '$app/paths';
   import BrandMark from '$lib/components/BrandMark.svelte';
   import ProjectCard from '$lib/components/ProjectCard.svelte';
-  import { projects } from '$lib/data/projects';
-
-  import { onMount } from 'svelte';
   import ArticleCard from '$lib/publishing/ArticleCard.svelte';
-  import { getPublic, type Article, type Page } from '$lib/publishing/api';
-  let posts = $state<Article[]>([]),
-    postsLoading = $state(true),
-    postsError = $state('');
-  async function loadPosts(force = false) {
-    postsLoading = true;
-    postsError = '';
-    try {
-      posts = (await getPublic<Page<Article>>('/blogs?per_page=3', undefined, force)).items;
-    } catch {
-      postsError = 'Latest articles could not be loaded.';
-    } finally {
-      postsLoading = false;
-    }
-  }
-  onMount(() => {
-    void loadPosts();
-  });
+  import Seo from '$lib/Seo.svelte';
+  let { data } = $props();
+  const projects = $derived(data.projects);
+  const posts = $derived(data.posts);
 </script>
 
-<svelte:head>
-  <title>Voidreg | Deep dive into the Void</title>
-  <meta
-    name="description"
-    content="Projects and writing on systems, graphics, RF, design engineering, and low-level programming."
-  />
-</svelte:head>
+<Seo title="Voidreg | Deep dive into the Void" description={copy.homeDescription} />
 
 <main id="main-content" class="site-container page-shell home-page">
   <section class="hero">
     <div class="hero-copy">
-      <p class="eyebrow">Systems · Graphics · Design Engineering</p>
+      <p class="eyebrow">{copy.homeEyebrow}</p>
       <h1 class="display-heading">Deep dive into the Void</h1>
       <p class="lead">
-        A site where I share work and updates on low-level programming, graphics programming,
-        bare-metal development, AI, and performance optimization.
+        {copy.homeIntro}
       </p>
       <div class="button-row">
         <a class="button" href={resolve('/projects')}>View projects</a><a
@@ -55,10 +34,9 @@
 
   <section class="credibility" aria-label="Areas of work">
     <p>
-      Systems · Graphics · Web infrastructure<br />AI/ML · Bare-metal development · Kernel
-      programming · Performance optimization
+      {copy.interests}
     </p>
-    <p>Independent portfolio · projects, experiments, and technical notes</p>
+    <p>Independent portfolio | projects, experiments, and technical notes</p>
   </section>
 
   <section class="section-stack" aria-labelledby="selected-projects">
@@ -67,11 +45,13 @@
       <h2 id="selected-projects" class="section-heading">Selected projects</h2>
     </div>
     <div class="card-grid">
-      {#each projects.slice(0, 3) as project (project.title)}<ProjectCard {project} />{/each}
+      {#each projects as project (project.title)}<ProjectCard {project} />{:else}<EmptyContent
+          kind="featured"
+        />{/each}
     </div>
     <div>
       <a class="button" href={resolve('/projects')}
-        >View all projects <span aria-hidden="true">→</span></a
+        >View all projects <Icon name="arrow-right" size={16} /></a
       >
     </div>
   </section>
@@ -82,22 +62,19 @@
       <h2 id="latest-posts" class="section-heading">Latest Blog Posts</h2>
     </div>
     <div class="post-list">
-      {#if postsLoading}<p role="status">Loading latest articles…</p>
-      {:else if postsError}<p role="alert">{postsError}</p>
-        <button class="button button-secondary" onclick={() => loadPosts(true)}>Try again</button>
-      {:else if posts.length === 0}<p>No articles published yet. Check back soon.</p>
-      {:else}{#each posts as article (article.slug)}<ArticleCard
-            {article}
-            heading="h3"
-          />{/each}{/if}
+      {#each posts as article (article.slug)}<ArticleCard
+          {article}
+          heading="h3"
+        />{:else}<EmptyContent kind="articles" />{/each}
     </div>
-    <a class="text-link" href={resolve('/blog')}>View all blogs <span aria-hidden="true">→</span></a
+    <a class="text-link" href={resolve('/blog')}
+      >View all blogs <Icon name="arrow-right" size={16} /></a
     >
   </section>
 
   <section>
     <a class="text-link" href={resolve('/about#contact')}
-      >Get in touch <span aria-hidden="true">→</span></a
+      >Get in touch <Icon name="arrow-right" size={16} /></a
     >
   </section>
 </main>
@@ -129,6 +106,9 @@
     color: var(--muted-foreground);
     font-family: var(--font-code);
     font-size: 0.75rem;
+  }
+  .credibility p {
+    white-space: pre-line;
   }
   .credibility p:last-child {
     color: var(--primary);

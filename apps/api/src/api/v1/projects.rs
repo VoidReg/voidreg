@@ -1,30 +1,23 @@
 use actix_web::{get, web};
-use serde::Deserialize;
 
 use crate::db::Db;
-use crate::domain::ProjectListResponse;
 use crate::error::AppError;
 
-#[derive(Debug, Deserialize)]
-#[cfg_attr(feature = "swagger", derive(utoipa::IntoParams))]
-pub struct ProjectQuery {
-    pub featured: Option<bool>,
-}
+pub type ProjectQuery = crate::db::content::ContentQuery;
 
 #[cfg_attr(feature = "swagger", utoipa::path(
     get,
     path = "/api/v1/projects",
     tag = "projects",
     params(ProjectQuery),
-    responses((status = 200, description = "Project list", body = ProjectListResponse))
+    responses((status = 200, description = "Project list", body = serde_json::Value))
 ))]
 #[get("/projects")]
 pub async fn list_projects(
     db: web::Data<Db>,
     query: web::Query<ProjectQuery>,
-) -> Result<web::Json<ProjectListResponse>, AppError> {
-    let items = db.list_projects(query.featured).await?;
-    Ok(web::Json(ProjectListResponse { items }))
+) -> Result<web::Json<serde_json::Value>, AppError> {
+    Ok(web::Json(db.content_page("project", true, &query).await?))
 }
 
 #[cfg_attr(feature = "swagger", utoipa::path(

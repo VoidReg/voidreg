@@ -46,8 +46,17 @@ use crate::error::{ErrorBody, ErrorDetail};
         v1::admin::articles::publish_article,
         v1::admin::articles::unpublish_article,
         v1::admin::articles::delete_article,
+        v1::admin::moderation::summary,
+        v1::admin::moderation::preview,
+        v1::admin::moderation::list,
+        v1::admin::moderation::block,
+        v1::admin::moderation::revoke,
+        v1::admin::moderation::moderate,
         v1::admin::comments::list_comments,
         v1::admin::comments::approve_comment,
+        v1::admin::content::list, v1::admin::content::get_one, v1::admin::content::create,
+        v1::admin::content::update, v1::admin::content::remove, v1::admin::content::action,
+        v1::admin::media::list, v1::admin::media::upload, v1::admin::media::update, v1::admin::media::remove,
         v1::admin::comments::delete_comment
     ),
     components(schemas(
