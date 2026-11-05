@@ -28,13 +28,17 @@ The script refuses to run with uncommitted tracked changes. It exports the commi
 `HEAD` with `git archive`, syncs it to `DEPLOY_PATH` with `rsync --delete`, and then on
 the server:
 
-- `api`: pulls `ghcr.io/voidreg/voidreg-api:$API_IMAGE_TAG` (CI publishes `latest` and a
+- `api`: pulls `ghcr.io/voidreg/voidreg-site-api:$API_IMAGE_TAG` (CI publishes `latest` and a
   commit-SHA tag) and recreates the container.
 - `web`, `mcp`, `publishing`: builds the image from the synced source and recreates the
   container, waiting for its health check.
 - `admin`: builds the static files into `apps/admin/build`, which nginx serves at `/admin/`.
 - Always last: recreates nginx so upstream addresses refresh, tests its configuration and
   reloads it.
+
+The API image is published by CI to `ghcr.io/voidreg/voidreg-site-api`. New GHCR packages
+start private: either make the package public in its settings, or run `docker login ghcr.io`
+once on the server with a token that has `read:packages`.
 
 Server-only files are never touched by the sync: `deploy/.env`, `deploy/certs/`,
 `deploy/certbot/`, `deploy/backups/`, `apps/api/.env` and `apps/admin/build/`.

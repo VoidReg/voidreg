@@ -14,7 +14,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "0"
-  IMAGE: ghcr.io/voidreg/voidreg-api
+  IMAGE: ghcr.io/voidreg/voidreg-site-api
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -62,6 +62,8 @@ jobs:
         with:
           context: apps/api
           push: true
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           tags: |
             ${{ env.IMAGE }}:${{ github.sha }}
             ${{ env.IMAGE }}:latest
