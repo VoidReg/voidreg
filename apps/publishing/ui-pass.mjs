@@ -221,6 +221,8 @@ for (const theme of themes) {
           .first()
           .click()
           .catch(() => undefined);
+      // Park the pointer so a card under the banner is not captured mid hover transition.
+      await page.mouse.move(1, 1);
       // Visible schematics hydrate on scroll, so scroll through the page once.
       await page.evaluate(async () => {
         for (let y = 0; y < document.body.scrollHeight; y += 700) {
