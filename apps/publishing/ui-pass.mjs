@@ -20,19 +20,20 @@ const reader = [
   ['project', '/projects/test-signal-lab'],
   ['blog-tag', '/blog?tag=test'],
   ['map', '/map'],
-  ['map-open', '/map?open=test-signal-lab']
+  ['map-focus', '/map?focus=test-signal-lab']
 ];
-// With a large catalogue seeded (seed:scale), also check the grouped map and filters at scale.
-// Long pages are captured at viewport height so the lanes' on-demand drawing is what is judged.
+// With a large catalogue seeded (seed:scale), also check the board and filters at scale.
+// Long pages are captured at viewport height so the board's drawing is what is judged.
 const scale = process.env.SCALE === '1';
-const viewportOnly = new Set(['map-scale', 'map-scale-open', 'map-scale-filter']);
+const viewportOnly = new Set(['map-scale', 'map-scale-focus', 'map-scale-filter']);
 if (scale)
   reader.push(
     ['map-scale', '/map'],
-    ['map-scale-open', '/map?open=scale-project-0012,scale-project-0013'],
+    ['map-scale-focus', '/map?focus=scale-project-0012'],
     ['map-scale-filter', '/map?category=Category%2003&tag=rust']
   );
 const admin = [
+  ['preview-map', '/preview/map'],
   ['admin-articles', '/admin/'],
   ['admin-editor', '/admin/?article=publisle-feature-test'],
   [
@@ -171,6 +172,81 @@ function audit() {
   return out;
 }
 
+/**
+ * Drives the PCB board like a person: zoom with the wheel, drag, focus a project by keyboard,
+ * read its panel and clear it again. Also checks that drawing stays bounded and quick.
+ */
+async function boardPass(page, name, width, theme, shot) {
+  const label = `${name} ${width} ${theme}`;
+  const board = page.locator('.board');
+  if (!(await board.count())) return report(label, 'board is missing');
+  await board.scrollIntoViewIfNeeded();
+  await page.waitForSelector('.board[data-ready="true"]');
+  const box = await page.locator('.board .stage').boundingBox();
+  const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  const transform = () => page.locator('.board .world').evaluate((el) => el.style.transform);
+  const chips = () => page.locator('.board .chip').count();
+  const lod = () => board.getAttribute('data-lod');
+
+  // Scripted wheel: zooming in must change the level of detail and keep the DOM bounded.
+  const before = await transform();
+  await page.mouse.move(centre.x, centre.y);
+  const started = Date.now();
+  await page.keyboard.down('Control');
+  for (let i = 0; i < 6; i++) {
+    await page.mouse.wheel(0, -30);
+    await page.waitForTimeout(30);
+  }
+  await page.keyboard.up('Control');
+  await page.waitForTimeout(700);
+  const elapsed = Date.now() - started;
+  if ((await transform()) === before) report(label, 'wheel did not zoom the board');
+  const drawn = await chips();
+  if (drawn > 450) report(label, `${drawn} chips drawn at once, culling is not bounded`);
+  if (elapsed > 6000) report(label, `wheel zoom took ${elapsed}ms`);
+  await shot(`${name}-zoom`);
+
+  // Scripted drag pans the board.
+  const zoomed = await transform();
+  await page.mouse.move(centre.x, centre.y);
+  await page.mouse.down();
+  for (let i = 1; i <= 8; i++) await page.mouse.move(centre.x - i * 25, centre.y - i * 12);
+  await page.mouse.up();
+  await page.waitForTimeout(200);
+  if ((await transform()) === zoomed) report(label, 'drag did not pan the board');
+
+  // Keyboard focus: arrows pick a project, Enter lights its circuit and opens the panel.
+  await page.locator('.board .stage').focus();
+  await page.keyboard.press('ArrowRight');
+  await page.waitForTimeout(700);
+  await page.keyboard.press('Enter');
+  const panel = page.locator('aside[aria-label="Selected project"]');
+  try {
+    await panel.waitFor({ state: 'visible', timeout: 5000 });
+  } catch {
+    return report(label, 'focusing a project did not open the panel');
+  }
+  await page.waitForSelector('.board .circuit', { timeout: 5000 }).catch(() => undefined);
+  await page.waitForTimeout(1200);
+  if (!/[?&]focus=/.test(page.url())) report(label, 'focus is not in the URL');
+  if (!(await page.locator('.board .circuit .trace').count()))
+    report(label, 'focused project drew no traces');
+  if (!(await panel.getByRole('link', { name: 'Open project' }).count()))
+    report(label, 'panel has no Open project link');
+  const dimmed = await page.locator('.board .chip.dim').count();
+  const lit = await page.locator('.board .chip:not(.dim)').count();
+  if (!dimmed && (await lod()) !== 'far') report(label, 'nothing is dimmed around the circuit');
+  if (!lit && (await lod()) !== 'far') report(label, 'no lit chips around the circuit');
+  await page.mouse.move(1, 1);
+  await shot(`${name}-circuit`);
+
+  await page.locator('.board .stage').focus();
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  if (await panel.count()) report(label, 'Escape did not clear the focused project');
+  if (/[?&]focus=/.test(page.url())) report(label, 'focus is still in the URL after Escape');
+}
+
 const browser = await chromium.launch({
   executablePath: process.env.CHROME_PATH ?? '/usr/bin/google-chrome',
   args: ['--no-sandbox']
@@ -241,9 +317,20 @@ for (const theme of themes) {
       });
       pages++;
     };
+    const shot = async (tag) => {
+      await page.mouse.move(1, 1);
+      await page.screenshot({ path: `${outDir}/${tag}-${width}-${theme}.png` });
+    };
 
-    for (const [name, path] of reader) await visit(name, path);
-    if (password) for (const [name, path] of admin) await visit(name, path);
+    for (const [name, path] of reader) {
+      await visit(name, path);
+      if (name === 'map' || name === 'map-scale') await boardPass(page, name, width, theme, shot);
+    }
+    if (password)
+      for (const [name, path] of admin) {
+        await visit(name, path);
+        if (name === 'preview-map') await boardPass(page, name, width, theme, shot);
+      }
     await context.close();
   }
 }
