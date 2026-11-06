@@ -1,16 +1,10 @@
 <script lang="ts">
   import BrandMark from './BrandMark.svelte';
+  import CircuitTraces from './CircuitTraces.svelte';
 </script>
 
 <div class="hero-panel" aria-hidden="true">
-  <svg class="hero-panel-grid" xmlns="http://www.w3.org/2000/svg" focusable="false">
-    <defs>
-      <pattern id="hero-grid" width="40" height="40" patternUnits="userSpaceOnUse">
-        <path d="M40 0H0V40" fill="none" stroke="currentColor" stroke-width="1" />
-      </pattern>
-    </defs>
-    <rect width="100%" height="100%" fill="url(#hero-grid)" />
-  </svg>
+  <CircuitTraces />
   <span class="tick" data-pos="tl"></span>
   <span class="tick" data-pos="tr"></span>
   <span class="tick" data-pos="bl"></span>
