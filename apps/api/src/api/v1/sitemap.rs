@@ -29,6 +29,44 @@ pub async fn sitemap_blogs(db: Data<Db>, config: Data<Config>) -> Result<HttpRes
         }
         xml.push_str("</url>\n");
     }
+    // Topic pages are dynamic too. Only topics that hold a published post are listed.
+    let base = config.public_base_url.trim_end_matches('/');
+    for page in 1..=50 {
+        let topics = db
+            .content_page(
+                "topic",
+                true,
+                &crate::db::content::ContentQuery {
+                    page: Some(page),
+                    per_page: Some(100),
+                    ..Default::default()
+                },
+            )
+            .await?;
+        let items = topics["items"].as_array().cloned().unwrap_or_default();
+        for topic in &items {
+            let (Some(project), Some(slug)) =
+                (topic["project"]["slug"].as_str(), topic["slug"].as_str())
+            else {
+                continue;
+            };
+            if topic["post_count"].as_i64().unwrap_or(0) == 0 {
+                continue;
+            }
+            xml.push_str(&format!(
+                "  <url><loc>{base}/projects/{}/topics/{}</loc>",
+                xml_escape(project),
+                xml_escape(slug)
+            ));
+            if let Some(latest) = topic["latest_post_at"].as_str() {
+                xml.push_str(&format!("<lastmod>{}</lastmod>", xml_escape(latest)));
+            }
+            xml.push_str("</url>\n");
+        }
+        if items.len() < 100 {
+            break;
+        }
+    }
     xml.push_str("</urlset>\n");
 
     Ok(HttpResponse::Ok()

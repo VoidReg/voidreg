@@ -24,6 +24,8 @@ use crate::error::{ErrorBody, ErrorDetail};
         v1::projects::list_projects,
         v1::projects::get_project,
         v1::graph::graph,
+        v1::topics::list_topics,
+        v1::topics::get_topic,
         v1::blogs::list_blogs,
         v1::blogs::get_blog,
         v1::comments::list_comments,
@@ -55,7 +57,7 @@ use crate::error::{ErrorBody, ErrorDetail};
         v1::admin::moderation::moderate,
         v1::admin::comments::list_comments,
         v1::admin::comments::approve_comment,
-        v1::admin::revisions::list, v1::admin::revisions::show, v1::admin::revisions::restore, v1::admin::content::graph, v1::admin::content::list, v1::admin::content::get_one, v1::admin::content::create,
+        v1::admin::topics::list, v1::admin::topics::get_one, v1::admin::topics::create, v1::admin::topics::update, v1::admin::topics::action, v1::admin::topics::remove, v1::admin::revisions::list, v1::admin::revisions::show, v1::admin::revisions::restore, v1::admin::content::graph, v1::admin::content::list, v1::admin::content::get_one, v1::admin::content::create,
         v1::admin::content::update, v1::admin::content::remove, v1::admin::content::action,
         v1::admin::media::list, v1::admin::media::upload, v1::admin::media::update, v1::admin::media::remove,
         v1::admin::comments::delete_comment

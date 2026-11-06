@@ -35,14 +35,39 @@ use serde::Deserialize;
 impl Db {
     pub async fn content_graph(&self, public: bool, query: &GraphQuery) -> Result<Value, AppError> {
         let (projects, articles) = self.graph_rows(public).await?;
-        build_graph_with(projects, articles, !public, query)
+        let mut graph = build_graph_with(projects, articles, !public, query)?;
+        if graph["mode"] == "project"
+            && let Some(project) = graph["project"].as_str().map(str::to_owned)
+        {
+            // Topics group the project's posts on the map panel.
+            let page = self
+                .content_page(
+                    "topic",
+                    public,
+                    &super::content::ContentQuery {
+                        project_id: Some(project),
+                        per_page: Some(100),
+                        ..Default::default()
+                    },
+                )
+                .await?;
+            graph["topics"] = Value::Array(
+                page["items"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .map(|t| json!({"id": t["id"], "slug": t["slug"], "title": t["title"], "post_count": t["post_count"]}))
+                    .collect(),
+            );
+        }
+        Ok(graph)
     }
 
     /// Only the fields the graph needs, selected in SQL so large documents are never loaded.
     async fn graph_rows(&self, public: bool) -> Result<(Vec<Value>, Vec<Value>), AppError> {
         let column = if public { "published" } else { "working" };
         let mut sql = format!(
-            "SELECT e.kind, json_object('id', json_extract(e.{c}, '$.id'), 'slug', json_extract(e.{c}, '$.slug'), 'title', json_extract(e.{c}, '$.title'), 'category', json_extract(e.{c}, '$.category'), 'tags', json(json_extract(e.{c}, '$.tags')), 'published_at', json_extract(e.{c}, '$.published_at'), 'status', json_extract(e.{c}, '$.status'), 'sort_order', json_extract(e.{c}, '$.sort_order'), 'archived', json(CASE WHEN e.archived THEN 'true' ELSE 'false' END), 'has_unpublished_changes', json(CASE WHEN json_extract(e.{c}, '$.has_unpublished_changes') THEN 'true' ELSE 'false' END), 'project_ids', json(json_extract(e.{c}, '$.project_ids')), 'related_project_ids', json(json_extract(e.{c}, '$.related_project_ids'))) FROM content_entries e WHERE e.deleted = false",
+            "SELECT e.kind, json_object('id', json_extract(e.{c}, '$.id'), 'slug', json_extract(e.{c}, '$.slug'), 'title', json_extract(e.{c}, '$.title'), 'category', json_extract(e.{c}, '$.category'), 'tags', json(json_extract(e.{c}, '$.tags')), 'published_at', json_extract(e.{c}, '$.published_at'), 'status', json_extract(e.{c}, '$.status'), 'sort_order', json_extract(e.{c}, '$.sort_order'), 'archived', json(CASE WHEN e.archived THEN 'true' ELSE 'false' END), 'has_unpublished_changes', json(CASE WHEN json_extract(e.{c}, '$.has_unpublished_changes') THEN 'true' ELSE 'false' END), 'topic_id', json_extract(e.{c}, '$.topic_id'), 'project_ids', json(json_extract(e.{c}, '$.project_ids')), 'related_project_ids', json(json_extract(e.{c}, '$.related_project_ids'))) FROM content_entries e WHERE e.deleted = false AND e.kind IN ('project', 'article')",
             c = column
         );
         if public {
@@ -107,6 +132,7 @@ fn post_node(a: &Value, include_drafts: bool) -> Value {
         "id": a["id"], "kind": "post", "slug": a["slug"], "title": a["title"],
         "category": a["category"], "tags": a.get("tags").cloned().unwrap_or(json!([])),
         "published_at": a["published_at"],
+        "topic_id": a.get("topic_id").cloned().unwrap_or(Value::Null),
         "draft": a["status"] != "published",
         "changed": include_drafts && a["has_unpublished_changes"] == true,
     })

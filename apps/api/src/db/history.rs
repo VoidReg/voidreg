@@ -278,8 +278,23 @@ impl Db {
             }
             value[key] = json!(kept);
         }
+        // A topic deleted since this revision was saved is dropped the same way.
+        if let Some(id) = value["topic_id"]
+            .as_str()
+            .and_then(|id| uuid::Uuid::parse_str(id).ok())
+        {
+            let live = models::ContentEntry::filter_by_id(id)
+                .first()
+                .exec(&mut db)
+                .await?
+                .is_some_and(|t| t.kind == "topic" && !t.deleted);
+            if !live {
+                value["topic_id"] = Value::Null;
+            }
+        }
         content::validate_meta(&value)?;
         Self::check_related(&mut db, kind, Some(&row.id.to_string()), &mut value).await?;
+        Self::check_topic(&mut db, kind, &mut value).await?;
         let changed = toasty::sql::query("UPDATE content_entries SET working = ?, revision = ? WHERE id = ? AND revision = ? RETURNING revision")
             .bind(value.to_string())
             .bind(expected + 1)

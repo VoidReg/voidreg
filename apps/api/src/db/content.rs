@@ -249,6 +249,75 @@ impl Db {
         value["related_project_ids"] = json!(ids);
         Ok(())
     }
+    /// Validates the topic relations of a post or a topic. A post keeps at most one topic and its
+    /// project is added to the post's project list, so the two can never disagree.
+    pub(super) async fn check_topic(
+        db: &mut dyn toasty::Executor,
+        kind: &str,
+        value: &mut Value,
+    ) -> Result<(), AppError> {
+        match kind {
+            "topic" => {
+                let id = value["project_id"].as_str().unwrap_or("").to_owned();
+                let row = models::ContentEntry::filter_by_id(
+                    parse_uuid(&id)
+                        .map_err(|_| AppError::Unprocessable("a topic needs a project".into()))?,
+                )
+                .first()
+                .exec(&mut *db)
+                .await?;
+                if row.is_none_or(|p| p.kind != "project" || p.deleted) {
+                    return Err(AppError::Unprocessable(
+                        "the topic's project does not exist".into(),
+                    ));
+                }
+                value["related_project_ids"] = json!([]);
+                value["project_ids"] = json!([]);
+                for (key, max) in [("title", 120), ("summary", 400)] {
+                    if value[key].as_str().is_some_and(|s| s.chars().count() > max) {
+                        return Err(AppError::Unprocessable(format!(
+                            "{key} can be at most {max} characters"
+                        )));
+                    }
+                }
+            }
+            "article" => {
+                let Some(id) = value["topic_id"]
+                    .as_str()
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_owned)
+                else {
+                    value["topic_id"] = Value::Null;
+                    return Ok(());
+                };
+                let row = models::ContentEntry::filter_by_id(
+                    parse_uuid(&id)
+                        .map_err(|_| AppError::Unprocessable("topic does not exist".into()))?,
+                )
+                .first()
+                .exec(&mut *db)
+                .await?
+                .filter(|t| t.kind == "topic" && !t.deleted)
+                .ok_or_else(|| AppError::Unprocessable("topic does not exist".into()))?;
+                let topic: Value = serde_json::from_str(&row.working)?;
+                let project = topic["project_id"].clone();
+                let mut ids = value["project_ids"].as_array().cloned().unwrap_or_default();
+                if !ids.contains(&project) {
+                    if ids.len() >= 100 {
+                        return Err(AppError::Unprocessable(
+                            "too many project associations".into(),
+                        ));
+                    }
+                    ids.push(project);
+                    value["project_ids"] = json!(ids);
+                }
+            }
+            _ => {
+                value["topic_id"] = Value::Null;
+            }
+        }
+        Ok(())
+    }
     pub async fn content_reserved(&self, kind: &str, slug: &str) -> Result<bool, AppError> {
         let mut db = self.inner.lock().await;
         Ok(
@@ -275,6 +344,27 @@ impl Db {
             row.working
         };
         Ok(serde_json::from_str(&raw)?)
+    }
+    /// One entry with the same cheap enrichment list items get (post counts, project, topic).
+    pub async fn content_get_enriched(
+        &self,
+        kind: &str,
+        slug: &str,
+        public: bool,
+    ) -> Result<Value, AppError> {
+        let mut db = self.inner.lock().await;
+        let row = Self::entry(&mut *db, kind, slug).await?;
+        let raw = if public {
+            row.published
+                .filter(|_| !row.archived)
+                .ok_or_else(|| AppError::NotFound("content not published".into()))?
+        } else {
+            row.working
+        };
+        let mut items = [serde_json::from_str::<Value>(&raw)?];
+        Self::enrich_listing(&mut *db, kind, public, &mut items).await?;
+        let [item] = items;
+        Ok(item)
     }
     pub async fn discussion_key(&self, slug: &str) -> Result<String, AppError> {
         let value = self.content_get("article", slug, true).await?;
@@ -307,7 +397,7 @@ impl Db {
             .as_str()
             .ok_or_else(|| AppError::Unprocessable("slug required".into()))?
             .to_owned();
-        let name = format!("{kind}:{slug}");
+        let name = alias_name(kind, &value, &slug);
         if models::ContentAlias::filter_by_name(&name)
             .first()
             .exec(&mut db)
@@ -318,6 +408,7 @@ impl Db {
         }
         validate_meta(&value)?;
         Self::check_related(&mut db, kind, None, &mut value).await?;
+        Self::check_topic(&mut db, kind, &mut value).await?;
         let id = uuid::Uuid::new_v4();
         value["id"] = json!(id.to_string());
         value["discussion_slug"] = json!(slug);
@@ -380,6 +471,10 @@ impl Db {
         value["id"] = old["id"].clone();
         value["discussion_slug"] = old["discussion_slug"].clone();
         value["slug"] = old["slug"].clone();
+        if kind == "topic" {
+            // A topic never moves between projects, because its URL lives under the project.
+            value["project_id"] = old["project_id"].clone();
+        }
         value["status"] = old["status"].clone();
         value["archived"] = json!(false);
         value["revision"] = json!(expected + 1);
@@ -387,6 +482,7 @@ impl Db {
         value["has_unpublished_changes"] = json!(true);
         validate_meta(&value)?;
         Self::check_related(&mut db, kind, Some(&row.id.to_string()), &mut value).await?;
+        Self::check_topic(&mut db, kind, &mut value).await?;
         let id = row.id;
         let revision = expected + 1;
         let working = value.to_string();
@@ -517,6 +613,39 @@ impl Db {
                 }
             }
         }
+        if action == "delete" && (kind == "topic" || kind == "project") {
+            let (other_kind, field, message) = if kind == "topic" {
+                (
+                    "article",
+                    "topic_id",
+                    "move this topic's posts to another topic before deleting it",
+                )
+            } else {
+                (
+                    "topic",
+                    "project_id",
+                    "delete this project's topics before deleting the project",
+                )
+            };
+            let sql = format!(
+                "SELECT count(*) FROM content_entries WHERE kind = ? AND deleted = false AND json_extract(working, '$.{field}') = ?"
+            );
+            let me = row.id.to_string();
+            let rows = toasty::sql::query(sql)
+                .bind(other_kind.to_owned())
+                .bind(me)
+                .column_types([toasty::stmt::Type::I64])
+                .exec(&mut db)
+                .await?;
+            let busy = matches!(
+                rows.first(),
+                Some(toasty::stmt::Value::Record(r))
+                    if matches!(r.fields.first(), Some(toasty::stmt::Value::I64(n)) if *n > 0)
+            );
+            if busy {
+                return Err(AppError::Conflict(message.into()));
+            }
+        }
         match action {
             "publish" => {
                 if archived {
@@ -525,14 +654,29 @@ impl Db {
                     ));
                 }
                 if value["title"].as_str().unwrap_or("").trim().is_empty()
-                    || value["summary"].as_str().unwrap_or("").trim().is_empty()
+                    || (kind != "topic"
+                        && value["summary"].as_str().unwrap_or("").trim().is_empty())
                 {
                     return Err(AppError::Unprocessable(
                         "title and summary are required to publish".into(),
                     ));
                 }
-                crate::domain::document::validate_document(&value["document"].to_string())?;
-                crate::domain::document::validate_compiled(&value["compiled"].to_string())?;
+                if kind != "topic" {
+                    crate::domain::document::validate_document(&value["document"].to_string())?;
+                    crate::domain::document::validate_compiled(&value["compiled"].to_string())?;
+                }
+                if kind == "topic" {
+                    let owner = parse_uuid(value["project_id"].as_str().unwrap_or(""))?;
+                    let project = models::ContentEntry::filter_by_id(owner)
+                        .first()
+                        .exec(&mut db)
+                        .await?;
+                    if project.is_none_or(|p| p.kind != "project" || p.deleted) {
+                        return Err(AppError::Unprocessable(
+                            "the topic's project does not exist".into(),
+                        ));
+                    }
+                }
                 for id in value["project_ids"].as_array().into_iter().flatten() {
                     let project =
                         models::ContentEntry::filter_by_id(parse_uuid(id.as_str().unwrap_or(""))?)
@@ -590,7 +734,7 @@ impl Db {
                 if let Some(new_slug) = value["pending_slug"].as_str().map(str::to_owned) {
                     validate_slug(&new_slug)?;
                     if new_slug != value["slug"] {
-                        let name = format!("{kind}:{new_slug}");
+                        let name = alias_name(kind, &value, &new_slug);
                         if let Some(alias) = models::ContentAlias::filter_by_name(&name)
                             .first()
                             .exec(&mut db)
@@ -652,6 +796,18 @@ impl Db {
         if changed.is_empty() {
             return Err(AppError::Conflict("content changed; reload".into()));
         }
+        if action == "delete" && kind == "topic" {
+            // Unlike posts, a deleted topic frees its URL so the name can be reused in the project.
+            toasty::sql::query("DELETE FROM content_aliases WHERE name = ?")
+                .bind(row.name.clone())
+                .exec(&mut db)
+                .await?;
+            toasty::sql::query("UPDATE content_entries SET name = ? WHERE id = ?")
+                .bind(format!("deleted:{}", row.id))
+                .bind(row.id.as_bytes().to_vec())
+                .exec(&mut db)
+                .await?;
+        }
         if action != "delete" {
             let event = if action == "restore" {
                 "restore-archive"
@@ -676,6 +832,10 @@ pub struct ContentQuery {
     pub project_id: Option<String>,
     /// Project slug; resolved to an id so renamed projects keep their posts.
     pub project: Option<String>,
+    /// Topic id, for posts.
+    pub topic_id: Option<String>,
+    /// Topic slug inside the project selected by `project` or `project_id`, for posts.
+    pub topic: Option<String>,
     /// Technology tag, case-insensitive exact match.
     pub tag: Option<String>,
     /// Category, case-insensitive exact match.
@@ -735,7 +895,32 @@ impl Db {
             );
         }
         if let Some(id) = &project_id {
-            conditions.push(format!("EXISTS (SELECT 1 FROM json_each(json_extract({column}, '$.project_ids')) WHERE value = ?)"));
+            if kind == "topic" {
+                conditions.push(format!("json_extract({column}, '$.project_id') = ?"));
+            } else {
+                conditions.push(format!("EXISTS (SELECT 1 FROM json_each(json_extract({column}, '$.project_ids')) WHERE value = ?)"));
+            }
+            args.push(id.clone().into());
+        }
+        let mut topic_id = query.topic_id.clone();
+        if let Some(slug) = query.topic.as_deref().filter(|s| !s.is_empty()) {
+            // A topic slug only means something inside a project; unknown ones match nothing.
+            topic_id = Some(match &project_id {
+                Some(project) => {
+                    match models::ContentAlias::filter_by_name(format!("topic:{project}:{slug}"))
+                        .first()
+                        .exec(&mut *db)
+                        .await?
+                    {
+                        Some(alias) => alias.owner,
+                        None => String::new(),
+                    }
+                }
+                None => String::new(),
+            });
+        }
+        if let Some(id) = &topic_id {
+            conditions.push(format!("json_extract({column}, '$.topic_id') = ?"));
             args.push(id.clone().into());
         }
         if let Some(tag) = query.tag.as_deref().filter(|t| !t.is_empty()) {
@@ -863,8 +1048,9 @@ impl Db {
             if kind == "article" {
                 for item in items.iter_mut() {
                     item["projects"] = json!([]);
+                    item["topic"] = Value::Null;
                 }
-            } else if kind == "project" {
+            } else if kind == "project" || kind == "topic" {
                 for item in items.iter_mut() {
                     item["post_count"] = json!(0);
                     item["latest_post_at"] = Value::Null;
@@ -904,6 +1090,132 @@ impl Db {
                     .filter_map(|id| lookup.get(id.as_str()?).cloned())
                     .collect();
                 item["projects"] = Value::Array(projects);
+            }
+            // Topics of the posts on this page, with their project's slug for links.
+            let topic_ids: Vec<String> = items
+                .iter()
+                .filter_map(|item| item["topic_id"].as_str().map(str::to_owned))
+                .collect::<std::collections::BTreeSet<_>>()
+                .into_iter()
+                .collect();
+            let mut topics = std::collections::HashMap::<String, Value>::new();
+            if !topic_ids.is_empty() {
+                let marks = vec!["?"; topic_ids.len()].join(",");
+                let sql = format!(
+                    "SELECT json_object('id', json_extract(e.{column}, '$.id'), 'slug', json_extract(e.{column}, '$.slug'), 'title', json_extract(e.{column}, '$.title'), 'project_id', json_extract(e.{column}, '$.project_id')) FROM content_entries e WHERE e.kind = 'topic' AND {visible} AND json_extract(e.{column}, '$.id') IN ({marks})"
+                );
+                let mut query = toasty::sql::query(sql);
+                for id in &topic_ids {
+                    query = query.bind(id.clone());
+                }
+                let rows = query
+                    .column_types([toasty::stmt::Type::String])
+                    .exec(&mut *db)
+                    .await?;
+                for row in rows {
+                    if let toasty::stmt::Value::Record(r) = row
+                        && let Some(toasty::stmt::Value::String(raw)) = r.fields.first()
+                    {
+                        let t: Value = serde_json::from_str(raw)?;
+                        if let (Some(id), Some(project)) = (
+                            t["id"].as_str(),
+                            t["project_id"].as_str().and_then(|p| lookup.get(p)),
+                        ) {
+                            topics.insert(
+                                id.to_owned(),
+                                json!({"id": t["id"], "slug": t["slug"], "title": t["title"], "project_slug": project["slug"]}),
+                            );
+                        }
+                    }
+                }
+            }
+            for item in items.iter_mut() {
+                item["topic"] = item["topic_id"]
+                    .as_str()
+                    .and_then(|id| topics.get(id).cloned())
+                    .unwrap_or(Value::Null);
+            }
+        } else if kind == "topic" {
+            let published_only = if public {
+                ""
+            } else {
+                " AND json_extract(e.working, '$.status') = 'published'"
+            };
+            let sql = format!(
+                "SELECT json_extract(e.{column}, '$.topic_id'), count(*), coalesce(max(json_extract(e.{column}, '$.published_at')), '') FROM content_entries e WHERE e.kind = 'article' AND {visible}{published_only} AND json_extract(e.{column}, '$.topic_id') IN ({marks}) GROUP BY 1"
+            );
+            let mut query = toasty::sql::query(sql);
+            for id in &page_ids {
+                query = query.bind(id.clone());
+            }
+            let rows = query
+                .column_types([
+                    toasty::stmt::Type::String,
+                    toasty::stmt::Type::I64,
+                    toasty::stmt::Type::String,
+                ])
+                .exec(&mut *db)
+                .await?;
+            let mut stats = std::collections::HashMap::<String, (i64, String)>::new();
+            for row in rows {
+                if let toasty::stmt::Value::Record(r) = row
+                    && let [
+                        toasty::stmt::Value::String(id),
+                        toasty::stmt::Value::I64(count),
+                        toasty::stmt::Value::String(latest),
+                    ] = r.fields.as_slice()
+                {
+                    stats.insert(id.clone(), (*count, latest.clone()));
+                }
+            }
+            // Titles and slugs of the projects the listed topics belong to.
+            let project_ids: Vec<String> = items
+                .iter()
+                .filter_map(|item| item["project_id"].as_str().map(str::to_owned))
+                .collect::<std::collections::BTreeSet<_>>()
+                .into_iter()
+                .collect();
+            let mut projects = std::collections::HashMap::<String, Value>::new();
+            if !project_ids.is_empty() {
+                let marks = vec!["?"; project_ids.len()].join(",");
+                let sql = format!(
+                    "SELECT json_object('id', json_extract(e.{column}, '$.id'), 'slug', json_extract(e.{column}, '$.slug'), 'title', json_extract(e.{column}, '$.title')) FROM content_entries e WHERE e.kind = 'project' AND {visible} AND json_extract(e.{column}, '$.id') IN ({marks})"
+                );
+                let mut query = toasty::sql::query(sql);
+                for id in &project_ids {
+                    query = query.bind(id.clone());
+                }
+                let rows = query
+                    .column_types([toasty::stmt::Type::String])
+                    .exec(&mut *db)
+                    .await?;
+                for row in rows {
+                    if let toasty::stmt::Value::Record(r) = row
+                        && let Some(toasty::stmt::Value::String(raw)) = r.fields.first()
+                    {
+                        let p: Value = serde_json::from_str(raw)?;
+                        if let Some(id) = p["id"].as_str() {
+                            projects.insert(id.to_owned(), p.clone());
+                        }
+                    }
+                }
+            }
+            for item in items.iter_mut() {
+                let (count, latest) = item["id"]
+                    .as_str()
+                    .and_then(|id| stats.get(id))
+                    .cloned()
+                    .unwrap_or_default();
+                item["post_count"] = json!(count);
+                item["latest_post_at"] = if latest.is_empty() {
+                    Value::Null
+                } else {
+                    json!(latest)
+                };
+                item["project"] = item["project_id"]
+                    .as_str()
+                    .and_then(|id| projects.get(id).cloned())
+                    .unwrap_or(Value::Null);
             }
         } else if kind == "project" {
             let published_only = if public {
@@ -953,6 +1265,18 @@ impl Db {
             }
         }
         Ok(())
+    }
+}
+
+/// Alias that reserves a content URL. Topic URLs only need to be unique inside their project.
+fn alias_name(kind: &str, value: &Value, slug: &str) -> String {
+    if kind == "topic" {
+        format!(
+            "topic:{}:{slug}",
+            value["project_id"].as_str().unwrap_or("")
+        )
+    } else {
+        format!("{kind}:{slug}")
     }
 }
 

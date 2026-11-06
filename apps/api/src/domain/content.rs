@@ -10,6 +10,10 @@ pub struct ContentMeta {
     pub has_unpublished_changes: bool,
     pub pending_slug: Option<String>,
     pub project_ids: Vec<String>,
+    /// Topic of the project this post is filed under. The topic's project is always one of
+    /// `project_ids`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub topic_id: Option<String>,
     /// Projects explicitly related to this project (by id, so slug renames never break them).
     pub related_project_ids: Vec<String>,
     pub media_ids: Vec<String>,
