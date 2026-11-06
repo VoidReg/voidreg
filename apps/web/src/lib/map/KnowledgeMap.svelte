@@ -1,57 +1,38 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { SvelteURLSearchParams } from 'svelte/reactivity';
   import { resolve } from '$app/paths';
-  import MapLane from './MapLane.svelte';
-  import {
-    categoriesOf,
-    lanesOf,
-    technologiesOf,
-    toggleOpen,
-    type MapFilter,
-    type MapModel
-  } from './layout';
+  import Board from './Board.svelte';
+  import MapPanel from './MapPanel.svelte';
+  import { categoriesOf, lanesOf, technologiesOf, type MapFilter, type MapModel } from './layout';
 
   let {
     model,
     filter,
-    open = [],
-    focus = '',
-    preview = false
+    focusId = '',
+    loading = false,
+    failed = false,
+    preview = false,
+    onfocus
   }: {
     model: MapModel;
     filter: MapFilter;
-    /** Slugs of projects whose posts are listed, kept in the URL. */
-    open?: string[];
-    focus?: string;
+    focusId?: string;
+    loading?: boolean;
+    failed?: boolean;
     preview?: boolean;
+    onfocus: (id: string) => void;
   } = $props();
 
   const lanes = $derived(lanesOf(model, filter));
   const categories = $derived(categoriesOf(model));
   const technologies = $derived(technologiesOf(model));
-  const openIds = $derived(
-    new Set(model.projects.filter((p) => open.includes(p.slug)).map((p) => p.id))
-  );
   const shown = $derived(lanes.reduce((sum, lane) => sum + lane.projects.length, 0));
-  const hasShared = $derived(model.edges.some((e) => e.kind === 'shared-tag'));
   const filtered = $derived(Boolean(filter.q || filter.tag || filter.category));
-  const selected = $derived(model.projects.find((p) => p.slug === focus)?.id ?? '');
-
-  let showShared = $state(false);
-  let hovered = $state('');
-  const active = $derived(hovered || selected);
-
-  // Expansion and filters live in the URL, so a link shares exactly what is on screen.
-  const toggleHref = (slug: string) => {
-    const params = new SvelteURLSearchParams(page.url.search);
-    const next = toggleOpen(open, slug);
-    if (next.length) params.set('open', next.join(','));
-    else params.delete('open');
-    const query = params.toString();
-    return page.url.pathname + (query ? `?${query}` : '');
-  };
-  const clearPath = $derived(page.url.pathname + (open.length ? `?open=${open.join(',')}` : ''));
+  const focused = $derived(model.projects.find((p) => p.id === focusId));
+  const hasShared = $derived(
+    model.edges.some((e) => e.kind === 'shared-tag') || model.mode === 'summary'
+  );
+  const clearPath = $derived(page.url.pathname);
 </script>
 
 <form class="map-filters" method="get" role="search" aria-label="Filter the map">
@@ -87,7 +68,6 @@
       {/each}
     </select></label
   >
-  {#if open.length}<input type="hidden" name="open" value={open.join(',')} />{/if}
   <div class="map-filter-actions">
     <button type="submit" class="map-button">Apply</button>
     {#if filtered}<a class="text-link" href={resolve(clearPath as '/map')}>Clear filters</a>{/if}
@@ -95,53 +75,47 @@
 </form>
 
 <div class="map-tools">
-  {#if hasShared}<label class="map-toggle">
-      <input type="checkbox" bind:checked={showShared} />
-      Show links from shared technologies
-    </label>{/if}
+  <ul class="map-legend" aria-label="Legend">
+    <li><span class="legend-swatch" data-kind="chip"></span>Project</li>
+    <li><span class="legend-swatch" data-kind="related"></span>Related project</li>
+    {#if hasShared}<li>
+        <span class="legend-swatch" data-kind="shared"></span>Shared technology
+      </li>{/if}
+    <li><span class="legend-swatch" data-kind="pad"></span>Post</li>
+    {#if preview && model.projects.some((p) => p.draft || p.changed)}<li>
+        <span class="legend-swatch" data-kind="draft"></span>Draft or edited
+      </li>{/if}
+  </ul>
   <p class="map-status" role="status">
     {shown === model.projects.length
       ? `${shown} ${shown === 1 ? 'project' : 'projects'}`
       : `${shown} of ${model.projects.length} projects match`}
     in {lanes.length}
     {lanes.length === 1 ? 'category' : 'categories'}.
-    {#if model.mode === 'summary'}Use Show posts on a project to list its posts.{/if}
   </p>
 </div>
 
-<ul class="map-legend" aria-label="Legend">
-  <li><span class="legend-swatch" data-kind="stem"></span>Post follows project</li>
-  <li><span class="legend-swatch" data-kind="related"></span>Related projects</li>
-  {#if hasShared}<li>
-      <span class="legend-swatch" data-kind="shared"></span>Shared technology
-    </li>{/if}
-  {#if model.projects.some((p) => p.draft || p.changed)}<li>
-      <span class="legend-swatch" data-kind="draft"></span>Draft or edited
-    </li>{/if}
-</ul>
-
-<div class="lanes">
-  {#each lanes as lane, index (lane.name)}
-    <MapLane
-      name={lane.name}
-      projects={lane.projects}
+<div class="board-shell">
+  <Board {model} {filter} {focusId} {preview} panelOpen={Boolean(focused)} {onfocus} />
+  {#if focused}
+    <MapPanel
+      project={focused}
       {model}
-      open={openIds}
-      {active}
-      {showShared}
+      {loading}
+      {failed}
       {preview}
-      eager={index === 0 || shown <= 40}
-      {toggleHref}
-      onactive={(id) => (hovered = id)}
+      onclose={() => onfocus('')}
+      {onfocus}
     />
-  {:else}
-    <p class="map-empty">
-      No projects match these filters. <a class="text-link" href={resolve(clearPath as '/map')}
-        >Clear filters</a
-      >
-    </p>
-  {/each}
+  {/if}
 </div>
+{#if shown === 0}
+  <p class="map-empty">
+    No projects match these filters. <a class="text-link" href={resolve(clearPath as '/map')}
+      >Clear filters</a
+    >
+  </p>
+{/if}
 
 {#if model.mode === 'full' ? model.standalone.length : model.unlinked}
   <section class="standalone" aria-label="Standalone notes">
@@ -229,43 +203,11 @@
     padding: 2rem 0;
   }
 
-  .map-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.625rem;
-    font-size: 0.875rem;
-  }
-
-  .map-toggle input {
-    display: grid;
-    flex: none;
-    place-content: center;
-    margin: 0;
-    border: 1px solid var(--input);
-    background: var(--background);
-    width: 1.125rem;
-    height: 1.125rem;
-    appearance: none;
-  }
-
-  .map-toggle input:checked {
-    border-color: var(--foreground);
-    background: var(--foreground);
-  }
-
-  .map-toggle input:checked::after {
-    background: var(--background);
-    width: 0.625rem;
-    height: 0.625rem;
-    content: '';
-    clip-path: polygon(14% 44%, 0 62%, 40% 100%, 100% 20%, 82% 4%, 40% 66%);
-  }
-
   .map-legend {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem 1.5rem;
-    margin: 0 0 1rem;
+    margin: 0;
     padding: 0;
     color: var(--muted-foreground);
     font-family: var(--font-code);
@@ -293,13 +235,26 @@
     border-top: 1px solid var(--muted-foreground);
   }
 
+  .legend-swatch[data-kind='chip'] {
+    border: 1px solid var(--input);
+    background: var(--card);
+    width: 1rem;
+    height: 0.625rem;
+  }
+
+  .legend-swatch[data-kind='pad'] {
+    background: var(--primary);
+    border: 0;
+    width: 0.5rem;
+    height: 0.5rem;
+  }
+
   .legend-swatch[data-kind='draft'] {
     border-top: 2px dashed var(--foreground);
   }
 
-  .lanes {
-    display: grid;
-    gap: 1.5rem;
+  .board-shell {
+    position: relative;
   }
 
   .standalone {

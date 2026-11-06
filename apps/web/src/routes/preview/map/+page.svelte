@@ -25,7 +25,7 @@
     graph={data.graph}
     expanded={data.expanded}
     filter={data.filter}
-    open={data.open}
+    loaded={data.loaded}
     focus={data.focus}
     preview
   />

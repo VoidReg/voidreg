@@ -19,9 +19,9 @@
     <p class="eyebrow">Knowledge map</p>
     <h1 class="display-heading">Projects and the writing that follows them</h1>
     <p class="lead">
-      Projects are grouped by category. Each chip is a project; choose Show posts on a chip to list
-      the posts that follow it. Hover or focus a project to light up everything it connects to, and
-      filter by name, technology or category to narrow a large map.
+      Each module is a category and each chip is a project. Drag and zoom across the board, then
+      choose a chip to light its circuit: the projects it relates to, the technologies it shares and
+      the posts that follow it. Filter by name, technology or category to jump to a group.
     </p>
     <p class="hero-note">{projects} projects | {posts} posts</p>
   </header>
@@ -35,7 +35,7 @@
       graph={data.graph}
       expanded={data.expanded}
       filter={data.filter}
-      open={data.open}
+      loaded={data.loaded}
       focus={data.focus}
     />
   {/if}
