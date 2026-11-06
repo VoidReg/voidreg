@@ -330,3 +330,67 @@ async fn a_restored_article_still_loads_through_the_typed_admin_getter() {
     assert_eq!(article.title, "Original");
     assert_eq!(article.revision, 3);
 }
+
+#[actix_web::test]
+async fn restoring_drops_links_to_projects_deleted_since() {
+    let db = db().await;
+    let one = db
+        .content_create("project", content("p-one", "One"))
+        .await
+        .unwrap();
+    let one_id = one["id"].as_str().unwrap().to_owned();
+    db.content_action("project", "p-one", 1, "publish")
+        .await
+        .unwrap();
+
+    // An article and a project both link to p-one, and the linked state is published (a milestone).
+    let mut article = content("linked", "Linked");
+    article["project_ids"] = json!([one_id]);
+    db.content_create("article", article).await.unwrap();
+    db.content_action("article", "linked", 1, "publish")
+        .await
+        .unwrap();
+    let mut two = content("p-two", "Two");
+    two["related_project_ids"] = json!([one_id]);
+    db.content_create("project", two).await.unwrap();
+    db.content_action("project", "p-two", 1, "publish")
+        .await
+        .unwrap();
+
+    // Unlink and republish, so p-one can be deleted.
+    for (kind, slug, key) in [
+        ("article", "linked", "project_ids"),
+        ("project", "p-two", "related_project_ids"),
+    ] {
+        let mut value = db.content_get(kind, slug, false).await.unwrap();
+        value[key] = json!([]);
+        db.content_save(kind, slug, 2, value, false).await.unwrap();
+        db.content_action(kind, slug, 3, "publish").await.unwrap();
+    }
+    db.content_action("project", "p-one", 2, "delete")
+        .await
+        .unwrap();
+
+    let article = db
+        .revision_restore("article", "linked", 2, 4)
+        .await
+        .unwrap();
+    assert_eq!(
+        article["project_ids"],
+        json!([]),
+        "dead article link dropped"
+    );
+    let project = db.revision_restore("project", "p-two", 2, 4).await.unwrap();
+    assert_eq!(
+        project["related_project_ids"],
+        json!([]),
+        "dead related project dropped"
+    );
+    // The restored copies can be published without hand editing.
+    for (kind, slug) in [("article", "linked"), ("project", "p-two")] {
+        let compiled = content(slug, "x")["compiled"].clone();
+        db.content_action_compiled(kind, slug, 5, "publish", Some(compiled))
+            .await
+            .unwrap();
+    }
+}

@@ -256,6 +256,28 @@ impl Db {
         value["revision"] = json!(expected + 1);
         value["updated_at"] = json!(now_rfc3339());
         value["has_unpublished_changes"] = json!(true);
+        // Projects deleted since this revision was saved must not make the restored copy
+        // unpublishable, so links to them are dropped rather than refused.
+        for key in ["project_ids", "related_project_ids"] {
+            let Some(items) = value[key].as_array().cloned() else {
+                continue;
+            };
+            let mut kept = Vec::with_capacity(items.len());
+            for item in items {
+                let live = match item.as_str().and_then(|id| uuid::Uuid::parse_str(id).ok()) {
+                    Some(id) => models::ContentEntry::filter_by_id(id)
+                        .first()
+                        .exec(&mut db)
+                        .await?
+                        .is_some_and(|p| p.kind == "project" && !p.deleted),
+                    None => false,
+                };
+                if live {
+                    kept.push(item);
+                }
+            }
+            value[key] = json!(kept);
+        }
         content::validate_meta(&value)?;
         Self::check_related(&mut db, kind, Some(&row.id.to_string()), &mut value).await?;
         let changed = toasty::sql::query("UPDATE content_entries SET working = ?, revision = ? WHERE id = ? AND revision = ? RETURNING revision")
