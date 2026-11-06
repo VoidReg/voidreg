@@ -823,6 +823,158 @@
     outline-color: var(--primary-foreground);
   }
 
+  /* Filter chips and project links. Interactive, so the edge uses --input for 3:1. */
+  .chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border: 1px solid var(--input);
+    background: var(--background);
+    color: var(--foreground);
+    padding: 0.25rem 0.75rem;
+    font-family: var(--font-code);
+    font-size: 0.75rem;
+    line-height: 1.5;
+    text-decoration: none;
+    transition:
+      background-color var(--duration-fast) var(--ease-standard),
+      border-color var(--duration-fast) var(--ease-standard);
+  }
+
+  .chip:hover {
+    border-color: var(--foreground);
+    background: var(--secondary);
+  }
+
+  .chip[aria-current='true'] {
+    border-color: var(--foreground);
+    background: var(--foreground);
+    color: var(--background);
+  }
+
+  .chip-count {
+    color: inherit;
+    opacity: 0.8;
+  }
+
+  .note-projects {
+    margin-top: 0.75rem;
+  }
+
+  .filter-groups {
+    display: grid;
+    gap: 1.25rem;
+  }
+
+  .filter-label {
+    margin-bottom: 0.5rem;
+    color: var(--muted-foreground);
+    font-family: var(--font-code);
+    font-size: 0.75rem;
+    line-height: 1.5;
+    text-transform: uppercase;
+  }
+
+  .filter-status {
+    color: var(--muted-foreground);
+    font-size: 0.875rem;
+  }
+
+  .filter-status .text-link {
+    margin-inline-start: 0.5rem;
+  }
+
+  .project-activity {
+    color: var(--muted-foreground);
+    font-family: var(--font-code);
+    font-size: 0.75rem;
+    line-height: 1.5;
+  }
+
+  .section-count {
+    margin-inline-start: 0.5rem;
+    color: var(--primary);
+    font-family: var(--font-code);
+    font-size: 1rem;
+    font-weight: 500;
+  }
+
+  /* "Following" and "Related projects" lists, and prev/next in a project's timeline. */
+  .follows-list {
+    display: grid;
+    gap: 1px;
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--border);
+    background: var(--border);
+    list-style: none;
+  }
+
+  .follows-item {
+    display: grid;
+    gap: 0.5rem;
+    justify-items: start;
+    background: var(--card);
+    padding: 1.25rem 1.5rem;
+  }
+
+  .follows-item h3 {
+    font-size: 1.25rem;
+    line-height: 1.3;
+  }
+
+  .follows-item p:not(.eyebrow) {
+    color: var(--muted-foreground);
+  }
+
+  .timeline-nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+  }
+
+  .timeline-link {
+    display: grid;
+    gap: 0.25rem;
+    border: 1px solid var(--input);
+    padding: 1rem 1.25rem;
+    color: var(--foreground);
+    text-decoration: none;
+    transition:
+      background-color var(--duration-fast) var(--ease-standard),
+      border-color var(--duration-fast) var(--ease-standard);
+  }
+
+  .timeline-link[data-side='next'] {
+    grid-column: 2;
+    text-align: end;
+  }
+
+  .timeline-link:hover {
+    border-color: var(--foreground);
+    background: var(--secondary);
+  }
+
+  @media (max-width: 47.999rem) {
+    .timeline-nav {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .timeline-link[data-side='next'] {
+      grid-column: 1;
+      text-align: start;
+    }
+  }
+
   /* Footer */
   .site-footer {
     border-block-start: 1px solid var(--border);

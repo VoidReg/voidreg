@@ -9,6 +9,7 @@
     category,
     publishedAt,
     readingTime,
+    projects = [],
     heading = 'h3'
   }: {
     slug: string;
@@ -17,6 +18,7 @@
     category: string;
     publishedAt?: string | null;
     readingTime?: number | null;
+    projects?: { slug: string; title: string }[];
     heading?: 'h2' | 'h3';
   } = $props();
 </script>
@@ -39,6 +41,13 @@
       ></svelte:element
     >
     <p>{summary}</p>
+    {#if projects.length}<ul class="chip-row note-projects" aria-label="Projects this post follows">
+        {#each projects as project (project.slug)}<li>
+            <a class="chip" href={resolve('/projects/[slug]', { slug: project.slug })}
+              >{project.title}</a
+            >
+          </li>{/each}
+      </ul>{/if}
   </div>
   <span class="note-arrow"><Icon name="arrow-right" size={20} /></span>
 </article>

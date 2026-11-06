@@ -10,6 +10,14 @@
     <span class="eyebrow">{project.category}</span>
     <svelte:element this={heading}>{project.title}</svelte:element>
     <p>{project.summary}</p>
+    {#if project.post_count}<p class="project-activity">
+        {project.post_count}
+        {project.post_count === 1 ? 'post' : 'posts'}{#if project.latest_post_at}
+          | latest {new Date(project.latest_post_at).toLocaleDateString(undefined, {
+            year: 'numeric',
+            month: 'short'
+          })}{/if}
+      </p>{/if}
     <a class="button button-secondary" href={resolve('/projects/[slug]', { slug: project.slug })}
       >View project <Icon name="arrow-right" size={16} /></a
     >

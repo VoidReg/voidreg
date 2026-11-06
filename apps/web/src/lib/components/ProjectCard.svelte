@@ -9,6 +9,14 @@
   <span class="eyebrow">{project.category}</span>
   <svelte:element this={heading}>{project.title}</svelte:element>
   <p>{project.summary}</p>
+  {#if project.post_count}<p class="project-activity">
+      {project.post_count}
+      {project.post_count === 1 ? 'post' : 'posts'}{#if project.latest_post_at}
+        | latest {new Date(project.latest_post_at).toLocaleDateString(undefined, {
+          year: 'numeric',
+          month: 'short'
+        })}{/if}
+    </p>{/if}
   <div class="tags" aria-label={`${project.title} technologies`}>
     {#each project.tags as tag (tag)}<span class="tag">{tag}</span>{/each}
   </div>

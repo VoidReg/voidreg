@@ -6,6 +6,7 @@ export type ContentMeta = {
   has_unpublished_changes?: boolean;
   pending_slug?: string | null;
   project_ids?: string[];
+  related_project_ids?: string[];
   media_ids?: string[];
   seo_title?: string;
   seo_description?: string;
@@ -15,7 +16,10 @@ export type ContentMeta = {
   hero_caption?: string;
   demo_url?: string | null;
 };
+export type ProjectRef = { id: string; slug: string; title: string };
 export type Article = ContentMeta & {
+  /** Resolved by the listing endpoints so cards need no extra requests. */
+  projects?: ProjectRef[];
   tags?: string[];
   repo_url?: string | null;
   revision?: number;

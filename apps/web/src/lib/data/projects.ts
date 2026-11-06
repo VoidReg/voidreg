@@ -1,5 +1,18 @@
 import type { Article, ContentMeta } from '@voidreg/publishing-ui/api';
+export type RelatedProject = {
+  id: string;
+  slug: string;
+  title: string;
+  category: string;
+  summary: string;
+  tags: string[];
+};
 export type Project = ContentMeta & {
+  /** Present on listings: published posts linked to this project. */
+  post_count?: number;
+  latest_post_at?: string | null;
+  /** Present on detail reads: published related projects. */
+  related?: RelatedProject[];
   slug: string;
   title: string;
   category: string;
