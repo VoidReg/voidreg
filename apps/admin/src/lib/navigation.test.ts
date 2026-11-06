@@ -57,3 +57,7 @@ test('sort, direction and page size come from the URL and reject unknown values'
   assert.equal(bad.dir, 'asc');
   assert.equal(bad.perPage, 20);
 });
+test('history is a valid inspector tab and unknown tabs fall back to the article tab', () => {
+  assert.equal(adminRoute(url('?article=a&panel=settings&inspector=history')).inspector, 'history');
+  assert.equal(adminRoute(url('?article=a&inspector=nope')).inspector, 'article');
+});

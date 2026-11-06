@@ -233,6 +233,9 @@
 }
 
 .ui-dialog {
+  margin: auto;
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
   border: 1px solid var(--foreground);
   background: var(--background);
   padding: 0;

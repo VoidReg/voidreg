@@ -249,8 +249,9 @@ impl Db {
         }
         if let Some(map) = value.as_object_mut() {
             map.remove("compiled");
-            map.remove("content_hash");
         }
+        // The admin detail view deserializes into Article, which requires the field.
+        value["content_hash"] = json!("");
         value["archived"] = json!(false);
         value["revision"] = json!(expected + 1);
         value["updated_at"] = json!(now_rfc3339());

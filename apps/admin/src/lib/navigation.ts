@@ -2,7 +2,7 @@ export type AdminTab = 'articles' | 'projects' | 'media' | 'comments' | 'mcp';
 export type EditorView = {
   mode: 'write' | 'preview';
   panel: 'document' | 'outline' | 'settings';
-  inspector: 'article' | 'block';
+  inspector: 'article' | 'block' | 'history';
   block: string | null;
 };
 // SvelteKit's `page.url` is a readonly view of URL, so helpers take only what they read.
@@ -36,7 +36,12 @@ export function adminRoute(url: UrlLike) {
           ? ('outline' as const)
           : ('document' as const),
     block: p.get('block'),
-    inspector: p.get('inspector') === 'block' ? ('block' as const) : ('article' as const)
+    inspector:
+      p.get('inspector') === 'block'
+        ? ('block' as const)
+        : p.get('inspector') === 'history'
+          ? ('history' as const)
+          : ('article' as const)
   };
 }
 export function adminUrl(

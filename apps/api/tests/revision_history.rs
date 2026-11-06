@@ -306,3 +306,27 @@ async fn http_history_requires_a_session_and_restores_with_csrf() {
         StatusCode::NOT_FOUND
     );
 }
+
+#[actix_web::test]
+async fn a_restored_article_still_loads_through_the_typed_admin_getter() {
+    let db = db().await;
+    let mut value = content("typed-article", "Original");
+    value["published_at"] = json!(null);
+    value["reading_time_minutes"] = json!(null);
+    value["content_hash"] = json!("");
+    db.content_create("article", value).await.unwrap();
+    let mut edit = db
+        .content_get("article", "typed-article", false)
+        .await
+        .unwrap();
+    edit["title"] = json!("Edited");
+    db.content_save("article", "typed-article", 1, edit, false)
+        .await
+        .unwrap();
+    db.revision_restore("article", "typed-article", 1, 2)
+        .await
+        .unwrap();
+    let article = db.admin_get_article("typed-article").await.unwrap();
+    assert_eq!(article.title, "Original");
+    assert_eq!(article.revision, 3);
+}

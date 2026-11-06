@@ -121,6 +121,8 @@
   const contentKind = $derived(tab === 'projects' ? 'projects' : 'articles');
   let serverRevision = $state(1),
     conflict = $state(false);
+  let saveFailures = $state(0),
+    savedAt = $state<Date | null>(null);
   let slug = $state(''),
     title = $state(''),
     category = $state(''),
@@ -317,11 +319,13 @@
     });
   });
   $effect(() => {
-    if (!session.loggedIn || conflict || !editing || !dirty || busy || error || routeLoading)
-      return;
+    if (!session.loggedIn || conflict || !editing || !dirty || busy || routeLoading) return;
+    // Back off after failures (3s, 6s, 12s, 24s) and stop after five so a bad payload cannot loop.
+    if (saveFailures >= 5) return;
+    const delay = saveFailures === 0 ? 1500 : Math.min(30000, 1500 * 2 ** saveFailures);
     const timer = setTimeout(() => {
       void save();
-    }, 1500);
+    }, delay);
     return () => clearTimeout(timer);
   });
   async function logout() {
@@ -366,6 +370,8 @@
       storedSlug = value?.slug ?? '';
       serverRevision = value?.revision ?? 1;
       conflict = false;
+      saveFailures = 0;
+      savedAt = null;
       slug = value?.pending_slug || storedSlug;
       meta = value ?? {};
       tagsText = value?.tags?.join(', ') ?? '';
@@ -439,11 +445,14 @@
           true
         );
       }
-      message = 'Saved.';
+      message = '';
+      saveFailures = 0;
+      savedAt = new Date();
       catalog.invalidate();
       return true;
     } catch (e) {
       report(e);
+      if (!conflict && !(e instanceof ApiError && e.status === 401)) saveFailures++;
       return false;
     } finally {
       busy = false;
@@ -603,6 +612,9 @@
       busy={busy || compiling}
       {dirty}
       {conflict}
+      {serverRevision}
+      {saveFailures}
+      {savedAt}
       mode={editorView.mode}
       panel={editorView.panel}
       inspector={editorView.inspector}
