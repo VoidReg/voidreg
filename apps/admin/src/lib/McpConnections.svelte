@@ -1,6 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { adminRequest } from './api';
+  import { confirmDialog } from './ui/confirm.svelte';
+  import { notify } from './ui/toast.svelte';
+  import Tabs from './ui/Tabs.svelte';
+
   type Connection = {
     id: string;
     name: string;
@@ -9,32 +13,71 @@
     last_used_at: string | null;
   };
   let connections = $state<Connection[]>([]);
-  let name = $state(''),
-    token = $state(''),
-    tokenId = $state('');
-  let busy = $state(false),
-    loading = $state(true),
-    error = $state(''),
-    message = $state('');
-  const serverUrl = 'https://www.voidreg.xyz/mcp';
+  let name = $state('');
+  let token = $state('');
+  let tokenId = $state('');
+  let reveal = $state(false);
+  let busy = $state(false);
+  let loading = $state(true);
+  let failure = $state('');
+  let client = $state('claude');
+  const serverUrl = $derived(`${location.origin}/mcp`);
+  const shownToken = $derived(token || 'YOUR_TOKEN');
+
+  const DAY = 86_400_000;
+  const when = new Intl.DateTimeFormat('en', { dateStyle: 'medium' });
+  const whenTime = new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' });
+  const daysLeft = (iso: string) => Math.ceil((Date.parse(iso) - Date.now()) / DAY);
+
+  const snippets = $derived<Record<string, { label: string; where: string; code: string }>>({
+    claude: {
+      label: 'Claude Code',
+      where: 'Run in a terminal.',
+      code: `claude mcp add --transport http voidreg ${serverUrl} \\\n  --header "Authorization: Bearer ${shownToken}"`
+    },
+    cursor: {
+      label: 'Cursor',
+      where: 'Add to .cursor/mcp.json.',
+      code: JSON.stringify(
+        {
+          mcpServers: {
+            voidreg: { url: serverUrl, headers: { Authorization: `Bearer ${shownToken}` } }
+          }
+        },
+        null,
+        2
+      )
+    },
+    codex: {
+      label: 'Codex CLI',
+      where: 'Add to ~/.codex/config.toml, then export the token in your shell.',
+      code: `[mcp_servers.voidreg]\nurl = "${serverUrl}"\nbearer_token_env_var = "VOIDREG_MCP_TOKEN"\n\n# shell\nexport VOIDREG_MCP_TOKEN="${shownToken}"`
+    },
+    other: {
+      label: 'Other client',
+      where: 'Choose Streamable HTTP and set these values.',
+      code: `URL: ${serverUrl}\nHeader: Authorization: Bearer ${shownToken}`
+    }
+  });
+
   async function load() {
-    error = '';
+    failure = '';
     loading = true;
     try {
       connections = (await adminRequest<{ items: Connection[] }>('/mcp-tokens')).items;
     } catch (e) {
-      error = (e as Error).message;
+      failure = (e as Error).message;
     } finally {
       loading = false;
     }
   }
-  onMount(load);
+  onMount(() => void load());
+
   async function create(event: SubmitEvent) {
     event.preventDefault();
     busy = true;
-    error = '';
-    message = '';
     token = '';
+    reveal = false;
     try {
       const result = await adminRequest<{ token: string; connection: Connection }>(
         '/mcp-tokens',
@@ -45,27 +88,29 @@
       tokenId = result.connection.id;
       name = '';
       connections = [...connections, result.connection];
-      message = 'Connection created. Copy the token now; it is shown only once.';
+      notify.success('Connection created. Copy the token now; it is shown only once.');
     } catch (e) {
-      error = (e as Error).message;
+      notify.error((e as Error).message);
     } finally {
       busy = false;
     }
   }
   async function revoke(connection: Connection) {
-    if (!confirm(`Revoke access for ${connection.name}?`)) return;
+    const ok = await confirmDialog({
+      title: `Revoke "${connection.name}"?`,
+      body: 'Any client using this token loses access immediately. This cannot be undone.',
+      confirmLabel: 'Revoke access',
+      danger: true
+    });
+    if (!ok) return;
     busy = true;
-    error = '';
     try {
       await adminRequest(`/mcp-tokens/${connection.id}`, 'DELETE');
       connections = connections.filter((item) => item.id !== connection.id);
-      if (tokenId === connection.id) {
-        token = '';
-        tokenId = '';
-      }
-      message = 'Connection revoked.';
+      if (tokenId === connection.id) token = tokenId = '';
+      notify.success('Connection revoked.');
     } catch (e) {
-      error = (e as Error).message;
+      notify.error((e as Error).message);
     } finally {
       busy = false;
     }
@@ -73,42 +118,29 @@
   async function copy(value: string, label: string) {
     try {
       await navigator.clipboard.writeText(value);
-      message = `${label} copied.`;
+      notify.success(`${label} copied.`);
     } catch {
-      error = 'Copy was unavailable. Select and copy the value manually.';
+      notify.error('Copy was unavailable. Select the text and copy it manually.');
     }
   }
 </script>
 
-<section class="section-stack mcp-connections" aria-labelledby="mcp-title">
+<section class="mcp" aria-labelledby="mcp-title">
   <header>
-    <h2 id="mcp-title">MCP connections</h2>
+    <h1 id="mcp-title">MCP connections</h1>
     <p>
-      Connect a desktop or CLI AI client to your publishing workspace. Clients can read articles and
-      edit drafts. Review and publish in admin.
+      Connect a desktop or CLI AI client to your publishing workspace. Clients can read content and
+      edit drafts. Review and publish in this admin.
     </p>
   </header>
-  {#if error}<p role="alert" class="feedback">{error}</p>{/if}
-  <p role="status">{message}</p>
-  <section class="section-stack" aria-labelledby="mcp-setup">
-    <h3 id="mcp-setup">Connect your client</h3>
-    <p>
-      Choose Streamable HTTP in your client, enter this server URL, and set the Authorization header
-      to <code>Bearer YOUR_TOKEN</code>. Keep tokens in your client's private settings or
-      environment.
+
+  <section aria-labelledby="mcp-create">
+    <h2 id="mcp-create">1. Create an access token</h2>
+    <p class="hint">
+      Use one token per client. Tokens expire after 30 days and can be revoked at any time.
     </p>
-    <div class="publishing-form"><label>Server URL<input readonly value={serverUrl} /></label></div>
-    <div class="button-row">
-      <button class="button button-secondary" onclick={() => copy(serverUrl, 'Server URL')}
-        >Copy server URL</button
-      >
-    </div>
-    <p>
-      Use a separate token for each client. Tokens expire after 30 days and can be revoked at any
-      time. MCP edits saved drafts; reload a draft in admin to see changes.
-    </p>
-    <form class="publishing-form" onsubmit={create}>
-      <label
+    <form class="create" onsubmit={create}>
+      <label class="ui-field"
         >Connection name<input
           bind:value={name}
           maxlength="80"
@@ -116,114 +148,204 @@
           placeholder="My desktop assistant"
         /></label
       >
-      <button class="button" disabled={busy || loading}
-        >{busy ? 'Working...' : 'Create access token'}</button
+      <button class="ui-btn ui-btn-primary" disabled={busy || loading || !name.trim()}
+        >{busy ? 'Working...' : 'Create token'}</button
       >
     </form>
     {#if token}
-      <div class="publishing-form">
-        <label
-          >New access token, shown once<input
+      <div class="token ui-notice" role="group" aria-label="New access token">
+        <p>
+          <strong>New token. It is shown once.</strong> Store it in your client's private settings.
+        </p>
+        <div class="token-row">
+          <input
+            class="token-input"
             readonly
+            aria-label="Access token"
+            type={reveal ? 'text' : 'password'}
             value={token}
             autocomplete="off"
             spellcheck="false"
-          /></label
-        >
-        <div class="button-row">
-          <button class="button button-secondary" onclick={() => copy(token, 'Access token')}
-            >Copy token</button
+          />
+          <button
+            type="button"
+            class="ui-btn"
+            aria-pressed={reveal}
+            onclick={() => (reveal = !reveal)}>{reveal ? 'Hide' : 'Reveal'}</button
           >
-          <button class="button button-secondary" onclick={() => (token = '')}>Hide token</button>
+          <button type="button" class="ui-btn" onclick={() => copy(token, 'Access token')}
+            >Copy</button
+          >
+          <button type="button" class="ui-btn ui-btn-quiet" onclick={() => (token = '')}
+            >Dismiss</button
+          >
         </div>
       </div>
     {/if}
   </section>
-  <section class="section-stack" aria-labelledby="mcp-existing">
-    <h3 id="mcp-existing">Your connections</h3>
-    {#if loading}<p role="status">Loading connections...</p>
-    {:else if error && connections.length === 0}<div class="button-row">
-        <button class="button button-secondary" onclick={load}>Retry</button>
+
+  <section aria-labelledby="mcp-setup">
+    <h2 id="mcp-setup">2. Add it to your client</h2>
+    <Tabs
+      label="Client"
+      idPrefix="mcp"
+      value={client}
+      tabs={Object.entries(snippets).map(([id, s]) => ({ id, label: s.label }))}
+      onselect={(id) => (client = id)}
+    />
+    <div id="mcp-panel" role="tabpanel" aria-labelledby={`mcp-tab-${client}`} class="snippet">
+      <p class="hint">
+        {snippets[client].where}
+        {token ? 'Your new token is filled in.' : 'Replace YOUR_TOKEN with a token from step 1.'}
+      </p>
+      <pre><code>{snippets[client].code}</code></pre>
+      <button
+        type="button"
+        class="ui-btn ui-btn-small"
+        onclick={() => copy(snippets[client].code, 'Snippet')}>Copy snippet</button
+      >
+    </div>
+  </section>
+
+  <section aria-labelledby="mcp-existing">
+    <h2 id="mcp-existing">Your connections</h2>
+    {#if failure}
+      <div class="ui-notice ui-notice-error" role="alert">
+        <p>{failure}</p>
+        <button type="button" class="ui-btn ui-btn-small" onclick={load}>Retry</button>
       </div>
-    {:else if connections.length === 0}<p>No clients connected yet.</p>
+    {:else if loading}
+      <span class="ui-skeleton row" role="status" aria-label="Loading connections"></span>
+    {:else if connections.length === 0}
+      <div class="ui-empty">
+        <h3>No clients connected yet</h3>
+        <p>Create a token above to connect your first client.</p>
+      </div>
     {:else}
-      <ul class="connection-list">
-        {#each connections as connection (connection.id)}
-          <li>
-            <div>
-              <h4>{connection.name}</h4>
-              <p>
-                {Date.parse(connection.expires_at) <= Date.now() ? 'Expired' : 'Expires'}
-                {new Date(connection.expires_at).toLocaleDateString()}
-              </p>
-              <p>
-                Last used: {connection.last_used_at
-                  ? new Date(connection.last_used_at).toLocaleString()
-                  : 'Never'}
-              </p>
-            </div>
-            <button
-              class="button button-secondary"
-              disabled={busy}
-              onclick={() => revoke(connection)}
-              >Revoke<span class="sr-only"> {connection.name}</span></button
+      <div class="ui-table-wrap">
+        <table class="ui-table">
+          <caption class="sr-only">Connections</caption>
+          <thead>
+            <tr
+              ><th scope="col">Name</th><th scope="col">Expires</th><th scope="col">Last used</th
+              ><th scope="col"><span class="sr-only">Actions</span></th></tr
             >
-          </li>
-        {/each}
-      </ul>
+          </thead>
+          <tbody>
+            {#each connections as connection (connection.id)}
+              {@const left = daysLeft(connection.expires_at)}
+              <tr>
+                <th scope="row">{connection.name}</th>
+                <td>
+                  {when.format(new Date(connection.expires_at))}
+                  {#if left <= 0}<span class="ui-badge warn">Expired</span>
+                  {:else if left <= 7}<span class="ui-badge warn"
+                      >{left} day{left === 1 ? '' : 's'} left</span
+                    >{/if}
+                </td>
+                <td
+                  >{connection.last_used_at
+                    ? whenTime.format(new Date(connection.last_used_at))
+                    : 'Never'}</td
+                >
+                <td class="end"
+                  ><button
+                    type="button"
+                    class="ui-btn ui-btn-small ui-btn-danger"
+                    disabled={busy}
+                    onclick={() => revoke(connection)}
+                    >Revoke<span class="sr-only"> {connection.name}</span></button
+                  ></td
+                >
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
     {/if}
   </section>
 </section>
 
 <style>
-  .mcp-connections {
-    max-width: var(--content-width);
+  .mcp {
+    display: grid;
+    gap: 2rem;
+    max-width: 56rem;
   }
-  .mcp-connections > header {
+  .mcp > section {
     display: grid;
     gap: 0.75rem;
-  }
-  .mcp-connections > section {
-    max-width: 56rem;
-    gap: 1.5rem;
-    padding-block-start: 1.5rem;
     border-top: 1px solid var(--border);
+    padding-block-start: 1.5rem;
   }
-  .connection-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
-    gap: 1rem;
+  h1 {
+    font-size: 1.75rem;
+    line-height: 1.2;
   }
-  .connection-list li {
-    display: flex;
-    align-items: start;
-    justify-content: space-between;
-    gap: 1rem;
-    padding-block: 1rem;
-    border-bottom: 1px solid var(--border);
-  }
-  .connection-list li > div {
-    min-width: 0;
-    overflow-wrap: anywhere;
-  }
-  .connection-list h4 {
+  h2 {
     font-size: 1.125rem;
-    font-weight: 500;
-    line-height: 1.35;
   }
-  @media (min-width: 48rem) {
-    .connection-list h4 {
-      font-size: 1.25rem;
-    }
+  header {
+    display: grid;
+    gap: 0.5rem;
   }
-  .connection-list p {
-    margin-block: 0.5rem;
+  .hint {
+    color: var(--muted-foreground);
+    font-size: 0.875rem;
   }
-  @media (max-width: 30rem) {
-    .connection-list li {
-      flex-direction: column;
+  .create {
+    display: grid;
+    grid-template-columns: minmax(0, 24rem) auto;
+    gap: 0.75rem;
+    align-items: end;
+  }
+  .token {
+    display: grid;
+    gap: 0.5rem;
+  }
+  .token-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .token-input {
+    flex: 1 1 16rem;
+    border: 1px solid var(--input);
+    background: var(--background);
+    padding: 0.5rem 0.75rem;
+    min-height: 2.75rem;
+    min-width: 0;
+    color: var(--foreground);
+    font-family: var(--font-code);
+    font-size: 0.875rem;
+  }
+  .snippet {
+    display: grid;
+    gap: 0.75rem;
+    justify-items: start;
+  }
+  pre {
+    margin: 0;
+    border: 1px solid var(--border);
+    background: var(--card);
+    padding: 1rem;
+    width: 100%;
+    overflow-x: auto;
+    font: 0.8125rem/1.6 var(--font-code);
+  }
+  .row {
+    height: 3rem;
+  }
+  .end {
+    text-align: end;
+  }
+  .warn {
+    border-color: var(--danger);
+    color: var(--danger);
+  }
+  @media (max-width: 40rem) {
+    .create {
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 </style>

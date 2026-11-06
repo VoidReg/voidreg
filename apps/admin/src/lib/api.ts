@@ -39,3 +39,46 @@ export async function adminRequest<T>(path: string, method = 'GET', body?: unkno
   }
   return response.json();
 }
+
+/** JSON POST with upload progress, for large base64 bodies where fetch cannot report bytes sent. */
+export function adminUpload<T>(
+  path: string,
+  body: unknown,
+  onProgress?: (fraction: number) => void
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const csrf = document.cookie
+      .split('; ')
+      .find((c) => c.startsWith('voidreg_admin_csrf='))
+      ?.split('=')
+      .slice(1)
+      .join('=');
+    const request = new XMLHttpRequest();
+    request.open('POST', '/api/v1/admin' + path);
+    request.withCredentials = true;
+    request.setRequestHeader('Content-Type', 'application/json');
+    if (csrf) request.setRequestHeader('X-CSRF-Token', decodeURIComponent(csrf));
+    request.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress?.(event.loaded / event.total);
+    };
+    request.onerror = () => reject(new ApiError('The upload could not reach the server.', 0));
+    request.onload = () => {
+      let data: unknown = null;
+      try {
+        data = JSON.parse(request.responseText);
+      } catch {
+        /* empty body */
+      }
+      if (request.status >= 200 && request.status < 300) return resolve(data as T);
+      if (request.status === 401) onUnauthorized?.();
+      reject(
+        new ApiError(
+          (data as { error?: { message?: string } } | null)?.error?.message ??
+            'Upload failed. Please try again.',
+          request.status
+        )
+      );
+    };
+    request.send(JSON.stringify(body));
+  });
+}

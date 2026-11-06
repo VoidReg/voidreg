@@ -3,56 +3,32 @@
   import { page } from '$app/state';
   import { adminUrl } from '$lib/navigation';
   import { adminRequest } from './api';
-  import type { Page } from '@voidreg/publishing-ui/api';
-  type Collection = 'comments' | 'users' | 'sources' | 'blocks' | 'events' | 'audit';
-  type Entry = {
-    id?: string;
-    name?: string;
-    email?: string;
-    provider?: string;
-    kind?: string;
-    target?: string;
-    status?: string;
-    source?: string;
-    identity_id?: string;
-    article_slug?: string;
-    author_name?: string;
-    body?: string;
-    parent_id?: string;
-    parent_author?: string;
-    parent_body?: string;
-    reason?: string;
-    created_at?: string | number;
-    last_seen?: number;
-    first_seen?: number;
-    time?: number;
-    expires_at?: number;
-    revoked_at?: number;
-    active?: number;
-    blocked?: number;
-    comments?: number;
-    spam?: number;
-    rejections?: number;
-    count?: number;
-    accounts?: string[];
-    accounts_total?: number;
-    action?: string;
-    actor?: string;
-  };
+  import { confirmDialog } from './ui/confirm.svelte';
+  import { notify } from './ui/toast.svelte';
+  import Tabs from './ui/Tabs.svelte';
+  import CommentsList from './moderation/CommentsList.svelte';
+  import PeopleList from './moderation/PeopleList.svelte';
+  import RecordList from './moderation/RecordList.svelte';
+  import { COLLECTIONS, type Collection, type Entry } from './moderation/types';
+  import type { Article, Page } from '@voidreg/publishing-ui/api';
+
+  const empty = (): Page<Entry> => ({ items: [], page: 1, per_page: 20, total: 0 });
   let collection = $state<Collection>('comments');
-  let result = $state<Page<Entry>>({ items: [], page: 1, per_page: 20, total: 0 });
+  let result = $state<Page<Entry>>(empty());
   let summary = $state<Record<string, number>>({});
   let status = $state('pending'),
     query = $state(''),
     user = $state(''),
     source = $state(''),
-    article = $state('');
-  let since = $state(''),
+    article = $state(''),
+    since = $state(''),
     until = $state('');
   let loading = $state(false),
     busy = $state(false),
-    error = $state(''),
-    notice = $state('');
+    failure = $state('');
+  let reason = $state('');
+  let selected = $state<Set<string>>(new Set());
+  let articles = $state<{ slug: string; title: string }[]>([]);
   let requestId = 0;
   let previewRequest = 0;
   let blockTarget = $state<{ kind: string; target: string; name: string } | null>(null);
@@ -61,15 +37,13 @@
     affected = $state<number | null>(null);
   let ip = $state('');
   const pages = $derived(Math.max(1, Math.ceil(result.total / result.per_page)));
-  const date = (value?: number | string | null) =>
-    value
-      ? new Date(typeof value === 'number' ? value * 1000 : value).toLocaleString()
-      : 'Not recorded';
-  async function load(page = 1) {
+  const filtered = $derived(!!(query || user || source || article || since || until));
+
+  async function load(pageNumber = 1) {
     const id = ++requestId;
     loading = true;
-    error = '';
-    const params = new URLSearchParams({ page: String(page), q: query });
+    failure = '';
+    const params = new URLSearchParams({ page: String(pageNumber), q: query });
     if (collection === 'comments') {
       params.set('status', status);
       params.set('user', user);
@@ -87,11 +61,21 @@
       if (id === requestId) {
         result = next;
         summary = counts;
+        selected = new Set();
       }
     } catch (e) {
-      if (id === requestId) error = (e as Error).message;
+      if (id === requestId) failure = (e as Error).message;
     } finally {
       if (id === requestId) loading = false;
+    }
+  }
+  async function loadArticles() {
+    if (articles.length) return;
+    try {
+      const list = await adminRequest<Page<Article>>('/articles?per_page=100');
+      articles = list.items.map((a) => ({ slug: a.slug, title: a.title }));
+    } catch {
+      /* the filter falls back to the slug typed into the URL */
     }
   }
   function browse(nextPage = 1) {
@@ -113,11 +97,7 @@
   function restoreRoute() {
     const p = page.url.searchParams;
     const view = p.get('view') ?? 'comments';
-    collection = (
-      ['comments', 'users', 'sources', 'blocks', 'events', 'audit'].includes(view)
-        ? view
-        : 'comments'
-    ) as Collection;
+    collection = (COLLECTIONS.some((c) => c.id === view) ? view : 'comments') as Collection;
     status = p.get('m_status') === 'all' ? '' : (p.get('m_status') ?? 'pending');
     query = p.get('m_q') ?? '';
     user = p.get('m_user') ?? '';
@@ -125,72 +105,103 @@
     article = p.get('m_article') ?? '';
     since = p.get('m_since') ?? '';
     until = p.get('m_until') ?? '';
+    if (collection === 'comments') void loadArticles();
     void load(Math.max(1, Math.floor(Number(p.get('m_page')) || 1)));
   }
   function change(next: Collection, navigate = true) {
-    result = { items: [], page: 1, per_page: 20, total: 0 };
+    result = empty();
     collection = next;
-    query = '';
-    user = '';
-    source = '';
-    article = '';
-    since = '';
-    until = '';
+    query = user = source = article = since = until = '';
     if (navigate) void browse();
   }
   function history(kind: 'user' | 'source', id: string) {
-    result = { items: [], page: 1, per_page: 20, total: 0 };
+    result = empty();
     collection = 'comments';
-    article = '';
+    article = query = since = until = '';
     status = '';
-    query = '';
     user = kind === 'user' ? id : '';
     source = kind === 'source' ? id : '';
-    since = '';
-    until = '';
     void browse();
+  }
+  function clearFilters() {
+    query = user = source = article = since = until = '';
+    void browse();
+  }
+
+  const REASON_LABEL: Record<string, string> = {
+    approve: 'approved',
+    spam: 'marked as spam',
+    hide: 'hidden',
+    restore: 'returned to review',
+    remove: 'removed'
+  };
+  async function apply(id: string, action: string) {
+    await adminRequest('/moderation/comments/' + id + '/' + action, 'POST', {
+      reason: reason.trim() || 'Admin action: ' + action
+    });
   }
   async function moderate(entry: Entry, action: string) {
     if (
       action === 'remove' &&
-      !confirm('Permanently remove this comment text? This cannot be undone.')
+      !(await confirmDialog({
+        title: 'Remove this comment text?',
+        body: 'The text is erased permanently. The record stays for moderation history.',
+        confirmLabel: 'Remove text',
+        danger: true
+      }))
     )
       return;
     busy = true;
-    error = '';
-    notice = '';
     try {
-      await adminRequest('/moderation/comments/' + entry.id + '/' + action, 'POST', {
-        reason: 'Admin action: ' + action
-      });
-      notice = 'Comment updated.';
+      await apply(entry.id!, action);
+      notify.success(`Comment ${REASON_LABEL[action] ?? 'updated'}.`);
       await load(result.page);
     } catch (e) {
-      error = (e as Error).message;
+      notify.error((e as Error).message);
     } finally {
       busy = false;
     }
   }
+  async function bulk(action: 'approve' | 'spam' | 'hide') {
+    const ids = [...selected];
+    if (!ids.length) return;
+    busy = true;
+    let done = 0;
+    let failed = 0;
+    for (const id of ids) {
+      try {
+        await apply(id, action);
+        done++;
+      } catch {
+        failed++;
+      }
+    }
+    await load(result.page);
+    busy = false;
+    if (failed) notify.error(`${done} ${REASON_LABEL[action]}, ${failed} could not be updated.`);
+    else notify.success(`${done} comment${done === 1 ? '' : 's'} ${REASON_LABEL[action]}.`);
+  }
+
   async function prepareBlock(kind: string, target: string, name: string) {
     const id = ++previewRequest;
     blockTarget = { kind, target, name };
     blockReason = '';
     blockHours = kind === 'user' ? '' : '24';
     affected = null;
-    error = '';
-    {
-      try {
-        const preview = await adminRequest<{ comments: number }>(
-          '/moderation/block-preview',
-          'POST',
-          { kind, target }
-        );
-        if (id === previewRequest) affected = preview.comments;
-      } catch (e) {
-        if (id === previewRequest) {
-          error = (e as Error).message;
-          blockTarget = null;
+    try {
+      const preview = await adminRequest<{ comments: number }>(
+        '/moderation/block-preview',
+        'POST',
+        {
+          kind,
+          target
         }
+      );
+      if (id === previewRequest) affected = preview.comments;
+    } catch (e) {
+      if (id === previewRequest) {
+        notify.error((e as Error).message);
+        blockTarget = null;
       }
     }
   }
@@ -198,7 +209,6 @@
     event.preventDefault();
     if (!blockTarget) return;
     busy = true;
-    error = '';
     try {
       await adminRequest('/moderation/blocks', 'POST', {
         kind: blockTarget.kind,
@@ -208,26 +218,30 @@
       });
       blockTarget = null;
       ip = '';
-      notice =
-        'Posting blocked. Existing contributions are hidden and require review after unblocking.';
+      notify.success(
+        'Posting blocked. Existing contributions are hidden and need review after unblocking.'
+      );
       await load(result.page);
     } catch (e) {
-      error = (e as Error).message;
+      notify.error((e as Error).message);
     } finally {
       busy = false;
     }
   }
   async function unblock(entry: Entry) {
-    if (!confirm('Unblock this target? Previously hidden comments will still require review.'))
-      return;
+    const ok = await confirmDialog({
+      title: 'Unblock this target?',
+      body: 'Previously hidden comments still need review before they show again.',
+      confirmLabel: 'Unblock'
+    });
+    if (!ok) return;
     busy = true;
-    error = '';
     try {
       await adminRequest('/moderation/blocks/' + entry.id + '/revoke', 'POST');
-      notice = 'Block revoked. Review old comments before approving them.';
+      notify.success('Block revoked. Review old comments before approving them.');
       await load(result.page);
     } catch (e) {
-      error = (e as Error).message;
+      notify.error((e as Error).message);
     } finally {
       busy = false;
     }
@@ -237,345 +251,348 @@
   });
 </script>
 
-<section class="section-stack moderation" aria-labelledby="moderation-heading">
+<section class="mod" aria-labelledby="moderation-heading">
   <header>
-    <p class="eyebrow">Community management</p>
-    <h2 id="moderation-heading">Comments and abuse</h2>
+    <h1 id="moderation-heading">Comments and abuse</h1>
   </header>
-  <dl class="moderation-summary">
-    {#each [['Pending', 'pending'], ['Spam', 'spam'], ['Hidden', 'hidden'], ['Users', 'users'], ['Active blocks', 'blocks'], ['Abuse events (24h)', 'rejected_24h']] as [label, key]}
+  <dl class="summary">
+    {#each [['Pending', 'pending'], ['Spam', 'spam'], ['Hidden', 'hidden'], ['Users', 'users'], ['Active blocks', 'blocks'], ['Abuse events (24h)', 'rejected_24h']] as [label, key] (key)}
       <div>
         <dt>{label}</dt>
         <dd>{summary[key] ?? 0}</dd>
       </div>
     {/each}
   </dl>
-  <nav class="button-row" aria-label="Community management views">
-    {#each ['comments', 'users', 'sources', 'blocks', 'events', 'audit'] as value}
-      <button
-        class="button button-secondary"
-        aria-pressed={collection === value}
-        disabled={busy}
-        onclick={() => change(value as Collection)}
-        >{value === 'events'
-          ? 'Spam activity'
-          : value === 'audit'
-            ? 'Moderation history'
-            : value[0].toUpperCase() + value.slice(1)}</button
-      >
-    {/each}
-  </nav>
-  <form
-    class="moderation-filters"
-    onsubmit={(e) => {
-      e.preventDefault();
-      void browse();
-    }}
-  >
-    {#if collection === 'comments'}
-      <label
-        >Status<select bind:value={status}
-          ><option value="">All</option
-          >{#each ['pending', 'approved', 'spam', 'hidden', 'removed'] as value}<option {value}
-              >{value}</option
-            >{/each}</select
-        ></label
-      >
-      <label>Article<input bind:value={article} placeholder="Article slug" /></label>
-      <label>User ID<input bind:value={user} /></label><label
-        >Source ID<input bind:value={source} /></label
-      >
-    {/if}
-    {#if collection === 'users'}<label>Source ID<input bind:value={source} /></label>{/if}
-    <label>Search<input type="search" bind:value={query} /></label>
-    {#if collection !== 'users'}<label>From<input type="datetime-local" bind:value={since} /></label
-      ><label>Until<input type="datetime-local" bind:value={until} /></label>{/if}
-    <button class="button button-secondary" disabled={loading || busy}>Apply filters</button>
-  </form>
-  {#if collection === 'sources' || collection === 'blocks'}
+
+  <Tabs
+    label="Community management views"
+    idPrefix="mod"
+    value={collection}
+    tabs={COLLECTIONS}
+    onselect={(id) => !busy && change(id as Collection)}
+  />
+  <div id="mod-panel" role="tabpanel" aria-labelledby={`mod-tab-${collection}`} class="panel">
     <form
-      class="button-row"
+      class="filters"
+      role="search"
       onsubmit={(e) => {
         e.preventDefault();
-        void prepareBlock('ip', ip, ip);
+        void browse();
       }}
     >
-      <label
-        >Exact IP address<input
-          required
-          bind:value={ip}
-          placeholder="IPv4 or IPv6"
-          autocomplete="off"
-        /></label
-      >
-      <button class="button button-secondary" disabled={busy}>Block address</button>
-    </form>
-    <p class="placeholder-note">
-      Raw IP addresses are not stored. A shared source does not prove that accounts belong to the
-      same person.
-    </p>
-  {/if}
-  {#if blockTarget}
-    <section class="block-review" aria-labelledby="block-review-title">
-      <h3 id="block-review-title">
-        Block {blockTarget.kind === 'user' ? 'account' : 'source'}: {blockTarget.name}
-      </h3>
-      <p>
-        {affected === null
-          ? 'Matching existing contributions will be hidden.'
-          : `${affected} existing contributions will be affected.`} Posting will be disabled. Unblocking
-        will not automatically restore old comments.
-      </p>
-      <form class="publishing-form" onsubmit={block}>
-        <label>Reason<textarea required maxlength="1000" bind:value={blockReason}></textarea></label
-        >
-        <label
-          >Duration<select bind:value={blockHours}
-            ><option value="24">24 hours</option><option value="168">7 days</option><option value=""
-              >Permanent</option
-            ></select
+      {#if collection === 'comments'}
+        <label class="ui-field"
+          >Status<select bind:value={status} onchange={() => void browse()}
+            ><option value="">All</option
+            >{#each ['pending', 'approved', 'spam', 'hidden', 'removed'] as value (value)}<option
+                {value}>{value[0].toUpperCase() + value.slice(1)}</option
+              >{/each}</select
           ></label
         >
-        <div class="button-row">
-          <button class="button" disabled={busy || affected === null}>Confirm block</button><button
-            type="button"
-            class="button button-secondary"
-            disabled={busy}
-            onclick={() => (blockTarget = null)}>Cancel</button
-          >
-        </div>
-      </form>
-    </section>
-  {/if}
-  {#if error}<p role="alert">{error}</p>
-    <button class="button button-secondary" onclick={() => load(result.page)}>Retry</button>{/if}
-  {#if notice}<p role="status">{notice}</p>{/if}
-  <div class="section-stack" aria-busy={loading}>
-    {#if loading}<p role="status">Loading community activity...</p>{/if}
-    {#if !loading && result.items.length === 0}<p>No matching records.</p>{/if}
-    {#each result.items as entry, index (entry.id ?? index)}
-      <article class="moderation-record">
-        {#if collection === 'comments'}
-          <h3>{entry.author_name}</h3>
-          <p>{entry.article_slug} | {entry.status} | {date(entry.created_at)}</p>
-          {#if entry.reason}<p>Reason: {entry.reason}</p>{/if}
-          {#if entry.parent_id}<p>Reply to {entry.parent_author ?? 'another reader'}</p>
-            <blockquote class="comment-body">{entry.parent_body}</blockquote>{/if}
-          <p class="comment-body">{entry.body || 'Comment text removed.'}</p>
-          <div class="button-row">
-            {#if entry.status !== 'removed'}
-              {#if entry.status !== 'approved'}<button
-                  class="button"
-                  disabled={busy || loading}
-                  onclick={() => moderate(entry, 'approve')}>Approve</button
-                >{/if}
-              {#if entry.status !== 'spam'}<button
-                  class="button button-secondary"
-                  disabled={busy || loading}
-                  onclick={() => moderate(entry, 'spam')}>Mark spam</button
-                >{/if}
-              {#if entry.status !== 'hidden'}<button
-                  class="button button-secondary"
-                  disabled={busy || loading}
-                  onclick={() => moderate(entry, 'hide')}>Hide</button
-                >{/if}
-              {#if entry.status === 'spam' || entry.status === 'hidden'}<button
-                  class="button button-secondary"
-                  disabled={busy || loading}
-                  onclick={() => moderate(entry, 'restore')}>Return to review</button
-                >{/if}
-              <button
-                class="button button-secondary"
-                disabled={busy || loading}
-                onclick={() => moderate(entry, 'remove')}>Remove text</button
-              >
-            {/if}
-            {#if entry.identity_id}<button
-                class="button button-secondary"
-                disabled={busy}
-                onclick={() =>
-                  prepareBlock('user', entry.identity_id!, entry.author_name ?? entry.identity_id!)}
-                >Block user</button
-              ><button
-                class="button button-secondary"
-                onclick={() => history('user', entry.identity_id!)}>User history</button
-              >{/if}
-            {#if entry.source}<button
-                class="button button-secondary"
-                disabled={busy}
-                onclick={() => prepareBlock('source', entry.source!, entry.source!.slice(0, 12))}
-                >Block source</button
-              ><button
-                class="button button-secondary"
-                onclick={() => history('source', entry.source!)}>Source history</button
-              >{/if}
-          </div>
-          <p class="record-id">User: {entry.identity_id ?? 'Anonymous'} | Source: {entry.source}</p>
-        {:else if collection === 'users' || collection === 'sources'}
-          <h3>{entry.name}</h3>
-          <p>
-            {entry.blocked ? 'Blocked' : 'No active block'}{entry.provider
-              ? ' | ' + entry.provider
-              : ''}
-          </p>
-          {#if entry.email}<p>{entry.email}</p>{/if}
-          <p>
-            {entry.comments ?? 0} comments | {entry.spam ?? 0} marked spam{collection === 'sources'
-              ? ' | ' + (entry.rejections ?? 0) + ' abuse events'
-              : ''}
-          </p>
-          <p>Last observed: {date(entry.last_seen)}</p>
-          <p class="record-id">{entry.id}</p>
-          {#if entry.accounts?.length}<p>
-              Accounts observed on this source (up to 20 recent accounts):
-            </p>
-            <div class="button-row">
-              {#each entry.accounts as id}<button
-                  class="text-link"
-                  onclick={() => history('user', id)}>{id}</button
-                >{/each}
-            </div>{/if}
-          <div class="button-row">
-            {#if collection === 'sources'}<button
-                class="button button-secondary"
-                onclick={() => {
-                  const id = entry.id!;
-                  change('users', false);
-                  source = id;
-                  void browse();
-                }}>View accounts</button
-              >{/if}
+        <label class="ui-field"
+          >Article<select bind:value={article} onchange={() => void browse()}
+            ><option value="">All articles</option>{#each articles as option (option.slug)}<option
+                value={option.slug}>{option.title}</option
+              >{/each}{#if article && !articles.some((a) => a.slug === article)}<option
+                value={article}>{article}</option
+              >{/if}</select
+          ></label
+        >
+      {/if}
+      <label class="ui-field grow"
+        >Search<input type="search" bind:value={query} placeholder="Text, name or ID" /></label
+      >
+      {#if collection !== 'users'}
+        <label class="ui-field">From<input type="datetime-local" bind:value={since} /></label><label
+          class="ui-field">Until<input type="datetime-local" bind:value={until} /></label
+        >
+      {/if}
+      <button class="ui-btn" disabled={loading || busy}>Apply</button>
+      {#if filtered}<button type="button" class="ui-btn ui-btn-quiet" onclick={clearFilters}
+          >Clear</button
+        >{/if}
+    </form>
+    {#if user || source}
+      <p class="chips" aria-label="Active filters">
+        {#if user}<span class="ui-badge">User {user.slice(0, 8)}</span>{/if}
+        {#if source}<span class="ui-badge">Source {source.slice(0, 8)}</span>{/if}
+        <button
+          type="button"
+          class="ui-btn ui-btn-small ui-btn-quiet"
+          onclick={() => ((user = source = ''), void browse())}>Show everyone</button
+        >
+      </p>
+    {/if}
+
+    {#if collection === 'comments'}
+      <div class="bulk" role="region" aria-label="Moderation actions">
+        <label class="ui-field grow"
+          >Reason recorded with each action<input
+            bind:value={reason}
+            maxlength="200"
+            placeholder="Optional, for the moderation history"
+          /></label
+        >
+        {#if selected.size}
+          <div class="bulk-actions">
+            <strong>{selected.size} selected</strong>
             <button
-              class="button button-secondary"
-              onclick={() => history(collection === 'users' ? 'user' : 'source', entry.id!)}
-              >View comments</button
-            ><button
-              class="button button-secondary"
+              type="button"
+              class="ui-btn ui-btn-small ui-btn-primary"
               disabled={busy}
-              onclick={() => prepareBlock(entry.kind!, entry.target!, entry.name!)}
-              >Block {collection === 'users' ? 'user' : 'source'}</button
-            >{#if entry.blocked}<button
-                class="button button-secondary"
-                onclick={() => {
-                  change('blocks', false);
-                  query = entry.id!;
-                  void browse();
-                }}>Manage blocks</button
-              >{/if}
+              onclick={() => bulk('approve')}>Approve</button
+            >
+            <button
+              type="button"
+              class="ui-btn ui-btn-small"
+              disabled={busy}
+              onclick={() => bulk('spam')}>Spam</button
+            >
+            <button
+              type="button"
+              class="ui-btn ui-btn-small"
+              disabled={busy}
+              onclick={() => bulk('hide')}>Hide</button
+            >
+            <button
+              type="button"
+              class="ui-btn ui-btn-small ui-btn-quiet"
+              onclick={() => (selected = new Set())}>Clear</button
+            >
           </div>
-        {:else if collection === 'blocks'}
-          <h3>{entry.kind === 'user' ? 'Account block' : 'Source block'}</h3>
-          <p class="record-id">{entry.target}</p>
-          <p>{entry.reason}</p>
-          <p>
-            {entry.active ? 'Active' : 'Inactive'} | Expires: {entry.expires_at
-              ? date(entry.expires_at)
-              : 'Permanent'}
-          </p>
-          <p>Created: {date(entry.created_at)} | Admin: {entry.actor}</p>
-          {#if entry.active}<button
-              class="button button-secondary"
-              disabled={busy}
-              onclick={() => unblock(entry)}>Unblock</button
-            >{/if}
-        {:else}
-          <h3>{entry.reason || entry.action}</h3>
-          <p>{date(entry.time)}{entry.count ? ' | ' + entry.count + ' attempts' : ''}</p>
-          <p class="record-id">{entry.source || entry.target}</p>
-          {#if entry.actor}<p>Admin: {entry.actor}</p>{/if}
-          {#if entry.source}<div class="button-row">
-              <button
-                class="button button-secondary"
-                onclick={() => history('source', entry.source!)}>Source comments</button
-              ><button
-                class="button button-secondary"
-                disabled={busy}
-                onclick={() => prepareBlock('source', entry.source!, entry.source!.slice(0, 12))}
-                >Block source</button
-              >
-            </div>{/if}
+        {:else if result.items.length > 1}
+          <button
+            type="button"
+            class="ui-btn ui-btn-small"
+            onclick={() => (selected = new Set(result.items.map((i) => i.id!)))}
+            >Select all on this page</button
+          >
         {/if}
-      </article>
-    {/each}
+      </div>
+    {/if}
+
+    {#if collection === 'sources' || collection === 'blocks'}
+      <form
+        class="ip"
+        onsubmit={(e) => {
+          e.preventDefault();
+          void prepareBlock('ip', ip, ip);
+        }}
+      >
+        <label class="ui-field"
+          >Block an exact IP address<input
+            required
+            bind:value={ip}
+            placeholder="IPv4 or IPv6"
+            autocomplete="off"
+          /></label
+        >
+        <button class="ui-btn" disabled={busy}>Review block</button>
+      </form>
+      <p class="hint">
+        Raw IP addresses are not stored. A shared source does not prove that accounts belong to the
+        same person.
+      </p>
+    {/if}
+
+    {#if blockTarget}
+      <section class="review" aria-labelledby="block-review-title">
+        <h2 id="block-review-title">
+          Block {blockTarget.kind === 'user' ? 'account' : 'source'}: {blockTarget.name}
+        </h2>
+        <p>
+          {affected === null
+            ? 'Matching existing contributions will be hidden.'
+            : `${affected} existing contributions will be affected.`}
+          Posting will be disabled. Unblocking does not restore old comments automatically.
+        </p>
+        <form onsubmit={block}>
+          <label class="ui-field"
+            >Reason<textarea required rows="2" maxlength="1000" bind:value={blockReason}
+            ></textarea></label
+          >
+          <label class="ui-field"
+            >Duration<select bind:value={blockHours}
+              ><option value="24">24 hours</option><option value="168">7 days</option><option
+                value="">Permanent</option
+              ></select
+            ></label
+          >
+          <div class="row">
+            <button class="ui-btn ui-btn-danger" disabled={busy || affected === null}
+              >Confirm block</button
+            >
+            <button
+              type="button"
+              class="ui-btn"
+              disabled={busy}
+              onclick={() => (blockTarget = null)}>Cancel</button
+            >
+          </div>
+        </form>
+      </section>
+    {/if}
+
+    {#if failure}
+      <div class="ui-notice ui-notice-error" role="alert">
+        <p>{failure}</p>
+        <button type="button" class="ui-btn ui-btn-small" onclick={() => load(result.page)}
+          >Retry</button
+        >
+      </div>
+    {:else if loading && result.items.length === 0}
+      <div role="status" aria-label="Loading">
+        {#each [0, 1, 2] as n (n)}<span class="ui-skeleton row-skel"></span>{/each}
+      </div>
+    {:else if result.items.length === 0}
+      <div class="ui-empty">
+        <h2>Nothing here</h2>
+        <p>{filtered || status ? 'No records match these filters.' : 'No records yet.'}</p>
+        {#if filtered || status}<button
+            type="button"
+            class="ui-btn"
+            onclick={() => ((status = ''), clearFilters())}>Clear filters</button
+          >{/if}
+      </div>
+    {:else}
+      <div aria-busy={loading}>
+        {#if collection === 'comments'}
+          <CommentsList
+            items={result.items}
+            {busy}
+            bind:selected
+            onaction={moderate}
+            onblock={prepareBlock}
+            onhistory={history}
+          />
+        {:else if collection === 'users' || collection === 'sources'}
+          <PeopleList
+            items={result.items}
+            {collection}
+            {busy}
+            onhistory={history}
+            onblock={prepareBlock}
+            onaccounts={(id) => {
+              change('users', false);
+              source = id;
+              void browse();
+            }}
+            onmanage={(id) => {
+              change('blocks', false);
+              query = id;
+              void browse();
+            }}
+          />
+        {:else}
+          <RecordList
+            items={result.items}
+            {collection}
+            {busy}
+            onunblock={unblock}
+            onhistory={history}
+            onblock={prepareBlock}
+          />
+        {/if}
+      </div>
+    {/if}
+
+    <nav class="pages" aria-label="Community activity pages">
+      <button
+        type="button"
+        class="ui-btn ui-btn-small"
+        disabled={loading || busy || result.page <= 1}
+        onclick={() => browse(result.page - 1)}>Previous</button
+      >
+      <span aria-live="polite">Page {result.page} of {pages} | {result.total} records</span>
+      <button
+        type="button"
+        class="ui-btn ui-btn-small"
+        disabled={loading || busy || result.page >= pages}
+        onclick={() => browse(result.page + 1)}>Next</button
+      >
+    </nav>
   </div>
-  <nav class="button-row" aria-label="Community activity pages">
-    <button
-      class="button button-secondary"
-      disabled={loading || busy || result.page <= 1}
-      onclick={() => browse(result.page - 1)}>Previous</button
-    >
-    <span aria-live="polite">Page {result.page} of {pages} | {result.total} records</span>
-    <button
-      class="button button-secondary"
-      disabled={loading || busy || result.page >= pages}
-      onclick={() => browse(result.page + 1)}>Next</button
-    >
-  </nav>
 </section>
 
 <style>
-  .moderation,
-  .moderation-record {
+  .mod {
+    display: grid;
+    gap: 1.25rem;
+    max-width: 72rem;
     min-width: 0;
   }
-  .moderation > header {
-    display: grid;
-    gap: 0.75rem;
+  h1 {
+    font-size: 1.75rem;
+    line-height: 1.2;
   }
-  .moderation-summary {
+  .summary {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
-    gap: 1rem;
+    gap: 0.75rem;
+    margin: 0;
   }
-  .moderation-summary > div {
+  .summary > div {
     display: grid;
-    gap: 0.5rem;
-    padding: 1rem;
+    gap: 0.25rem;
     border: 1px solid var(--border);
+    padding: 0.75rem 1rem;
+  }
+  dt {
+    color: var(--muted-foreground);
+    font-size: 0.75rem;
+    text-transform: uppercase;
   }
   dd {
+    margin: 0;
     font-size: 1.5rem;
   }
-  .moderation > form.button-row {
-    align-items: end;
+  .panel {
+    display: grid;
+    gap: 1rem;
+    min-width: 0;
   }
-  .moderation-filters {
+  .filters,
+  .bulk,
+  .ip {
     display: flex;
     flex-wrap: wrap;
-    gap: 1rem;
+    gap: 0.75rem;
     align-items: end;
-    padding: 1.5rem;
-    background: var(--card);
-    border: 1px solid var(--border);
   }
-  label {
-    display: grid;
+  .grow {
+    flex: 1 1 14rem;
+  }
+  .bulk-actions,
+  .chips,
+  .row {
+    display: flex;
+    flex-wrap: wrap;
     gap: 0.5rem;
-    min-width: 0;
-    max-width: 100%;
+    align-items: center;
   }
-  input,
-  select {
-    min-width: 0;
-    max-width: 100%;
-    min-height: 2.875rem;
-    padding: 0.5rem;
-    border: 1px solid var(--input);
-    background: var(--background);
-    color: var(--foreground);
-    border-radius: var(--radius);
+  .hint {
+    color: var(--muted-foreground);
+    font-size: 0.875rem;
   }
-  .moderation-record,
-  .block-review {
+  .review {
     display: grid;
-    gap: 1rem;
-    border: 1px solid var(--border);
-    padding: 1.5rem;
-    overflow-wrap: anywhere;
+    gap: 0.75rem;
+    border: 1px solid var(--foreground);
+    padding: 1.25rem;
   }
-  .record-id {
-    font-family: var(--font-code);
-    font-size: 0.8125rem;
-    overflow-wrap: anywhere;
+  .review form {
+    display: grid;
+    gap: 0.75rem;
+    max-width: 28rem;
+  }
+  .row-skel {
+    height: 5rem;
+    margin-block-end: 0.5rem;
+  }
+  .pages {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    font-size: 0.875rem;
   }
 </style>
