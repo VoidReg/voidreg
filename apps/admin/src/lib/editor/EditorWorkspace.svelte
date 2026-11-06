@@ -15,6 +15,7 @@
   import HistoryPanel from './HistoryPanel.svelte';
   import SaveStatus from './SaveStatus.svelte';
   import ShortcutSheet from './ShortcutSheet.svelte';
+  import ImportDialog from './ImportDialog.svelte';
   import Tabs from '$lib/ui/Tabs.svelte';
   import { outlineText } from './outline-text';
   import BlockSummary from './BlockSummary.svelte';
@@ -98,13 +99,20 @@
     onexport
   }: Props = $props();
   const selectedId = $derived(doc.blocks.find((block) => block.id === selectedBlock)?.id);
-  let importText = $state(''),
-    importFormat = $state('markdown');
   const labels = blockLabels(extensions);
   const selected = $derived(doc.blocks.find((block) => block.id === selectedId));
   const selectedIndex = $derived(doc.blocks.findIndex((block) => block.id === selectedId));
   const errors = $derived(diagnostics.filter((item) => item.level === 'error'));
   let shortcutsOpen = $state(false);
+  let importOpen = $state(false);
+  let moreOpen = $state(false);
+  function menuAction(run: () => unknown) {
+    moreOpen = false;
+    void run();
+  }
+  function outsideMenu(event: MouseEvent) {
+    if (moreOpen && !(event.target as HTMLElement).closest?.('.editor-more')) moreOpen = false;
+  }
   const wordCount = $derived(outlineText(doc.blocks).trim().match(/\S+/g)?.length ?? 0);
 
   // The site app serves private draft previews under /preview (admin session required).
@@ -173,7 +181,10 @@
   }
   function keydown(event: KeyboardEvent) {
     const mod = event.ctrlKey || event.metaKey;
-    if (mod && event.key.toLowerCase() === 's') {
+    if (event.key === 'Escape' && moreOpen) {
+      moreOpen = false;
+      document.querySelector<HTMLElement>('.editor-more > summary')?.focus();
+    } else if (mod && event.key.toLowerCase() === 's') {
       event.preventDefault();
       if (!busy && !conflict) void onsave();
     } else if (mod && event.key === 'Enter') {
@@ -197,8 +208,9 @@
   }
 </script>
 
-<svelte:window onkeydown={keydown} />
+<svelte:window onkeydown={keydown} onclick={outsideMenu} />
 <ShortcutSheet bind:open={shortcutsOpen} />
+<ImportDialog bind:open={importOpen} {onimport} />
 
 <div
   class="publishing-workspace"
@@ -210,19 +222,12 @@
     <div class="editor-location">
       <button class="editor-back" disabled={busy} onclick={onback}
         ><Icon name="arrow-left" size={16} />
-        {kind === 'projects' ? 'Projects' : 'Articles'}</button
+        <span>{kind === 'projects' ? 'Projects' : 'Articles'}</span></button
       ><span class="location-divider" aria-hidden="true">/</span>
       <h1 class="workspace-title">{kind === 'projects' ? 'Project editor' : 'Article editor'}</h1>
     </div>
     <div class="editor-primary-actions">
       <button
-        class="editor-button secondary"
-        disabled={busy || conflict || dirty || !storedSlug}
-        title={dirty || !storedSlug
-          ? 'Save first to preview the saved draft on the site'
-          : 'Open the saved draft on the site in a new tab'}
-        onclick={openSitePreview}>Site preview</button
-      ><button
         class="editor-button secondary"
         disabled={busy || conflict}
         title="Shortcut: Ctrl or Cmd + S"
@@ -233,6 +238,47 @@
         title="Shortcut: Ctrl or Cmd + Enter"
         onclick={onpublish}>{status === 'published' ? 'Update' : 'Publish'}</button
       >
+      <details class="ui-menu editor-more" bind:open={moreOpen}>
+        <summary class="editor-button secondary" aria-label="More actions"
+          ><Icon name="more" size={18} /><span class="editor-more-label">More</span></summary
+        >
+        <div class="ui-menu-list">
+          <button
+            type="button"
+            disabled={busy || conflict || dirty || !storedSlug}
+            title={dirty || !storedSlug
+              ? 'Save first to preview the saved draft on the site'
+              : 'Open the saved draft on the site in a new tab'}
+            onclick={() => menuAction(openSitePreview)}>Site preview</button
+          >
+          <button type="button" onclick={() => menuAction(() => (importOpen = true))}
+            >Import document</button
+          >
+          <button type="button" onclick={() => menuAction(() => onexport('json'))}
+            >Export JSON</button
+          >
+          <button type="button" onclick={() => menuAction(() => onexport('markdown'))}
+            >Export Markdown</button
+          >
+          <button type="button" onclick={() => menuAction(() => (shortcutsOpen = true))}
+            >Keyboard shortcuts</button
+          >
+          {#if storedSlug}
+            <button
+              type="button"
+              disabled={busy || conflict || status === 'draft'}
+              onclick={() => menuAction(onunpublish)}
+              >Unpublish {kind === 'projects' ? 'project' : 'article'}</button
+            ><button
+              type="button"
+              class="danger"
+              disabled={busy || conflict}
+              onclick={() => menuAction(ondelete)}
+              >Delete {kind === 'projects' ? 'project' : 'article'}</button
+            >
+          {/if}
+        </div>
+      </details>
     </div>
   </header>
   <div class="editor-toolbar">
@@ -252,7 +298,7 @@
             : { mode: 'preview', panel: 'document', inspector: 'article' }
         )}
     />
-    <div class="editor-tools">
+    <div class="editor-tools" role="group" aria-label="Side panels">
       <button
         class="outline-toggle"
         aria-pressed={panel === 'outline'}
@@ -260,15 +306,11 @@
         >Outline</button
       ><button
         aria-pressed={panel === 'settings' && inspector === 'article'}
-        onclick={() => showSettings('article')}
-        >{kind === 'projects' ? 'Project settings' : 'Article settings'}</button
+        onclick={() => showSettings('article')}>Settings</button
       ><button
         aria-pressed={panel === 'settings' && inspector === 'history'}
+        disabled={!storedSlug}
         onclick={() => showSettings('history')}>History</button
-      ><button
-        class="shortcuts-button"
-        onclick={() => (shortcutsOpen = true)}
-        aria-label="Keyboard shortcuts">?</button
       >
     </div>
   </div>
@@ -632,49 +674,6 @@
                 {diagnostic.level}: {diagnostic.message}
               </p>{/each}
           </section>
-          <section class="inspector-section">
-            <details class="inspector-details">
-              <summary>Import and export</summary>
-              <div class="inspector-fields">
-                <label class="editor-field"
-                  >Format<select bind:value={importFormat}
-                    ><option value="markdown">Markdown</option><option value="json"
-                      >Publisle JSON</option
-                    ></select
-                  ></label
-                ><label class="editor-field"
-                  >Document<textarea rows="8" bind:value={importText}></textarea></label
-                ><button
-                  class="editor-button secondary"
-                  onclick={() => onimport(importText, importFormat)}>Import document</button
-                >
-                <div class="export-actions">
-                  <button class="editor-button secondary" onclick={() => onexport('json')}
-                    >Export JSON</button
-                  ><button class="editor-button secondary" onclick={() => onexport('markdown')}
-                    >Export Markdown</button
-                  >
-                </div>
-              </div>
-            </details>
-          </section>
-          {#if storedSlug}<section class="inspector-section">
-              <details class="inspector-details">
-                <summary>Content actions</summary>
-                <div class="inspector-fields">
-                  <button
-                    class="editor-button secondary"
-                    disabled={busy || conflict || status === 'draft'}
-                    onclick={onunpublish}
-                    >Unpublish {kind === 'projects' ? 'project' : 'article'}</button
-                  ><button
-                    class="editor-button danger"
-                    disabled={busy || conflict}
-                    onclick={ondelete}>Delete {kind === 'projects' ? 'project' : 'article'}</button
-                  >
-                </div>
-              </details>
-            </section>{/if}
         {/if}
       </div>
       <button

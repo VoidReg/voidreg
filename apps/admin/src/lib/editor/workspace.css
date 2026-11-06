@@ -1009,3 +1009,114 @@
 .inspector-tabs.ui-tabs {
   border-bottom: 0;
 }
+
+/* Header and toolbar: one row of actions, secondary actions in the More menu. */
+.publishing-workspace {
+  --editor-bar-height: 4rem;
+}
+.editor-topbar {
+  min-height: var(--editor-bar-height);
+  padding-block: 0.5rem;
+  gap: 1rem;
+}
+.editor-location {
+  min-width: 0;
+  gap: 0.75rem;
+}
+.publishing-workspace .workspace-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1.25rem;
+}
+.editor-primary-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.editor-more > summary {
+  gap: 0.375rem;
+  list-style: none;
+  cursor: pointer;
+}
+.editor-more > summary::-webkit-details-marker {
+  display: none;
+}
+.editor-more[open] > summary {
+  background: var(--secondary);
+}
+.editor-more .ui-menu-list {
+  min-width: 13rem;
+}
+.editor-more .ui-menu-list button:disabled {
+  color: var(--disabled-foreground);
+  cursor: not-allowed;
+}
+.editor-tools {
+  grid-auto-columns: auto;
+  gap: 0;
+  margin-block: 0.375rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--muted);
+  overflow: hidden;
+}
+.editor-tools button {
+  min-height: 2rem;
+  padding: 0.25rem 0.875rem;
+  border-bottom: 0;
+  border-inline-end: 1px solid var(--border);
+  background: transparent;
+}
+.editor-tools button:last-child {
+  border-inline-end: 0;
+}
+.editor-tools button:hover:not(:disabled, [aria-pressed='true']) {
+  background: var(--secondary);
+  color: var(--foreground);
+}
+.editor-tools button:disabled {
+  color: var(--disabled-foreground);
+  cursor: not-allowed;
+}
+.editor-tools [aria-pressed='true'] {
+  background: var(--foreground);
+  color: var(--background);
+  font-weight: 500;
+}
+@container (max-width: 47.999rem) {
+  .publishing-workspace {
+    --editor-bar-height: 3.5rem;
+  }
+  .editor-topbar {
+    min-height: var(--editor-bar-height);
+    padding: 0.375rem 1rem;
+    gap: 0.5rem;
+  }
+  .editor-primary-actions {
+    gap: 0.375rem;
+  }
+  .editor-primary-actions .editor-button {
+    padding-inline: 0.75rem;
+  }
+  .editor-more-label {
+    display: none;
+  }
+  .editor-more > summary {
+    min-width: 2.75rem;
+    padding-inline: 0;
+  }
+  .editor-toolbar {
+    padding-block: 0;
+  }
+  .editor-tools {
+    grid-auto-columns: 1fr;
+    margin-block: 0 0.5rem;
+    border-top: 1px solid var(--border);
+  }
+  .editor-tools button {
+    padding-inline: 0.5rem;
+    text-align: center;
+  }
+}
