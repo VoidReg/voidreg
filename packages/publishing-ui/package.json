@@ -15,6 +15,13 @@
     "./Counter.svelte": {
       "svelte": "./src/Counter.svelte",
       "default": "./src/Counter.svelte"
+    },
+    "./schematic": "./src/schematic/model.ts",
+    "./schematic/sample": "./src/schematic/sample.ts",
+    "./schematic/static": "./src/schematic/static.ts",
+    "./Schematic.svelte": {
+      "svelte": "./src/Schematic.svelte",
+      "default": "./src/Schematic.svelte"
     }
   },
   "dependencies": {
@@ -26,7 +33,7 @@
     "svelte": "^5.0.0"
   },
   "scripts": {
-    "test": "tsx --test src/*.test.ts"
+    "test": "tsx --test src/**/*.test.ts"
   },
   "devDependencies": {
     "tsx": "^4.23.15"

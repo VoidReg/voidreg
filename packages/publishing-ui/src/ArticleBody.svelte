@@ -5,6 +5,7 @@
   import { implementations } from './renderers';
   import '@publisle/adapter-core/document.css';
   import '@publisle/adapter-core/katex.css';
+  import './schematic/schematic.css';
   let { article }: { article: Article } = $props();
   const componentId = $props.id();
   const instanceId = 'article-' + componentId.replace(/[^A-Za-z0-9_-]/g, '');

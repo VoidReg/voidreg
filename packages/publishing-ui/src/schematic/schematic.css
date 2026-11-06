@@ -1,0 +1,220 @@
+/* Shared by the compiled static frame and the interactive component. Tokens come from the host. */
+.schematic {
+  display: grid;
+  gap: 1rem;
+  margin-block: 1.5rem;
+}
+
+.schematic-figure {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--border, currentColor);
+  background: var(--card, transparent);
+  padding: 0.5rem;
+  color: var(--foreground, currentColor);
+}
+
+.schematic-wire,
+.schematic-figure line,
+.schematic-figure polyline,
+.schematic-figure polygon {
+  stroke: var(--foreground, currentColor);
+}
+
+.schematic-figure circle {
+  stroke: none;
+  fill: var(--foreground, currentColor);
+}
+
+.schematic-wire {
+  fill: none;
+  transition: stroke var(--duration-fast, 120ms) ease;
+}
+
+.schematic-wire.live {
+  stroke: var(--primary, currentColor);
+  stroke-dasharray: 6 8;
+  animation: schematic-flow 0.9s linear infinite;
+}
+
+.schematic-wire.focus {
+  stroke: var(--primary, currentColor);
+  stroke-width: 3.5;
+}
+
+.schematic-wire.dim,
+.schematic-part.dim {
+  opacity: 0.35;
+}
+
+.schematic-text {
+  fill: var(--foreground, currentColor);
+  stroke: none;
+  font-family: var(--font-code, monospace);
+  font-size: 12px;
+}
+
+.schematic-figure .schematic-dot {
+  fill: var(--foreground, currentColor);
+}
+
+.schematic-figure .schematic-body {
+  fill: none;
+}
+
+.schematic-figure .schematic-lit {
+  fill: var(--primary, currentColor);
+  stroke: var(--primary, currentColor);
+}
+
+.schematic-figure .schematic-ray {
+  stroke: var(--primary, currentColor);
+}
+
+.schematic-figure .schematic-blade {
+  stroke-width: 2.5;
+}
+
+.schematic-hit {
+  fill: transparent;
+  stroke: none;
+}
+
+.schematic-switch-hit {
+  cursor: pointer;
+  outline: none;
+}
+
+.schematic-switch-hit:focus-visible .schematic-hit {
+  stroke: var(--ring, currentColor);
+  stroke-width: 3;
+}
+
+.schematic-switch-hit:hover .schematic-blade {
+  stroke: var(--primary, currentColor);
+}
+
+.schematic-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+  align-items: center;
+}
+
+.schematic-toggle {
+  border: 1px solid var(--input, currentColor);
+  background: var(--background, transparent);
+  padding: 0.5rem 0.875rem;
+  min-height: 2.75rem;
+  color: var(--foreground, currentColor);
+  font-family: var(--font-code, monospace);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.schematic-toggle[aria-pressed='true'],
+.schematic-net[aria-pressed='true'] {
+  border-color: var(--foreground, currentColor);
+  background: var(--foreground, currentColor);
+  color: var(--background, canvas);
+}
+
+.schematic-slider {
+  display: inline-flex;
+  gap: 0.625rem;
+  align-items: center;
+  font-size: 0.875rem;
+}
+
+.schematic-slider input[type='range'] {
+  border: 1px solid var(--input, currentColor);
+  background: var(--background, transparent);
+  padding: 0.5rem;
+  width: 10rem;
+  accent-color: var(--primary, currentColor);
+}
+
+.schematic-slider output {
+  min-width: 4.5rem;
+  font-family: var(--font-code, monospace);
+  font-size: 0.8125rem;
+}
+
+.schematic-readout {
+  border-collapse: collapse;
+  max-width: 28rem;
+  font-size: 0.875rem;
+}
+
+.schematic-readout caption {
+  padding-bottom: 0.5rem;
+  color: var(--muted-foreground, inherit);
+  font-family: var(--font-code, monospace);
+  font-size: 0.75rem;
+  text-align: start;
+  text-transform: uppercase;
+}
+
+.schematic-readout th,
+.schematic-readout td {
+  border-bottom: 1px solid var(--border, currentColor);
+  padding: 0.375rem 0.75rem 0.375rem 0;
+  font-weight: 400;
+  text-align: start;
+}
+
+.schematic-readout tr.focus th,
+.schematic-readout tr.focus td {
+  color: var(--primary, inherit);
+}
+
+.schematic-net {
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 0.25rem 0.5rem;
+  min-height: 2rem;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.schematic-net:hover {
+  border-color: var(--input, currentColor);
+}
+
+.schematic-note {
+  margin: 0;
+  color: var(--muted-foreground, inherit);
+  font-size: 0.8125rem;
+}
+
+.schematic-error {
+  border: 1px solid var(--destructive, currentColor);
+  padding: 0.75rem 1rem;
+}
+
+.schematic-sr {
+  position: absolute;
+  margin: -1px;
+  border: 0;
+  padding: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@keyframes schematic-flow {
+  to {
+    stroke-dashoffset: -14;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .schematic-wire.live {
+    animation: none;
+    stroke-dasharray: none;
+  }
+}
