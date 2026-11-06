@@ -20,4 +20,10 @@
     mainEntityOfPage: 'https://www.voidreg.xyz/blog/' + article.slug
   }}
 />
-<PostDetail {article} projects={data.projects} newer={data.newer} older={data.older} />
+<PostDetail
+  {article}
+  projects={data.projects}
+  newer={data.newer}
+  older={data.older}
+  topic={data.topic}
+/>

@@ -1,7 +1,7 @@
 <script lang="ts">
   import NoteRow from '$lib/components/NoteRow.svelte';
   import type { Article } from '@voidreg/publishing-ui/api';
-  let { article, heading = 'h2' }: { article: Article; heading?: 'h2' | 'h3' } = $props();
+  let { article, heading = 'h2' }: { article: Article; heading?: 'h2' | 'h3' | 'h4' } = $props();
 </script>
 
 <NoteRow
@@ -13,5 +13,6 @@
   publishedAt={article.published_at}
   readingTime={article.reading_time_minutes}
   projects={article.projects}
+  topic={article.topic}
   tags={article.tags ?? []}
 />

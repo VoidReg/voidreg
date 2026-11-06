@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   apiQuery,
+  capChips,
   filterChips,
   filterHref,
   isCanonical,
@@ -76,4 +77,19 @@ test('canonical detection ignores percent-encoding differences', () => {
   assert.equal(isCanonical(new URLSearchParams("q=it's&project=alpha&topic="), href), false);
   assert.equal(isCanonical(new URLSearchParams('project=alpha&q=it%27s'), href), false);
   assert.equal(isCanonical(new URLSearchParams(''), '/blog'), true);
+});
+
+test('capped chip rows keep the active chip visible and list the rest', () => {
+  const items = ['a', 'b', 'c', 'd', 'e'];
+  assert.deepEqual(
+    capChips(items, 10, () => false),
+    { shown: items, rest: [] }
+  );
+  const capped = capChips(items, 3, (x) => x === 'e');
+  assert.deepEqual(capped.shown, ['e', 'a', 'b']);
+  assert.deepEqual(capped.rest, ['c', 'd']);
+  assert.deepEqual(
+    capChips(items, 2, () => false),
+    { shown: ['a', 'b'], rest: ['c', 'd', 'e'] }
+  );
 });

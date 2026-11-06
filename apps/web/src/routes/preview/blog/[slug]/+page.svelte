@@ -12,6 +12,7 @@
     projects={data.projects}
     newer={data.newer}
     older={data.older}
+    topic={data.topic}
     live={false}
   />
 {:else if data.result.state === 'failed'}

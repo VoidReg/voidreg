@@ -17,4 +17,4 @@
     url: 'https://www.voidreg.xyz/projects/' + project.slug
   }}
 />
-<ProjectDetail {project} posts={data.posts} />
+<ProjectDetail {project} log={data.log} />

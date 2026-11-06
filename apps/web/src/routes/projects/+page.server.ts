@@ -4,11 +4,13 @@ import type { Project } from '$lib/data/projects';
 export async function load({ fetch, url }) {
   const tag = url.searchParams.get('tag') ?? '';
   const category = url.searchParams.get('category') ?? '';
+  const q = (url.searchParams.get('q') ?? '').replace(/\s+/g, ' ').trim().slice(0, 100);
   const query =
     '/projects?page=' +
     pageNumber(url) +
     (tag ? '&tag=' + encodeURIComponent(tag) : '') +
-    (category ? '&category=' + encodeURIComponent(category) : '');
+    (category ? '&category=' + encodeURIComponent(category) : '') +
+    (q ? '&q=' + encodeURIComponent(q) : '');
   const [result, everything, vocabulary] = await Promise.all([
     publicContent<Page<Project>>(query, fetch),
     publicContent<Page<Project>>('/projects?per_page=100', fetch),
@@ -24,6 +26,7 @@ export async function load({ fetch, url }) {
     result,
     tag,
     category,
+    q,
     // Most used technologies, from the shared vocabulary so the row stays short at any scale.
     tags: unique(
       vocabulary.items

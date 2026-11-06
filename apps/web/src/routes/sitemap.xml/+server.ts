@@ -1,5 +1,5 @@
 import { publicContent, site } from '$lib/server/content';
-import type { Article, Page } from '@voidreg/publishing-ui/api';
+import type { Article, Page, Topic } from '@voidreg/publishing-ui/api';
 import type { Project } from '$lib/data/projects';
 const escape = (s: string) =>
   s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;');
@@ -23,6 +23,22 @@ export async function GET({ fetch }) {
       if (page * result.per_page >= result.total) break;
       page++;
     }
+  }
+  // Topic pages, only for topics that hold published posts.
+  let topicPage = 1;
+  while (true) {
+    const result = await publicContent<Page<Topic>>(
+      '/topics?per_page=100&page=' + topicPage,
+      fetch
+    );
+    for (const topic of result.items)
+      if (topic.project && topic.post_count > 0)
+        urls.push({
+          path: '/projects/' + topic.project.slug + '/topics/' + topic.slug,
+          date: topic.latest_post_at ?? ''
+        });
+    if (topicPage * result.per_page >= result.total) break;
+    topicPage++;
   }
   return new Response(
     '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' +

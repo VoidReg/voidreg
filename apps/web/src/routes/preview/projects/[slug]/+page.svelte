@@ -6,8 +6,8 @@
 
 <svelte:head><title>Preview: {data.preview.title}</title></svelte:head>
 
-{#if data.result.state === 'ready' && data.project && data.posts}
-  <ProjectDetail project={data.project} posts={data.posts} />
+{#if data.result.state === 'ready' && data.project && data.log}
+  <ProjectDetail project={data.project} log={data.log} live={false} />
 {:else if data.result.state === 'failed'}
   <PreviewNotice state="failed" diagnostics={data.result.diagnostics} />
 {:else}

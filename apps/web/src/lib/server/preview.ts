@@ -105,3 +105,9 @@ export async function draftPosts(
     )
   ).body;
 }
+
+/** Typed reader over the admin API, for helpers shared with the public pages. */
+export const adminGet =
+  (cookies: Cookies, fetcher: typeof fetch) =>
+  async <T>(path: string): Promise<T> =>
+    (await adminJson<T>(cookies, fetcher, path)).body;

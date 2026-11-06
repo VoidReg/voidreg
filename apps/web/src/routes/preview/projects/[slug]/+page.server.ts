@@ -1,6 +1,6 @@
-import { draftItem, draftPosts, draftProjects, toRelated } from '$lib/server/preview';
+import { adminGet, draftItem, draftProjects, toRelated } from '$lib/server/preview';
+import { projectLog } from '$lib/server/topics';
 import type { PreviewInfo } from '$lib/server/preview';
-import type { Article, Page } from '@voidreg/publishing-ui/api';
 import type { Project } from '$lib/data/projects';
 
 type Draft = Project & { revision?: number; has_unpublished_changes?: boolean; status?: string };
@@ -15,9 +15,10 @@ export async function load({ params, cookies, fetch }) {
   }
   const project = result.item;
   const related = await draftProjects(cookies, fetch, project.related_project_ids ?? []);
-  const posts: Page<Article> = project.id
-    ? await draftPosts(cookies, fetch, project.id)
-    : { items: [], page: 1, per_page: 100, total: 0 };
+  const log = await projectLog(
+    { get: adminGet(cookies, fetch), posts: '/articles' },
+    { id: project.id ?? '', slug: project.slug }
+  );
   const preview: PreviewInfo = {
     kind: 'project',
     title: project.title,
@@ -29,7 +30,7 @@ export async function load({ params, cookies, fetch }) {
   return {
     result: { state: 'ready' as const },
     project: { ...project, related: related.map(toRelated) },
-    posts,
+    log,
     preview
   };
 }

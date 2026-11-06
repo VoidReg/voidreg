@@ -1,17 +1,18 @@
 import { redirect } from '@sveltejs/kit';
-import { publicContent, pageNumber, normalizePagination } from '$lib/server/content';
+import { publicContent } from '$lib/server/content';
+import { projectLog } from '$lib/server/topics';
 import type { Project } from '$lib/data/projects';
-import type { Article, Page } from '@voidreg/publishing-ui/api';
 export async function load({ params, fetch, url }) {
   const project = await publicContent<Project>(
     '/projects/' + encodeURIComponent(params.slug),
     fetch
   );
   if (project.slug !== params.slug) redirect(308, '/projects/' + project.slug);
-  const posts = await publicContent<Page<Article>>(
-    '/blogs?project_id=' + encodeURIComponent(project.id ?? '') + '&page=' + pageNumber(url),
-    fetch
+  // The log used to be paged here. Long histories now live on /blog?project= and topic pages.
+  if (url.searchParams.has('page')) redirect(308, '/projects/' + project.slug);
+  const log = await projectLog(
+    { get: (path) => publicContent(path, fetch), posts: '/blogs' },
+    { id: project.id ?? '', slug: project.slug }
   );
-  normalizePagination(url, posts);
-  return { project, posts };
+  return { project, log };
 }

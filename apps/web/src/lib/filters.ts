@@ -99,3 +99,17 @@ export function isCanonical(current: URLSearchParams, canonicalHref: string): bo
     wanted.every(([k, v], i) => have[i][0] === k && have[i][1] === v)
   );
 }
+
+/**
+ * Splits a chip row into the visible part and the rest behind "Show more". The active chip is
+ * always visible, so a filter can never hide itself.
+ */
+export function capChips<T>(items: readonly T[], limit: number, isActive: (item: T) => boolean) {
+  if (items.length <= limit) return { shown: [...items], rest: [] as T[] };
+  const active = items.filter(isActive);
+  const shown = [...active, ...items.filter((item) => !isActive(item))].slice(
+    0,
+    Math.max(limit, active.length)
+  );
+  return { shown, rest: items.filter((item) => !shown.includes(item)) };
+}

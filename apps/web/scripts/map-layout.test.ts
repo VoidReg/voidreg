@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   MAX_OPEN,
   buildModel,
+  groupPosts,
   lanesOf,
   neighbourhood,
   outlineOf,
@@ -142,4 +143,34 @@ test('text helpers wrap and truncate without breaking words mid-line', () => {
   assert.equal(wrap('Supercalifragilisticexpialidocious', 12, 2)[0].length, 12);
   assert.equal(truncate('short', 20), 'short');
   assert.equal(truncate('x'.repeat(30), 20).length, 20);
+});
+
+test('panel posts group by topic, then other posts, and stay capped', () => {
+  const post = (id: string, topic?: string) => node(id, 'post', { topic_id: topic ?? null });
+  const posts = [
+    post('a', 't1'),
+    post('b', 't1'),
+    post('c', 't1'),
+    post('d', 't1'),
+    post('e', 't2'),
+    post('f'),
+    post('g', 'gone')
+  ];
+  const topics = [
+    { id: 't1', slug: 'one', title: 'One', post_count: 4 },
+    { id: 't2', slug: 'two', title: 'Two', post_count: 1 },
+    { id: 't3', slug: 'three', title: 'Three', post_count: 0 }
+  ];
+  const groups = groupPosts(posts, topics);
+  assert.deepEqual(
+    groups.map((g) => [g.title, g.total, g.items.map((i) => i.id).join('')]),
+    [
+      ['One', 4, 'abc'],
+      ['Two', 1, 'e'],
+      ['Other posts', 2, 'fg']
+    ]
+  );
+  assert.equal(groupPosts(posts, topics, 3, 4).flatMap((g) => g.items).length, 4);
+  assert.deepEqual(groupPosts(posts, []), [], 'no topics means the flat list');
+  assert.deepEqual(groupPosts(posts, undefined), []);
 });

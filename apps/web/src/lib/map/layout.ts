@@ -13,7 +13,10 @@ export type GraphNode = {
   draft: boolean;
   changed: boolean;
   post_count?: number;
+  /** Topic of the project this post is filed under. */
+  topic_id?: string | null;
 };
+export type GraphTopic = { id: string; slug: string; title: string; post_count: number };
 export type GraphEdge = {
   source: string;
   target: string;
@@ -29,6 +32,8 @@ export type Graph = {
   unlinked_posts?: number;
   posts_total?: number;
   project?: string;
+  /** Topics of the focused project (project mode only). */
+  topics?: GraphTopic[];
 };
 
 /** Projects a URL may keep expanded at once (matches the server). */
@@ -41,6 +46,8 @@ export type MapModel = {
   projects: GraphNode[];
   /** Posts known per project: all of them in full mode, only expanded projects in summary mode. */
   postsOf: Map<string, { items: GraphNode[]; total: number }>;
+  /** Topics per expanded project, in the order the project lists them. */
+  topicsOf: Map<string, GraphTopic[]>;
   /** Posts that follow no project (full mode only). */
   standalone: GraphNode[];
   unlinked: number;
@@ -110,6 +117,7 @@ export function buildModel(graph: Graph, expanded: Graph[] = []): MapModel {
     );
   const projectIds = new Set(projects.map((p) => p.id));
   const postsOf = new Map<string, { items: GraphNode[]; total: number }>();
+  const topicsOf = new Map<string, GraphTopic[]>();
   const unlinkedIds = new Set<string>();
   const posts = new Map(graph.nodes.filter((n) => n.kind === 'post').map((n) => [n.id, n]));
   const full = graph.mode !== 'summary';
@@ -141,6 +149,7 @@ export function buildModel(graph: Graph, expanded: Graph[] = []): MapModel {
     const items = g.nodes.filter((n) => n.kind === 'post').sort(byDate);
     if (g.project && projectIds.has(g.project) && (!full || !postsOf.has(g.project)))
       postsOf.set(g.project, { items, total: g.posts_total ?? items.length });
+    if (g.project && g.topics?.length) topicsOf.set(g.project, g.topics);
     g.edges.forEach(addEdge);
   }
   const adjacency = new Map<string, Set<string>>();
@@ -161,6 +170,7 @@ export function buildModel(graph: Graph, expanded: Graph[] = []): MapModel {
     mode: full ? 'full' : 'summary',
     projects,
     postsOf,
+    topicsOf,
     standalone: [...unlinkedIds].map((id) => posts.get(id)!).sort(byDate),
     unlinked: full ? unlinkedIds.size : (graph.unlinked_posts ?? 0),
     edges: [...edges.values()],
@@ -288,4 +298,39 @@ export function parseOpen(value: string | null | undefined): string[] {
 export function toggleOpen(open: readonly string[], slug: string): string[] {
   if (open.includes(slug)) return open.filter((s) => s !== slug);
   return [...open, slug].slice(-MAX_OPEN);
+}
+
+export type PostGroup = { key: string; title: string; total: number; items: GraphNode[] };
+
+/**
+ * Groups a project's posts by topic for the side panel: topics in their own order, then posts
+ * without a topic. Each group lists a few posts and the whole panel is capped, so a project with
+ * hundreds of posts stays short. Returns no groups when the project has no topics.
+ */
+export function groupPosts(
+  posts: readonly GraphNode[],
+  topics: readonly GraphTopic[] | undefined,
+  perGroup = 3,
+  maxTotal = 12
+): PostGroup[] {
+  if (!topics?.length) return [];
+  const groups: PostGroup[] = [];
+  let listed = 0;
+  const add = (key: string, title: string, items: GraphNode[], total: number) => {
+    if (!items.length || listed >= maxTotal) return;
+    const take = items.slice(0, Math.min(perGroup, maxTotal - listed));
+    listed += take.length;
+    groups.push({ key, title, total, items: take });
+  };
+  const known = new Set(topics.map((t) => t.id));
+  for (const topic of topics)
+    add(
+      topic.id,
+      topic.title,
+      posts.filter((p) => p.topic_id === topic.id),
+      topic.post_count
+    );
+  const other = posts.filter((p) => !p.topic_id || !known.has(p.topic_id));
+  add('other', 'Other posts', other, other.length);
+  return groups;
 }

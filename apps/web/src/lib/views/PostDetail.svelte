@@ -5,18 +5,22 @@
   import Comments from '$lib/publishing/Comments.svelte';
   import type { Article } from '@voidreg/publishing-ui/api';
   import type { Project } from '$lib/data/projects';
+  import type { PostTopic } from '$lib/topics';
+  import ArticleCard from '$lib/publishing/ArticleCard.svelte';
   // Shared by the public post page and the private draft preview (no comments or source link).
   let {
     article,
     projects,
     newer = null,
     older = null,
+    topic = null,
     live = true
   }: {
     article: Article;
     projects: Project[];
     newer?: Article | null;
     older?: Article | null;
+    topic?: PostTopic | null;
     live?: boolean;
   } = $props();
 </script>
@@ -24,8 +28,18 @@
 <main id="main-content" class="site-container page-shell">
   <ReadingColumn>
     <nav class="breadcrumb" aria-label="Breadcrumb">
-      <a href={resolve('/')}>Home</a><span>/</span><a href={resolve('/blog')}>Blog</a><span>/</span
-      ><span aria-current="page">{article.title}</span>
+      <a href={resolve('/')}>Home</a><span>/</span>{#if topic}<a href={resolve('/projects')}
+          >Projects</a
+        ><span>/</span><a href={resolve('/projects/[slug]', { slug: topic.project.slug })}
+          >{topic.project.title}</a
+        ><span>/</span>{#if live}<a
+            href={resolve('/projects/[slug]/topics/[topic]', {
+              slug: topic.project.slug,
+              topic: topic.slug
+            })}>{topic.title}</a
+          >{:else}<span>{topic.title}</span>{/if}<span>/</span>{:else}<a href={resolve('/blog')}
+          >Blog</a
+        ><span>/</span>{/if}<span aria-current="page">{article.title}</span>
     </nav>
   </ReadingColumn>
   <article class="section-stack detail-article">
@@ -101,6 +115,26 @@
               >{/if}
           </nav>{/if}
       </aside>
+    </ReadingColumn>{/if}
+  {#if topic && topic.others.length}<ReadingColumn>
+      <section class="section-stack" aria-labelledby="more-in-topic">
+        <h2 id="more-in-topic" class="section-heading">More in {topic.title}</h2>
+        <div class="note-list">
+          {#each topic.others as other (other.slug)}<ArticleCard
+              article={other}
+              heading="h3"
+            />{/each}
+        </div>
+        {#if live && topic.post_count > topic.others.length + 1}<p>
+            <a
+              class="text-link"
+              href={resolve('/projects/[slug]/topics/[topic]', {
+                slug: topic.project.slug,
+                topic: topic.slug
+              })}>All {topic.post_count} posts in {topic.title}</a
+            >
+          </p>{/if}
+      </section>
     </ReadingColumn>{/if}
   <ReadingColumn>
     {#if live}{#key article.id ?? article.slug}<Comments slug={article.slug} />{/key}{/if}

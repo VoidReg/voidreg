@@ -1,5 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import { publicContent } from '$lib/server/content';
+import { postTopic } from '$lib/server/topics';
 import type { Article, Page } from '@voidreg/publishing-ui/api';
 import type { Project } from '$lib/data/projects';
 export async function load({ params, fetch }) {
@@ -28,5 +29,9 @@ export async function load({ params, fetch }) {
       older = posts.items[index + 1] ?? null;
     }
   }
-  return { article, projects, newer, older };
+  const topic = await postTopic(
+    { get: (path) => publicContent(path, fetch), posts: '/blogs' },
+    article
+  );
+  return { article, projects, newer, older, topic };
 }

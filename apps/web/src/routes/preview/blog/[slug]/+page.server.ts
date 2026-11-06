@@ -1,4 +1,5 @@
-import { draftItem, draftPosts, draftProjects } from '$lib/server/preview';
+import { adminGet, draftItem, draftPosts, draftProjects } from '$lib/server/preview';
+import { postTopic } from '$lib/server/topics';
 import type { PreviewInfo } from '$lib/server/preview';
 import type { Article } from '@voidreg/publishing-ui/api';
 
@@ -25,6 +26,7 @@ export async function load({ params, cookies, fetch }) {
       older = posts.items[index + 1] ?? null;
     }
   }
+  const topic = await postTopic({ get: adminGet(cookies, fetch), posts: '/articles' }, article);
   const preview: PreviewInfo = {
     kind: 'post',
     title: article.title,
@@ -33,5 +35,5 @@ export async function load({ params, cookies, fetch }) {
     draft: article.status === 'draft',
     changed: article.has_unpublished_changes
   };
-  return { result: { state: 'ready' as const }, article, projects, newer, older, preview };
+  return { result: { state: 'ready' as const }, article, projects, newer, older, topic, preview };
 }

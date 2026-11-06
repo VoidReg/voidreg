@@ -1,7 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { PLATE_POSTS } from './board';
-  import { categoryOf, type GraphNode, type MapModel } from './layout';
+  import { categoryOf, groupPosts, type GraphNode, type MapModel } from './layout';
 
   let {
     project,
@@ -35,6 +35,9 @@
     return { related: sort(related), shared: sort(shared.filter((n) => !relatedIds.has(n.id))) };
   });
   const posts = $derived(model.postsOf.get(project.id));
+  const groups = $derived(
+    posts ? groupPosts(posts.items, model.topicsOf.get(project.id), 3, PLATE_POSTS) : []
+  );
   const postCount = $derived(posts?.total ?? project.post_count ?? 0);
   const href = $derived(
     preview
@@ -68,7 +71,21 @@
 
   <section aria-label="Posts">
     <h3>Posts <span>{postCount}</span></h3>
-    {#if posts && posts.items.length}
+    {#if posts && posts.items.length && groups.length}
+      {#each groups as group (group.key)}
+        <h4 class="group">{group.title} <span>{group.total}</span></h4>
+        <ul class="rows">
+          {#each group.items as post (post.id)}
+            <li><a href={postHref(post.slug)}>{post.title}</a></li>
+          {/each}
+        </ul>
+      {/each}
+      {#if posts.total > groups.reduce((n, g) => n + g.items.length, 0)}
+        <a class="more" href={moreHref}
+          >{posts.total - groups.reduce((n, g) => n + g.items.length, 0)} more</a
+        >
+      {/if}
+    {:else if posts && posts.items.length}
       <ul class="rows">
         {#each posts.items.slice(0, PLATE_POSTS) as post (post.id)}
           <li><a href={postHref(post.slug)}>{post.title}</a></li>
@@ -171,6 +188,23 @@
   }
 
   h3 span {
+    color: var(--foreground);
+  }
+
+  .group {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin: 0.5rem 0 0.25rem;
+    color: var(--muted-foreground);
+    font-family: var(--font-code);
+    font-size: 0.6875rem;
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .group span {
     color: var(--foreground);
   }
 
