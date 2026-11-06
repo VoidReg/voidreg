@@ -9,7 +9,11 @@ use serde_json::{Value, json};
 use voidreg_api::{
     app::build,
     config::Config,
-    db::{Db, content::ContentQuery, graph::build_graph},
+    db::{
+        Db,
+        content::ContentQuery,
+        graph::{GraphQuery, build_graph, build_graph_with},
+    },
 };
 
 fn project(slug: &str, tags: Value) -> Value {
@@ -413,4 +417,185 @@ async fn preview_cache_follows_the_saved_revision() {
         .unwrap();
     assert_eq!(next["item"]["revision"], 2);
     assert_eq!(next["item"]["title"], "Renamed draft");
+}
+
+fn slim_project(i: usize, tags: Value, related: Value) -> Value {
+    let id = format!("p{i:05}");
+    json!({"id":id,"slug":id,"title":id,"category":format!("cat-{}", i % 7),"tags":tags,"status":"published","archived":false,"sort_order":i,"related_project_ids":related,"has_unpublished_changes":false})
+}
+fn slim_post(i: usize, projects: Value) -> Value {
+    let id = format!("a{i:05}");
+    json!({"id":id,"slug":id,"title":id,"category":format!("cat-{}", i % 7),"tags":["t"],"status":"published","archived":false,"published_at":format!("2026-01-01T00:00:{:02}Z", i % 60),"project_ids":projects})
+}
+
+#[actix_web::test]
+async fn large_catalogues_return_a_bounded_summary() {
+    let projects: Vec<Value> = (0..1000)
+        .map(|i| {
+            slim_project(
+                i,
+                json!(["common", format!("tag-{}", i % 50)]),
+                json!([format!("p{:05}", (i + 1) % 1000)]),
+            )
+        })
+        .collect();
+    let articles: Vec<Value> = (0..5000)
+        .map(|i| slim_post(i, json!([format!("p{:05}", i % 1000)])))
+        .collect();
+    let started = std::time::Instant::now();
+    let graph = build_graph(projects.clone(), articles.clone(), false);
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(2),
+        "linear time"
+    );
+    assert_eq!(graph["mode"], "summary");
+    assert_eq!(graph["totals"], json!({"projects": 1000, "posts": 5000}));
+    let nodes = graph["nodes"].as_array().unwrap();
+    assert_eq!(nodes.len(), 1000, "projects only");
+    assert!(nodes.iter().all(|n| n["kind"] == "project"));
+    assert_eq!(nodes[0]["post_count"], 5);
+    let edges = graph["edges"].as_array().unwrap();
+    assert!(edges.iter().all(|e| e["kind"] == "related"));
+    assert_eq!(edges.len(), 1000, "ring of related projects");
+    assert_eq!(graph["categories"].as_array().unwrap().len(), 7);
+    assert!(graph.to_string().len() < 1_000_000, "payload stays small");
+
+    // Shared links appear only for the focused project, capped.
+    let focused = build_graph_with(
+        projects.clone(),
+        articles.clone(),
+        false,
+        &GraphQuery {
+            links: Some("shared".into()),
+            focus: Some("p00007".into()),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let shared: Vec<&Value> = focused["edges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|e| e["kind"] == "shared-tag")
+        .collect();
+    assert_eq!(shared.len(), 12);
+    assert!(
+        shared
+            .iter()
+            .all(|e| e["source"] == "p00007" || e["target"] == "p00007")
+    );
+
+    // One project returns its own posts and related neighbours only.
+    let one = build_graph_with(
+        projects.clone(),
+        articles.clone(),
+        false,
+        &GraphQuery {
+            project: Some("p00003".into()),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(one["mode"], "project");
+    assert_eq!(one["posts_total"], 5);
+    let kinds: Vec<&str> = one["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|n| n["kind"].as_str().unwrap())
+        .collect();
+    assert_eq!(kinds.iter().filter(|k| **k == "post").count(), 5);
+    assert_eq!(kinds.iter().filter(|k| **k == "project").count(), 3);
+    assert!(
+        build_graph_with(
+            projects,
+            articles,
+            false,
+            &GraphQuery {
+                project: Some("missing".into()),
+                ..Default::default()
+            }
+        )
+        .is_err()
+    );
+}
+
+#[actix_web::test]
+async fn small_graphs_cap_derived_links_per_project() {
+    let projects: Vec<Value> = (0..30)
+        .map(|i| slim_project(i, json!(["x"]), json!([])))
+        .collect();
+    let graph = build_graph(projects, vec![], false);
+    assert_eq!(graph["mode"], "full");
+    let shared = graph["edges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|e| e["kind"] == "shared-tag")
+        .count();
+    assert!(
+        shared <= 30 * 5,
+        "{shared} derived links, not all 435 pairs"
+    );
+    assert!(shared >= 30 * 5 / 2);
+}
+
+#[actix_web::test]
+async fn graph_query_modes_work_against_the_database() {
+    let db = db().await;
+    let a = published(&db, "project", project("alpha", json!(["Rust"]))).await;
+    published(&db, "project", project("beta", json!(["Rust"]))).await;
+    published(&db, "article", article("note", json!([a]))).await;
+    let summary = db
+        .content_graph(
+            true,
+            &GraphQuery {
+                summary: true,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(summary["mode"], "summary");
+    assert_eq!(summary["totals"], json!({"projects": 2, "posts": 1}));
+    assert_eq!(
+        summary["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|n| n["slug"] == "alpha")
+            .unwrap()["post_count"],
+        1
+    );
+    let one = db
+        .content_graph(
+            true,
+            &GraphQuery {
+                project: Some("alpha".into()),
+                links: Some("shared".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let kinds: Vec<&str> = one["edges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e["kind"].as_str().unwrap())
+        .collect();
+    assert!(kinds.contains(&"post-project") && kinds.contains(&"shared-tag"));
+    // The slim SQL projection keeps flags and tags intact.
+    let full = db
+        .content_graph(true, &GraphQuery::default())
+        .await
+        .unwrap();
+    let alpha = full["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|n| n["slug"] == "alpha")
+        .unwrap();
+    assert_eq!(alpha["tags"], json!(["Rust"]));
+    assert_eq!(alpha["draft"], false);
 }

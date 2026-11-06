@@ -1,3 +1,4 @@
+use crate::db::graph::GraphQuery;
 use actix_web::{HttpRequest, HttpResponse, get, web};
 
 use crate::api::v1::blogs::cached_response;
@@ -14,7 +15,11 @@ use crate::error::AppError;
     )
 ))]
 #[get("/graph")]
-pub async fn graph(db: web::Data<Db>, request: HttpRequest) -> Result<HttpResponse, AppError> {
-    let body = db.content_graph(true).await?.to_string();
+pub async fn graph(
+    db: web::Data<Db>,
+    request: HttpRequest,
+    query: web::Query<GraphQuery>,
+) -> Result<HttpResponse, AppError> {
+    let body = db.content_graph(true, &query).await?.to_string();
     Ok(cached_response(&request, body, "public, no-cache", None))
 }

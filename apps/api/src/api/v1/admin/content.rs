@@ -31,11 +31,15 @@ pub async fn get_one(
 }
 #[cfg_attr(feature="swagger", utoipa::path(get,path="/api/v1/admin/graph",tag="admin",responses((status=200,description="Graph of working copies, drafts included"))))]
 #[get("/graph")]
-pub async fn graph(db: web::Data<Db>, session: AdminSession) -> Result<HttpResponse, AppError> {
+pub async fn graph(
+    db: web::Data<Db>,
+    session: AdminSession,
+    query: web::Query<crate::db::graph::GraphQuery>,
+) -> Result<HttpResponse, AppError> {
     session.validate(&db).await?;
     Ok(HttpResponse::Ok()
         .insert_header(("Cache-Control", "private, no-store"))
-        .json(db.content_graph(false).await?))
+        .json(db.content_graph(false, &query).await?))
 }
 fn merge_fields(value: &mut Value, input: &Value) {
     const FIELDS: &[&str] = &[

@@ -837,32 +837,62 @@ impl Db {
         public: bool,
         items: &mut [Value],
     ) -> Result<(), AppError> {
-        let visible = |row: &models::ContentEntry| {
-            !row.deleted && (!public || (row.published.is_some() && !row.archived))
+        let column = if public { "published" } else { "working" };
+        let visible = if public {
+            "e.deleted = false AND e.published IS NOT NULL AND e.archived = false"
+        } else {
+            "e.deleted = false"
         };
-        let raw_of = |row: models::ContentEntry| {
-            if public {
-                row.published
-            } else {
-                Some(row.working)
+        // Only the ids shown on this page are looked up, so cost follows the page size and
+        // never the size of the catalogue.
+        let page_ids: Vec<String> = if kind == "article" {
+            items
+                .iter()
+                .flat_map(|item| item["project_ids"].as_array().into_iter().flatten())
+                .filter_map(|id| id.as_str().map(str::to_owned))
+                .collect::<std::collections::BTreeSet<_>>()
+                .into_iter()
+                .collect()
+        } else {
+            items
+                .iter()
+                .filter_map(|item| item["id"].as_str().map(str::to_owned))
+                .collect()
+        };
+        if page_ids.is_empty() {
+            if kind == "article" {
+                for item in items.iter_mut() {
+                    item["projects"] = json!([]);
+                }
+            } else if kind == "project" {
+                for item in items.iter_mut() {
+                    item["post_count"] = json!(0);
+                    item["latest_post_at"] = Value::Null;
+                }
             }
-        };
+            return Ok(());
+        }
+        let marks = vec!["?"; page_ids.len()].join(",");
         if kind == "article" {
+            let sql = format!(
+                "SELECT json_object('id', json_extract(e.{column}, '$.id'), 'slug', json_extract(e.{column}, '$.slug'), 'title', json_extract(e.{column}, '$.title')) FROM content_entries e WHERE e.kind = 'project' AND {visible} AND json_extract(e.{column}, '$.id') IN ({marks})"
+            );
+            let mut query = toasty::sql::query(sql);
+            for id in &page_ids {
+                query = query.bind(id.clone());
+            }
+            let rows = query
+                .column_types([toasty::stmt::Type::String])
+                .exec(&mut *db)
+                .await?;
             let mut lookup = std::collections::HashMap::<String, Value>::new();
-            for row in
-                models::ContentEntry::filter(models::ContentEntry::fields().kind().eq("project"))
-                    .exec(&mut *db)
-                    .await?
-                    .into_iter()
-                    .filter(visible)
-            {
-                if let Some(raw) = raw_of(row) {
-                    let p: Value = serde_json::from_str(&raw)?;
+            for row in rows {
+                if let toasty::stmt::Value::Record(r) = row
+                    && let Some(toasty::stmt::Value::String(raw)) = r.fields.first()
+                {
+                    let p: Value = serde_json::from_str(raw)?;
                     if let Some(id) = p["id"].as_str() {
-                        lookup.insert(
-                            id.to_owned(),
-                            json!({"id": p["id"], "slug": p["slug"], "title": p["title"]}),
-                        );
+                        lookup.insert(id.to_owned(), p.clone());
                     }
                 }
             }
@@ -876,28 +906,36 @@ impl Db {
                 item["projects"] = Value::Array(projects);
             }
         } else if kind == "project" {
+            let published_only = if public {
+                ""
+            } else {
+                " AND json_extract(e.working, '$.status') = 'published'"
+            };
+            let sql = format!(
+                "SELECT j.value, count(*), coalesce(max(json_extract(e.{column}, '$.published_at')), '') FROM content_entries e, json_each(json_extract(e.{column}, '$.project_ids')) j WHERE e.kind = 'article' AND {visible}{published_only} AND typeof(j.value) = 'text' AND j.value IN ({marks}) GROUP BY j.value"
+            );
+            let mut query = toasty::sql::query(sql);
+            for id in &page_ids {
+                query = query.bind(id.clone());
+            }
+            let rows = query
+                .column_types([
+                    toasty::stmt::Type::String,
+                    toasty::stmt::Type::I64,
+                    toasty::stmt::Type::String,
+                ])
+                .exec(&mut *db)
+                .await?;
             let mut stats = std::collections::HashMap::<String, (i64, String)>::new();
-            for row in
-                models::ContentEntry::filter(models::ContentEntry::fields().kind().eq("article"))
-                    .exec(&mut *db)
-                    .await?
-                    .into_iter()
-                    .filter(visible)
-            {
-                let Some(raw) = raw_of(row) else { continue };
-                let a: Value = serde_json::from_str(&raw)?;
-                if !public && a["status"] != "published" {
-                    continue;
-                }
-                let date = a["published_at"].as_str().unwrap_or("").to_owned();
-                for id in a["project_ids"].as_array().into_iter().flatten() {
-                    if let Some(id) = id.as_str() {
-                        let entry = stats.entry(id.to_owned()).or_insert((0, String::new()));
-                        entry.0 += 1;
-                        if date > entry.1 {
-                            entry.1 = date.clone();
-                        }
-                    }
+            for row in rows {
+                if let toasty::stmt::Value::Record(r) = row
+                    && let [
+                        toasty::stmt::Value::String(id),
+                        toasty::stmt::Value::I64(count),
+                        toasty::stmt::Value::String(latest),
+                    ] = r.fields.as_slice()
+                {
+                    stats.insert(id.clone(), (*count, latest.clone()));
                 }
             }
             for item in items.iter_mut() {
