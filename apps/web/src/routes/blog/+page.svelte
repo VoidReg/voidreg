@@ -4,6 +4,7 @@
   import ArticleCard from '$lib/publishing/ArticleCard.svelte';
   import { resolve } from '$app/paths';
   import Seo from '$lib/Seo.svelte';
+  import Pagination from '$lib/components/Pagination.svelte';
   import PostFilters from '$lib/components/PostFilters.svelte';
   import { filterHref } from '$lib/filters';
   let { data } = $props();
@@ -37,14 +38,12 @@
     <section class="note-list" aria-label="Articles">
       {#each result.items as article (article.slug)}<ArticleCard {article} />{/each}
     </section>
-    <nav class="button-row" aria-label="Article pages">
-      {#if result.page > 1}<a
-          class="button button-secondary"
-          href={resolve(href(result.page - 1) as '/blog')}>Previous</a
-        >{/if}<span>Page {result.page}</span>{#if result.page * result.per_page < result.total}<a
-          class="button button-secondary"
-          href={resolve(href(result.page + 1) as '/blog')}>Next</a
-        >{/if}
-    </nav>
+    <Pagination
+      page={result.page}
+      total={result.total}
+      perPage={result.per_page}
+      {href}
+      label="Article pages"
+    />
   {/if}
 </main>

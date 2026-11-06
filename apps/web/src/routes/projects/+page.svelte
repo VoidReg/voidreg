@@ -3,6 +3,7 @@
   import EmptyContent from '$lib/components/EmptyContent.svelte';
   import { resolve } from '$app/paths';
   import ProjectCard from '$lib/components/ProjectCard.svelte';
+  import Pagination from '$lib/components/Pagination.svelte';
   import Seo from '$lib/Seo.svelte';
   import { capChips } from '$lib/filters';
   let { data } = $props();
@@ -120,16 +121,13 @@
         heading="h2"
       />{:else}<EmptyContent kind="projects" heading="h2" />{/each}
   </section>
-  {#if data.result.total > 0}<nav class="button-row" aria-label="Project pages">
-      {#if data.result.page > 1}<a
-          class="button button-secondary"
-          href={resolve(href({ page: data.result.page - 1 }))}>Previous</a
-        >{/if}<span>Page {data.result.page}</span
-      >{#if data.result.page * data.result.per_page < data.result.total}<a
-          class="button button-secondary"
-          href={resolve(href({ page: data.result.page + 1 }))}>Next</a
-        >{/if}
-    </nav>{/if}
+  <Pagination
+    page={data.result.page}
+    total={data.result.total}
+    perPage={data.result.per_page}
+    href={(n) => href({ page: n })}
+    label="Project pages"
+  />
 </main>
 
 <style>

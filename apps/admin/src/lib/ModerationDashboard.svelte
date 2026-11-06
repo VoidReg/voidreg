@@ -5,6 +5,7 @@
   import { adminRequest } from './api';
   import { confirmDialog } from './ui/confirm.svelte';
   import { notify } from './ui/toast.svelte';
+  import Pager from './components/Pager.svelte';
   import Tabs from './ui/Tabs.svelte';
   import CommentsList from './moderation/CommentsList.svelte';
   import PeopleList from './moderation/PeopleList.svelte';
@@ -496,21 +497,14 @@
       </div>
     {/if}
 
-    <nav class="pages" aria-label="Community activity pages">
-      <button
-        type="button"
-        class="ui-btn ui-btn-small"
-        disabled={loading || busy || result.page <= 1}
-        onclick={() => browse(result.page - 1)}>Previous</button
-      >
-      <span aria-live="polite">Page {result.page} of {pages} | {result.total} records</span>
-      <button
-        type="button"
-        class="ui-btn ui-btn-small"
-        disabled={loading || busy || result.page >= pages}
-        onclick={() => browse(result.page + 1)}>Next</button
-      >
-    </nav>
+    <Pager
+      page={result.page}
+      {pages}
+      disabled={loading || busy}
+      label="Community activity pages"
+      summary={`${result.total} records`}
+      onselect={browse}
+    />
   </div>
 </section>
 
@@ -588,11 +582,5 @@
   .row-skel {
     height: 5rem;
     margin-block-end: 0.5rem;
-  }
-  .pages {
-    display: flex;
-    gap: 1rem;
-    align-items: center;
-    font-size: 0.875rem;
   }
 </style>

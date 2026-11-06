@@ -2,6 +2,7 @@
   import { resolve } from '$app/paths';
   import EmptyContent from '$lib/components/EmptyContent.svelte';
   import ArticleCard from '$lib/publishing/ArticleCard.svelte';
+  import Pagination from '$lib/components/Pagination.svelte';
   import Seo from '$lib/Seo.svelte';
   import { filterHref } from '$lib/filters';
   let { data } = $props();
@@ -67,15 +68,13 @@
     <section class="note-list" aria-label="Posts in this topic">
       {#each result.items as article (article.slug)}<ArticleCard {article} hideTopic />{/each}
     </section>
-    <nav class="button-row" aria-label="Topic pages">
-      {#if result.page > 1}<a
-          class="button button-secondary"
-          href={resolve(href(result.page - 1) as '/')}>Previous</a
-        >{/if}<span>Page {result.page}</span>{#if result.page * result.per_page < result.total}<a
-          class="button button-secondary"
-          href={resolve(href(result.page + 1) as '/')}>Next</a
-        >{/if}
-    </nav>
+    <Pagination
+      page={result.page}
+      total={result.total}
+      perPage={result.per_page}
+      {href}
+      label="Topic pages"
+    />
   {/if}
   <p class="button-row">
     <a class="text-link" href={resolve('/projects/[slug]', { slug: project?.slug ?? '' })}

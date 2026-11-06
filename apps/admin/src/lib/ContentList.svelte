@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import Icon from './components/Icon.svelte';
+  import Pager from './components/Pager.svelte';
   import { adminRequest } from './api';
   import { confirmDialog } from './ui/confirm.svelte';
   import { notify } from './ui/toast.svelte';
@@ -561,22 +562,12 @@
         </tbody>
       </table>
     </div>
-    <nav class="list-pages" aria-label="Pages">
-      <button
-        type="button"
-        class="ui-btn ui-btn-small"
-        disabled={loading || route.page <= 1}
-        onclick={() => onnavigate({ page: route.page - 1 > 1 ? route.page - 1 : null })}
-        >Previous</button
-      >
-      <span>Page {route.page} of {pages}</span>
-      <button
-        type="button"
-        class="ui-btn ui-btn-small"
-        disabled={loading || route.page >= pages}
-        onclick={() => onnavigate({ page: route.page + 1 })}>Next</button
-      >
-    </nav>
+    <Pager
+      page={route.page}
+      {pages}
+      disabled={loading}
+      onselect={(n) => onnavigate({ page: n > 1 ? n : null })}
+    />
   {/if}
 </section>
 
@@ -691,12 +682,6 @@
   }
   .list-skeleton {
     height: 2.25rem;
-  }
-  .list-pages {
-    display: flex;
-    gap: 1rem;
-    align-items: center;
-    font-size: 0.875rem;
   }
   @media (max-width: 47.999rem) {
     .list-filters {
