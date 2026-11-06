@@ -23,7 +23,8 @@
   },
   "scripts": {
     "test": "tsx --test src/*.test.ts",
-    "seed:test-blog": "tsx scripts/seed-test-blog.ts"
+    "seed:test-blog": "tsx scripts/seed-test-blog.ts",
+    "stress:publishing": "tsx scripts/stress-publishing.ts"
   },
   "devDependencies": {
     "tsx": "^4.23.15"
