@@ -24,16 +24,18 @@
     accessibility
   }: { payload: unknown; accessibility?: { label?: string } } = $props();
 
-  let failure = $state('');
-  const schematic = $derived.by<Schematic | undefined>(() => {
+  const parsed = $derived.by<{ schematic?: Schematic; failure: string }>(() => {
     try {
-      failure = '';
-      return parseSchematic(payload);
+      return { schematic: parseSchematic(payload), failure: '' };
     } catch (error) {
-      failure = error instanceof SchematicError ? error.message : 'The schematic could not be read.';
-      return undefined;
+      return {
+        failure:
+          error instanceof SchematicError ? error.message : 'The schematic could not be read.'
+      };
     }
   });
+  const schematic = $derived(parsed.schematic);
+  const failure = $derived(parsed.failure);
 
   let switches = $state<Record<string, boolean>>({});
   let values = $state<Record<string, number>>({});

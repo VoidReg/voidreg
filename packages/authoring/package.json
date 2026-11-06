@@ -22,7 +22,8 @@
     "@voidreg/publishing-ui": "workspace:*"
   },
   "scripts": {
-    "test": "tsx --test src/*.test.ts"
+    "test": "tsx --test src/*.test.ts",
+    "seed:test-blog": "tsx scripts/seed-test-blog.ts"
   },
   "devDependencies": {
     "tsx": "^4.23.15"
