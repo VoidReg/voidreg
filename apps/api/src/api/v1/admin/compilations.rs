@@ -92,3 +92,27 @@ pub async fn refresh(
             .await?,
     ))
 }
+
+/// Private, uncached preview source for the site's `/preview/...` pages. The browser
+/// artifact is never trusted: the draft is compiled by the trusted compiler and cached by revision.
+#[get("/preview/{kind}/{slug}")]
+pub async fn preview(
+    config: web::Data<Config>,
+    db: web::Data<Db>,
+    session: AdminSession,
+    path: web::Path<(String, String)>,
+) -> Result<HttpResponse, AppError> {
+    session.validate(&db).await?;
+    let (kind, slug) = path.into_inner();
+    let result = publishing::preview(&config, &db, publishing::kind(&kind)?, &slug).await?;
+    let mut response = if result["state"] == "pending" {
+        let mut r = HttpResponse::Accepted();
+        r.insert_header(("Retry-After", "2"));
+        r
+    } else {
+        HttpResponse::Ok()
+    };
+    Ok(response
+        .insert_header(("Cache-Control", "private, no-store"))
+        .json(result))
+}

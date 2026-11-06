@@ -5,6 +5,7 @@ pub mod auth;
 pub mod blogs;
 pub mod comments;
 pub mod contact;
+pub mod graph;
 pub mod health;
 pub mod mcp;
 pub mod media;
@@ -20,6 +21,7 @@ pub fn configure(cfg: &mut ServiceConfig) {
     )
     .service(projects::list_projects)
     .service(projects::get_project)
+    .service(graph::graph)
     .service(blogs::list_blogs)
     .service(blogs::get_blog)
     .service(

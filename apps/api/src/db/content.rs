@@ -92,6 +92,58 @@ impl Db {
             .exec(&mut *db)
             .await?;
         }
+        Self::backfill_relations(&mut *db).await
+    }
+    /// One-time, idempotent: turn legacy `related_slugs` into stable `related_project_ids`.
+    async fn backfill_relations(db: &mut dyn toasty::Executor) -> Result<(), AppError> {
+        let rows =
+            models::ContentEntry::filter(models::ContentEntry::fields().kind().eq("project"))
+                .exec(&mut *db)
+                .await?;
+        for row in rows.into_iter().filter(|r| !r.deleted) {
+            let mut working: Value = serde_json::from_str(&row.working)?;
+            // Only entries that still carry legacy slugs need work; the slugs are cleared
+            // afterwards so clearing relations in the admin is never undone on restart.
+            if working["related_slugs"]
+                .as_array()
+                .is_none_or(|slugs| slugs.is_empty())
+            {
+                continue;
+            }
+            let mut ids = Vec::new();
+            for slug in working["related_slugs"].as_array().into_iter().flatten() {
+                let Some(slug) = slug.as_str() else { continue };
+                if let Some(alias) = models::ContentAlias::filter_by_name(format!("project:{slug}"))
+                    .first()
+                    .exec(&mut *db)
+                    .await?
+                    && alias.owner != row.id.to_string()
+                    && !ids.contains(&alias.owner)
+                {
+                    ids.push(alias.owner);
+                }
+            }
+            working["related_project_ids"] = json!(ids);
+            working["related_slugs"] = json!([]);
+            let published = row
+                .published
+                .as_deref()
+                .map(serde_json::from_str::<Value>)
+                .transpose()?
+                .map(|mut v| {
+                    v["related_project_ids"] = json!(ids);
+                    v["related_slugs"] = json!([]);
+                    v.to_string()
+                });
+            toasty::sql::query(
+                "UPDATE content_entries SET working = ?, published = ? WHERE id = ?",
+            )
+            .bind(working.to_string())
+            .bind_typed(published, toasty_core::schema::db::Type::Text)
+            .bind(row.id.as_bytes().to_vec())
+            .exec(&mut *db)
+            .await?;
+        }
         Ok(())
     }
     async fn entry(
@@ -110,6 +162,91 @@ impl Db {
             .await?
             .filter(|r| !r.deleted)
             .ok_or_else(|| AppError::NotFound("content not found".into()))
+    }
+    /// Fill the read-only `related` list and derived `related_slugs` from published projects.
+    pub async fn resolve_related(&self, value: &mut Value) -> Result<(), AppError> {
+        let ids: Vec<String> = value["related_project_ids"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|v| v.as_str().map(str::to_owned))
+            .collect();
+        if ids.is_empty() {
+            return Ok(());
+        }
+        let mut db = self.inner.lock().await;
+        let mut related = Vec::new();
+        for id in ids {
+            let Ok(uuid) = parse_uuid(&id) else { continue };
+            let Some(row) = models::ContentEntry::filter_by_id(uuid)
+                .first()
+                .exec(&mut *db)
+                .await?
+            else {
+                continue;
+            };
+            if row.kind != "project" || row.deleted || row.archived {
+                continue;
+            }
+            let Some(published) = row.published else {
+                continue;
+            };
+            let p: Value = serde_json::from_str(&published)?;
+            related.push(json!({
+                "id": p["id"], "slug": p["slug"], "title": p["title"],
+                "category": p["category"], "summary": p["summary"], "tags": p["tags"]
+            }));
+        }
+        value["related_slugs"] = Value::Array(related.iter().map(|r| r["slug"].clone()).collect());
+        value["related"] = Value::Array(related);
+        Ok(())
+    }
+    /// Normalizes and validates project relations; articles never carry them.
+    async fn check_related(
+        db: &mut dyn toasty::Executor,
+        kind: &str,
+        own_id: Option<&str>,
+        value: &mut Value,
+    ) -> Result<(), AppError> {
+        if kind != "project" {
+            value["related_project_ids"] = json!([]);
+            return Ok(());
+        }
+        let mut ids: Vec<String> = Vec::new();
+        for id in value["related_project_ids"]
+            .as_array()
+            .into_iter()
+            .flatten()
+        {
+            let id = id
+                .as_str()
+                .ok_or_else(|| AppError::Unprocessable("related project ids must be text".into()))?
+                .to_owned();
+            if !ids.contains(&id) {
+                ids.push(id);
+            }
+        }
+        if ids.len() > 20 {
+            return Err(AppError::Unprocessable("too many related projects".into()));
+        }
+        for id in &ids {
+            if own_id == Some(id.as_str()) {
+                return Err(AppError::Unprocessable(
+                    "a project cannot be related to itself".into(),
+                ));
+            }
+            let row = models::ContentEntry::filter_by_id(parse_uuid(id)?)
+                .first()
+                .exec(&mut *db)
+                .await?;
+            if row.is_none_or(|p| p.kind != "project" || p.deleted) {
+                return Err(AppError::Unprocessable(
+                    "related project does not exist".into(),
+                ));
+            }
+        }
+        value["related_project_ids"] = json!(ids);
+        Ok(())
     }
     pub async fn content_reserved(&self, kind: &str, slug: &str) -> Result<bool, AppError> {
         let mut db = self.inner.lock().await;
@@ -179,6 +316,7 @@ impl Db {
             return Err(AppError::Conflict("URL already reserved".into()));
         }
         validate_meta(&value)?;
+        Self::check_related(&mut db, kind, None, &mut value).await?;
         let id = uuid::Uuid::new_v4();
         value["id"] = json!(id.to_string());
         value["discussion_slug"] = json!(slug);
@@ -245,6 +383,7 @@ impl Db {
         value["updated_at"] = json!(now_rfc3339());
         value["has_unpublished_changes"] = json!(true);
         validate_meta(&value)?;
+        Self::check_related(&mut *db, kind, Some(&row.id.to_string()), &mut value).await?;
         let id = row.id;
         let revision = expected + 1;
         let working = value.to_string();
@@ -339,25 +478,35 @@ impl Db {
         let mut archived = row.archived;
         let mut deleted = false;
         if action == "delete" && kind == "project" {
-            for article in
-                models::ContentEntry::filter(models::ContentEntry::fields().kind().eq("article"))
-                    .exec(&mut db)
-                    .await?
-                    .into_iter()
-                    .filter(|a| !a.deleted)
-            {
-                for raw in [Some(article.working), article.published]
-                    .into_iter()
-                    .flatten()
+            let me = json!(row.id.to_string());
+            for (other_kind, field, message) in [
+                (
+                    "article",
+                    "project_ids",
+                    "unlink this project from articles before deleting it",
+                ),
+                (
+                    "project",
+                    "related_project_ids",
+                    "remove this project from other projects' related lists before deleting it",
+                ),
+            ] {
+                for other in models::ContentEntry::filter(
+                    models::ContentEntry::fields().kind().eq(other_kind),
+                )
+                .exec(&mut db)
+                .await?
+                .into_iter()
+                .filter(|a| !a.deleted && a.id != row.id)
                 {
-                    let linked: Value = serde_json::from_str(&raw)?;
-                    if linked["project_ids"]
-                        .as_array()
-                        .is_some_and(|ids| ids.contains(&json!(row.id.to_string())))
-                    {
-                        return Err(AppError::Conflict(
-                            "unlink this project from articles before deleting it".into(),
-                        ));
+                    for raw in [Some(other.working), other.published].into_iter().flatten() {
+                        let linked: Value = serde_json::from_str(&raw)?;
+                        if linked[field]
+                            .as_array()
+                            .is_some_and(|ids| ids.contains(&me))
+                        {
+                            return Err(AppError::Conflict(message.into()));
+                        }
                     }
                 }
             }
@@ -511,6 +660,12 @@ pub struct ContentQuery {
     pub status: Option<String>,
     pub featured: Option<bool>,
     pub project_id: Option<String>,
+    /// Project slug; resolved to an id so renamed projects keep their posts.
+    pub project: Option<String>,
+    /// Technology tag, case-insensitive exact match.
+    pub tag: Option<String>,
+    /// Category, case-insensitive exact match.
+    pub category: Option<String>,
     pub ids: Option<String>,
 }
 impl Db {
@@ -547,9 +702,31 @@ impl Db {
             conditions.push(format!("json_extract({column}, '$.featured') = ?"));
             args.push(featured.into());
         }
-        if let Some(id) = &query.project_id {
+        let mut project_id = query.project_id.clone();
+        if let Some(slug) = query.project.as_deref().filter(|s| !s.is_empty()) {
+            // An unknown slug matches nothing instead of being ignored.
+            project_id = Some(
+                match models::ContentAlias::filter_by_name(format!("project:{slug}"))
+                    .first()
+                    .exec(&mut *db)
+                    .await?
+                {
+                    Some(alias) => alias.owner,
+                    None => String::new(),
+                },
+            );
+        }
+        if let Some(id) = &project_id {
             conditions.push(format!("EXISTS (SELECT 1 FROM json_each(json_extract({column}, '$.project_ids')) WHERE value = ?)"));
             args.push(id.clone().into());
+        }
+        if let Some(tag) = query.tag.as_deref().filter(|t| !t.is_empty()) {
+            conditions.push(format!("EXISTS (SELECT 1 FROM json_each(json_extract({column}, '$.tags')) WHERE lower(value) = ?)"));
+            args.push(tag.to_lowercase().into());
+        }
+        if let Some(category) = query.category.as_deref().filter(|c| !c.is_empty()) {
+            conditions.push(format!("lower(json_extract({column}, '$.category')) = ?"));
+            args.push(category.to_lowercase().into());
         }
         if let Some(ids) = &query.ids {
             let ids: Vec<_> = ids.split(',').take(100).collect();
@@ -611,7 +788,95 @@ impl Db {
                 items.push(v);
             }
         }
+        Self::enrich_listing(&mut *db, kind, public, &mut items).await?;
         Ok(json!({"items":items,"page":page,"per_page":per_page,"total":total}))
+    }
+    /// Cheap, bounded enrichment so cards never need follow-up requests:
+    /// articles list their projects; projects carry post counts.
+    async fn enrich_listing(
+        db: &mut dyn toasty::Executor,
+        kind: &str,
+        public: bool,
+        items: &mut [Value],
+    ) -> Result<(), AppError> {
+        let visible = |row: &models::ContentEntry| {
+            !row.deleted && (!public || (row.published.is_some() && !row.archived))
+        };
+        let raw_of = |row: models::ContentEntry| {
+            if public {
+                row.published
+            } else {
+                Some(row.working)
+            }
+        };
+        if kind == "article" {
+            let mut lookup = std::collections::HashMap::<String, Value>::new();
+            for row in
+                models::ContentEntry::filter(models::ContentEntry::fields().kind().eq("project"))
+                    .exec(&mut *db)
+                    .await?
+                    .into_iter()
+                    .filter(visible)
+            {
+                if let Some(raw) = raw_of(row) {
+                    let p: Value = serde_json::from_str(&raw)?;
+                    if let Some(id) = p["id"].as_str() {
+                        lookup.insert(
+                            id.to_owned(),
+                            json!({"id": p["id"], "slug": p["slug"], "title": p["title"]}),
+                        );
+                    }
+                }
+            }
+            for item in items.iter_mut() {
+                let projects: Vec<Value> = item["project_ids"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|id| lookup.get(id.as_str()?).cloned())
+                    .collect();
+                item["projects"] = Value::Array(projects);
+            }
+        } else if kind == "project" {
+            let mut stats = std::collections::HashMap::<String, (i64, String)>::new();
+            for row in
+                models::ContentEntry::filter(models::ContentEntry::fields().kind().eq("article"))
+                    .exec(&mut *db)
+                    .await?
+                    .into_iter()
+                    .filter(visible)
+            {
+                let Some(raw) = raw_of(row) else { continue };
+                let a: Value = serde_json::from_str(&raw)?;
+                if !public && a["status"] != "published" {
+                    continue;
+                }
+                let date = a["published_at"].as_str().unwrap_or("").to_owned();
+                for id in a["project_ids"].as_array().into_iter().flatten() {
+                    if let Some(id) = id.as_str() {
+                        let entry = stats.entry(id.to_owned()).or_insert((0, String::new()));
+                        entry.0 += 1;
+                        if date > entry.1 {
+                            entry.1 = date.clone();
+                        }
+                    }
+                }
+            }
+            for item in items.iter_mut() {
+                let (count, latest) = item["id"]
+                    .as_str()
+                    .and_then(|id| stats.get(id))
+                    .cloned()
+                    .unwrap_or_default();
+                item["post_count"] = json!(count);
+                item["latest_post_at"] = if latest.is_empty() {
+                    Value::Null
+                } else {
+                    json!(latest)
+                };
+            }
+        }
+        Ok(())
     }
 }
 

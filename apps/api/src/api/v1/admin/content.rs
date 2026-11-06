@@ -29,6 +29,14 @@ pub async fn get_one(
     session.validate(&db).await?;
     Ok(HttpResponse::Ok().json(db.content_get("project", &slug, false).await?))
 }
+#[cfg_attr(feature="swagger", utoipa::path(get,path="/api/v1/admin/graph",tag="admin",responses((status=200,description="Graph of working copies, drafts included"))))]
+#[get("/graph")]
+pub async fn graph(db: web::Data<Db>, session: AdminSession) -> Result<HttpResponse, AppError> {
+    session.validate(&db).await?;
+    Ok(HttpResponse::Ok()
+        .insert_header(("Cache-Control", "private, no-store"))
+        .json(db.content_graph(false).await?))
+}
 fn merge_fields(value: &mut Value, input: &Value) {
     const FIELDS: &[&str] = &[
         "slug",
@@ -47,6 +55,7 @@ fn merge_fields(value: &mut Value, input: &Value) {
         "document",
         "compiled",
         "media_ids",
+        "related_project_ids",
         "pending_slug",
     ];
     if let Some(fields) = input.as_object() {
@@ -102,7 +111,7 @@ pub async fn create(
     input: web::Json<Value>,
 ) -> Result<HttpResponse, AppError> {
     session.validate(&db).await?;
-    let mut value = json!({"slug":format!("project-{}",uuid::Uuid::new_v4()),"title":"Untitled project","category":"","summary":"","tags":[],"sections":[],"hero":null,"related_slugs":[],"repo_url":null,"has_detail_page":true,"featured":false,"sort_order":0,"document":{"schemaVersion":1,"metadata":{"language":"en"},"blocks":[]},"compiled":null});
+    let mut value = json!({"slug":format!("project-{}",uuid::Uuid::new_v4()),"title":"Untitled project","category":"","summary":"","tags":[],"sections":[],"hero":null,"related_slugs":[],"related_project_ids":[],"repo_url":null,"has_detail_page":true,"featured":false,"sort_order":0,"document":{"schemaVersion":1,"metadata":{"language":"en"},"blocks":[]},"compiled":null});
     merge_fields(&mut value, &input);
     value["status"] = json!("draft");
     validate(&value)?;

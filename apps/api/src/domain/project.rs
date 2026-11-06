@@ -15,6 +15,18 @@ pub struct MediaPlaceholder {
     pub text: String,
 }
 
+/// A published project referenced from another project. Resolved on read.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "swagger", derive(utoipa::ToSchema))]
+pub struct RelatedProject {
+    pub id: String,
+    pub slug: String,
+    pub title: String,
+    pub category: String,
+    pub summary: String,
+    pub tags: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "swagger", derive(utoipa::ToSchema))]
 pub struct Project {
@@ -39,6 +51,9 @@ pub struct Project {
     pub sections: Vec<ContentSection>,
     pub hero: Option<MediaPlaceholder>,
     pub related_slugs: Vec<String>,
+    /// Resolved published related projects. Never stored; filled on public reads.
+    #[serde(default)]
+    pub related: Vec<RelatedProject>,
     pub repo_url: Option<String>,
 }
 
@@ -56,6 +71,7 @@ impl Project {
             sections: Vec::new(),
             hero: None,
             related_slugs: Vec::new(),
+            related: Vec::new(),
             repo_url: None,
             ..self.clone()
         }

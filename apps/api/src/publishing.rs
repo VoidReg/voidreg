@@ -210,3 +210,59 @@ pub async fn verified_publication(
     crate::domain::document::validate_compiled(&job["artifact"].to_string())?;
     Ok(job["artifact"].clone())
 }
+
+static PREVIEW_CACHE: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashMap<(String, i64), Value>>,
+> = std::sync::LazyLock::new(Default::default);
+const PREVIEW_CACHE_LIMIT: usize = 64;
+const PREVIEW_POLL_ATTEMPTS: usize = 40;
+
+/// Compiles the saved working copy with the trusted compiler for the private site preview.
+/// Results are cached per `(id, revision)`, so every save naturally invalidates the cache.
+/// Returns `{state: "ready", item, diagnostics}`, `{state: "failed", diagnostics}` or
+/// `{state: "pending"}` when the compiler is slow; nothing here can publish content.
+pub async fn preview(config: &Config, db: &Db, kind: &str, slug: &str) -> Result<Value, AppError> {
+    let mut item = db.content_get(kind, slug, false).await?;
+    let revision = item["revision"].as_i64().unwrap_or(0);
+    let key = (item["id"].as_str().unwrap_or("").to_owned(), revision);
+    let cached = PREVIEW_CACHE.lock().ok().and_then(|c| c.get(&key).cloned());
+    let (artifact, diagnostics) = if let Some(artifact) = cached {
+        (artifact, json!([]))
+    } else {
+        let started = start(config, db, kind, slug, revision, false).await?;
+        let id = started["id"].as_str().unwrap_or_default().to_owned();
+        valid_id(&id)?;
+        // The start response is only a receipt; always read the job itself.
+        let mut job = request(config, &format!("/jobs/{id}"), None).await?;
+        for _ in 0..PREVIEW_POLL_ATTEMPTS {
+            if job["state"] == "ready" || job["state"] == "failed" {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+            job = request(config, &format!("/jobs/{id}"), None).await?;
+        }
+        match job["state"].as_str() {
+            Some("ready") => {
+                private_preview(&mut job);
+                let artifact = job["artifact"].clone();
+                crate::domain::document::validate_compiled(&artifact.to_string())?;
+                let has_errors = job["diagnostics"]
+                    .as_array()
+                    .is_some_and(|d| d.iter().any(|d| d["level"] == "error"));
+                if !has_errors && let Ok(mut cache) = PREVIEW_CACHE.lock() {
+                    if cache.len() >= PREVIEW_CACHE_LIMIT {
+                        cache.clear();
+                    }
+                    cache.insert(key, artifact.clone());
+                }
+                (artifact, job["diagnostics"].clone())
+            }
+            Some("failed") => {
+                return Ok(json!({"state": "failed", "diagnostics": job["diagnostics"]}));
+            }
+            _ => return Ok(json!({"state": "pending"})),
+        }
+    };
+    item["compiled"] = artifact;
+    Ok(json!({"state": "ready", "item": item, "diagnostics": diagnostics}))
+}

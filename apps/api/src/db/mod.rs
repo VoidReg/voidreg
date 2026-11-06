@@ -9,6 +9,7 @@ use crate::error::AppError;
 use crate::util::{now_rfc3339, sha256_hex};
 
 pub mod content;
+pub mod graph;
 mod media;
 mod models;
 pub mod moderation;
@@ -146,9 +147,9 @@ impl Db {
             .collect()
     }
     pub async fn get_project(&self, slug: &str) -> Result<Project, AppError> {
-        Ok(serde_json::from_value(
-            self.content_get("project", slug, true).await?,
-        )?)
+        let mut value = self.content_get("project", slug, true).await?;
+        self.resolve_related(&mut value).await?;
+        Ok(serde_json::from_value(value)?)
     }
     pub async fn list_published_articles(
         &self,
@@ -855,6 +856,7 @@ fn project_from_row(row: models::Project) -> Result<Project, AppError> {
             .map(|value| serde_json::from_str::<MediaPlaceholder>(&value))
             .transpose()?,
         related_slugs: serde_json::from_str(&row.related_slugs)?,
+        related: Vec::new(),
         repo_url: row.repo_url,
     })
 }

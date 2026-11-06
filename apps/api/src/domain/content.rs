@@ -10,6 +10,8 @@ pub struct ContentMeta {
     pub has_unpublished_changes: bool,
     pub pending_slug: Option<String>,
     pub project_ids: Vec<String>,
+    /// Projects explicitly related to this project (by id, so slug renames never break them).
+    pub related_project_ids: Vec<String>,
     pub media_ids: Vec<String>,
     pub seo_title: String,
     pub seo_description: String,
