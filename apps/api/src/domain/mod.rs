@@ -23,4 +23,4 @@ pub use newsletter::{NewsletterRequest, NewsletterResponse};
 pub use project::{ContentSection, MediaPlaceholder, Project, ProjectListResponse, RelatedProject};
 
 pub mod content;
-pub use content::ContentMeta;
+pub use content::{ContentMeta, normalize_tags};

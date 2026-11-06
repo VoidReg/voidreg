@@ -19,6 +19,7 @@ async fn database() -> Db {
             title: slug.into(),
             category: "Systems".into(),
             summary: "Summary".into(),
+            tags: vec![],
             status: "published".into(),
             featured: false,
             sort_order: 0,

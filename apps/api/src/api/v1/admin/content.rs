@@ -66,6 +66,21 @@ fn merge_fields(value: &mut Value, input: &Value) {
         }
     }
 }
+fn normalize_project_tags(value: &mut Value) -> Result<(), AppError> {
+    let items = value["tags"]
+        .as_array()
+        .ok_or_else(|| AppError::Unprocessable("tags must be a list of text".into()))?;
+    let raw = items
+        .iter()
+        .map(|t| {
+            t.as_str()
+                .map(str::to_owned)
+                .ok_or_else(|| AppError::Unprocessable("tags must be a list of text".into()))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    value["tags"] = json!(crate::domain::normalize_tags(raw)?);
+    Ok(())
+}
 fn validate(value: &Value) -> Result<(), AppError> {
     let _: crate::domain::Project = serde_json::from_value(value.clone())
         .map_err(|e| AppError::Unprocessable(format!("invalid project fields: {e}")))?;
@@ -113,6 +128,7 @@ pub async fn create(
     session.validate(&db).await?;
     let mut value = json!({"slug":format!("project-{}",uuid::Uuid::new_v4()),"title":"Untitled project","category":"","summary":"","tags":[],"sections":[],"hero":null,"related_slugs":[],"related_project_ids":[],"repo_url":null,"has_detail_page":true,"featured":false,"sort_order":0,"document":{"schemaVersion":1,"metadata":{"language":"en"},"blocks":[]},"compiled":null});
     merge_fields(&mut value, &input);
+    normalize_project_tags(&mut value)?;
     value["status"] = json!("draft");
     validate(&value)?;
     Ok(HttpResponse::Created().json(db.content_create("project", value).await?))
@@ -134,6 +150,7 @@ pub async fn update(
         current["compiled"] = Value::Null;
     }
     merge_fields(&mut current, &input);
+    normalize_project_tags(&mut current)?;
     validate(&current)?;
     if current["slug"] != *slug {
         current["pending_slug"] = current["slug"].clone();

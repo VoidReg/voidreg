@@ -52,6 +52,8 @@ pub struct ArticleWriteRequest {
     #[serde(default)]
     pub summary: Option<String>,
     #[serde(default)]
+    pub tags: Option<Vec<String>>,
+    #[serde(default)]
     pub featured: Option<bool>,
     #[serde(default)]
     pub sort_order: Option<i64>,

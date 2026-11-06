@@ -11,6 +11,7 @@ impl ArticleFields {
             title: self.title,
             category: self.category,
             summary: self.summary,
+            tags: self.tags,
             status: ArticleStatus::parse(&self.status).map_err(AppError::Internal)?,
             featured: self.featured,
             sort_order: self.sort_order,

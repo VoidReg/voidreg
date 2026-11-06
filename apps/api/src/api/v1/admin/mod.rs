@@ -9,6 +9,7 @@ pub mod media;
 pub mod moderation;
 pub mod revisions;
 pub mod session;
+pub mod tags;
 
 pub fn configure(cfg: &mut ServiceConfig) {
     cfg.service(compilations::start)
@@ -43,6 +44,7 @@ pub fn configure(cfg: &mut ServiceConfig) {
         .service(revisions::show)
         .service(revisions::restore)
         .service(content::graph)
+        .service(tags::list)
         .service(content::list)
         .service(content::get_one)
         .service(content::create)

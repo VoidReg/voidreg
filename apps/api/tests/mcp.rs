@@ -257,6 +257,7 @@ async fn conditional_write_prevents_publish_races_and_requires_draft_status() {
         title: "Original".into(),
         category: "Systems".into(),
         summary: "Summary".into(),
+        tags: vec![],
         status: "draft".into(),
         featured: false,
         sort_order: 0,

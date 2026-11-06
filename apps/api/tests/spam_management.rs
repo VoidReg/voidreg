@@ -36,6 +36,7 @@ async fn fixture() -> Db {
         title: "Discussion".into(),
         category: "Systems".into(),
         summary: "A test discussion".into(),
+        tags: vec![],
         status: "published".into(),
         featured: false,
         sort_order: 0,

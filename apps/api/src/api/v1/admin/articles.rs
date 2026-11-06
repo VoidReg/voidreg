@@ -85,6 +85,7 @@ pub(crate) async fn create(db: &Db, input: ArticleWriteRequest) -> Result<HttpRe
         title,
         category,
         summary,
+        tags: crate::domain::normalize_tags(input.tags.as_deref().unwrap_or_default())?,
         status: crate::domain::ArticleStatus::Draft.as_str().to_owned(),
         featured: input.featured.unwrap_or(false),
         sort_order: input.sort_order.unwrap_or(0),
@@ -180,6 +181,9 @@ pub(crate) async fn update(
     }
     if let Some(summary) = &input.summary {
         current_fields.summary = draft_text(summary, "summary", MAX_SUMMARY_LEN)?;
+    }
+    if let Some(tags) = &input.tags {
+        current_fields.tags = crate::domain::normalize_tags(tags)?;
     }
     if let Some(featured) = input.featured {
         current_fields.featured = featured;
@@ -383,6 +387,7 @@ fn article_fields(article: Article) -> Result<ArticleFields, AppError> {
         title: article.title,
         category: article.category,
         summary: article.summary,
+        tags: article.tags,
         status: article.status.as_str().to_owned(),
         featured: article.featured,
         sort_order: article.sort_order,

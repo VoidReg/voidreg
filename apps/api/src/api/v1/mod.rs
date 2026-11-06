@@ -12,6 +12,7 @@ pub mod media;
 pub mod newsletter;
 pub mod projects;
 pub mod sitemap;
+pub mod tags;
 
 pub fn configure(cfg: &mut ServiceConfig) {
     cfg.service(
@@ -22,6 +23,7 @@ pub fn configure(cfg: &mut ServiceConfig) {
     .service(projects::list_projects)
     .service(projects::get_project)
     .service(graph::graph)
+    .service(tags::tags)
     .service(blogs::list_blogs)
     .service(blogs::get_blog)
     .service(

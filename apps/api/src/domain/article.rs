@@ -37,6 +37,9 @@ pub struct Article {
     pub title: String,
     pub category: String,
     pub summary: String,
+    /// Free-form tags shared with project technologies.
+    #[serde(default)]
+    pub tags: Vec<String>,
     pub status: ArticleStatus,
     pub featured: bool,
     pub sort_order: i64,

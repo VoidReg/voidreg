@@ -15,6 +15,7 @@ mod media;
 mod models;
 pub mod moderation;
 mod seed;
+mod tags;
 
 #[derive(Clone)]
 pub struct Db {
@@ -30,6 +31,7 @@ pub struct ArticleFields {
     pub title: String,
     pub category: String,
     pub summary: String,
+    pub tags: Vec<String>,
     pub status: String,
     pub featured: bool,
     pub sort_order: i64,
@@ -662,6 +664,8 @@ pub fn compute_content_hash(fields: &ArticleFields) -> String {
     input.push('\u{1f}');
     input.push_str(fields.summary.as_str());
     input.push('\u{1f}');
+    input.push_str(&fields.tags.join("\u{1e}"));
+    input.push('\u{1f}');
     input.push_str(if fields.featured { "featured" } else { "plain" });
     input.push('\u{1f}');
     input.push_str(&fields.published_at.clone().unwrap_or_default());
@@ -884,6 +888,7 @@ fn article_from_row(row: models::Article) -> Result<Article, AppError> {
         title: row.title,
         category: row.category,
         summary: row.summary,
+        tags: Vec::new(),
         status: ArticleStatus::parse(&row.status).map_err(AppError::Internal)?,
         featured: row.featured,
         sort_order: row.sort_order,

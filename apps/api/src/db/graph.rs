@@ -56,7 +56,7 @@ pub fn build_graph(projects: Vec<Value>, articles: Vec<Value>, include_drafts: b
     for a in &articles {
         nodes.push(json!({
             "id": a["id"], "kind": "post", "slug": a["slug"], "title": a["title"],
-            "category": a["category"], "tags": [], "published_at": a["published_at"],
+            "category": a["category"], "tags": a.get("tags").cloned().unwrap_or(json!([])), "published_at": a["published_at"],
             "draft": a["status"] != "published",
             "changed": include_drafts && a["has_unpublished_changes"] == true,
         }));
