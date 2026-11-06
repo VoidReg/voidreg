@@ -4,23 +4,11 @@
   import ArticleCard from '$lib/publishing/ArticleCard.svelte';
   import { resolve } from '$app/paths';
   import Seo from '$lib/Seo.svelte';
+  import PostFilters from '$lib/components/PostFilters.svelte';
+  import { filterHref } from '$lib/filters';
   let { data } = $props();
   const result = $derived(data.result);
-  const active = $derived(data.active);
-  const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
-  const tagHref = (tag: string) => {
-    const params = [];
-    if (data.project) params.push('project=' + encodeURIComponent(data.project));
-    if (tag) params.push('tag=' + encodeURIComponent(tag));
-    return (params.length ? `/blog?${params.join('&')}` : '/blog') as '/blog';
-  };
-  const href = (page: number) => {
-    const params = [];
-    if (data.project) params.push('project=' + encodeURIComponent(data.project));
-    if (data.tag) params.push('tag=' + encodeURIComponent(data.tag));
-    if (page > 1) params.push('page=' + page);
-    return params.length ? `/blog?${params.join('&')}` : '/blog';
-  };
+  const href = (page: number) => filterHref('/blog', { ...data.filters, page });
 </script>
 
 <Seo title="Blog | Voidreg" description={copy.blogDescription} />
@@ -33,49 +21,15 @@
     <h1 class="display-heading">{copy.blogTitle}</h1>
     <p class="lead">{copy.blogIntro}</p>
   </header>
-  {#if data.filters.length}<nav aria-label="Filter posts by project">
-      <ul class="chip-row">
-        <li>
-          <a class="chip" href={resolve('/blog')} aria-current={data.project ? undefined : 'true'}
-            >All posts</a
-          >
-        </li>
-        {#each data.filters as filter (filter.slug)}<li>
-            <a
-              class="chip"
-              href={resolve(`/blog?project=${encodeURIComponent(filter.slug)}`)}
-              aria-current={data.project === filter.slug ? 'true' : undefined}
-              >{filter.title} <span class="chip-count">{filter.post_count}</span></a
-            >
-          </li>{/each}
-      </ul>
-    </nav>{/if}
-  {#if data.tags.length || data.tag}<nav aria-label="Filter posts by tag">
-      <p class="filter-label">Tag</p>
-      <ul class="chip-row">
-        <li>
-          <a class="chip" href={resolve(tagHref(''))} aria-current={data.tag ? undefined : 'true'}
-            >All</a
-          >
-        </li>
-        {#each data.tags as tag (tag.name)}<li>
-            <a
-              class="chip"
-              href={resolve(tagHref(tag.name))}
-              aria-current={same(data.tag, tag.name) ? 'true' : undefined}
-              >{tag.name} <span class="chip-count">{tag.count}</span></a
-            >
-          </li>{/each}
-        {#if data.tag && !data.tags.some((t) => same(t.name, data.tag))}<li>
-            <a class="chip" href={resolve(tagHref(data.tag))} aria-current="true">{data.tag}</a>
-          </li>{/if}
-      </ul>
-    </nav>{/if}
-  {#if data.project || data.tag}<p class="filter-status" role="status">
-      {#if data.project}{#if active}Posts following {active.title}.{:else}No project matches this
-          filter.{/if}{/if}
-      {#if data.tag}{result.total}
-        {result.total === 1 ? 'post is' : 'posts are'} tagged {data.tag}.{/if}
+  <PostFilters
+    filters={data.filters}
+    projectTitle={data.project?.title ?? ''}
+    topics={data.topics}
+    seeds={data.seeds}
+    total={result.total}
+  />
+  {#if data.filters.project && !data.project}<p class="filter-status" role="status">
+      No project matches "{data.filters.project}".
       <a class="text-link" href={resolve('/blog')}>Clear filters</a>
     </p>{/if}
   {#if result.items.length === 0}<EmptyContent kind="articles" heading="h2" />
