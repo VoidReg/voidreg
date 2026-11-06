@@ -50,7 +50,7 @@ pub fn build_graph(projects: Vec<Value>, articles: Vec<Value>, include_drafts: b
             "id": p["id"], "kind": "project", "slug": p["slug"], "title": p["title"],
             "category": p["category"], "tags": p["tags"], "published_at": p["published_at"],
             "draft": p["status"] != "published",
-            "changed": p["has_unpublished_changes"] == true,
+            "changed": include_drafts && p["has_unpublished_changes"] == true,
         }));
     }
     for a in &articles {
@@ -58,7 +58,7 @@ pub fn build_graph(projects: Vec<Value>, articles: Vec<Value>, include_drafts: b
             "id": a["id"], "kind": "post", "slug": a["slug"], "title": a["title"],
             "category": a["category"], "tags": [], "published_at": a["published_at"],
             "draft": a["status"] != "published",
-            "changed": a["has_unpublished_changes"] == true,
+            "changed": include_drafts && a["has_unpublished_changes"] == true,
         }));
     }
 

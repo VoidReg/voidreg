@@ -195,7 +195,7 @@ async fn listings_are_enriched_and_filterable() {
 
 #[actix_web::test]
 async fn graph_edges_are_symmetric_deduplicated_and_never_leak_drafts() {
-    let p = |id: &str, tags: Value, related: Value, status: &str| json!({"id":id,"slug":id,"title":id,"category":"c","tags":tags,"status":status,"archived":false,"sort_order":0,"related_project_ids":related});
+    let p = |id: &str, tags: Value, related: Value, status: &str| json!({"id":id,"slug":id,"title":id,"category":"c","tags":tags,"status":status,"archived":false,"sort_order":0,"related_project_ids":related,"has_unpublished_changes":true});
     let projects = vec![
         p("a", json!(["Rust", "DSP"]), json!(["b"]), "published"),
         p("b", json!(["rust"]), json!(["a"]), "published"),
@@ -216,6 +216,14 @@ async fn graph_edges_are_symmetric_deduplicated_and_never_leak_drafts() {
         .map(|n| n["id"].as_str().unwrap())
         .collect();
     assert_eq!(ids, ["a", "b", "c", "p1"], "drafts excluded");
+    assert!(
+        public["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|n| n["changed"] == false),
+        "the public graph never reveals unpublished edits"
+    );
     let edges = public["edges"].as_array().unwrap();
     let kinds = |k: &str| edges.iter().filter(|e| e["kind"] == k).count();
     assert_eq!(
@@ -247,7 +255,7 @@ async fn graph_edges_are_symmetric_deduplicated_and_never_leak_drafts() {
             .as_array()
             .unwrap()
             .iter()
-            .any(|n| n["id"] == "d" && n["draft"] == true)
+            .any(|n| n["id"] == "d" && n["draft"] == true && n["changed"] == true)
     );
 }
 
