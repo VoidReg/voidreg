@@ -92,6 +92,7 @@
                 {#each section.items as article (article.slug)}<ArticleCard
                     {article}
                     heading="h4"
+                    hideTopic
                   />{/each}
               </div>
               {#if live && section.topic.post_count > section.items.length}<p>

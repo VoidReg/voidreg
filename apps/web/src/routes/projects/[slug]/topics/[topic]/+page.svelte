@@ -65,7 +65,7 @@
   {#if result.items.length === 0}<EmptyContent kind="articles" heading="h2" />
   {:else}
     <section class="note-list" aria-label="Posts in this topic">
-      {#each result.items as article (article.slug)}<ArticleCard {article} />{/each}
+      {#each result.items as article (article.slug)}<ArticleCard {article} hideTopic />{/each}
     </section>
     <nav class="button-row" aria-label="Topic pages">
       {#if result.page > 1}<a

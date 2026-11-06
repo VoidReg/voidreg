@@ -19,6 +19,12 @@ const reader = [
   ['post-long', '/blog/revision-history-in-practice'],
   ['project', '/projects/test-signal-lab'],
   ['blog-tag', '/blog?tag=test'],
+  ['blog-filtered', '/blog?project=test-signal-lab&topic=bench-circuits&tag=test'],
+  ['blog-search', '/blog?q=bench'],
+  ['post-topic', '/blog/test-bench-notes'],
+  ['project-other-posts', '/projects/test-revision-vault'],
+  ['topic', '/projects/test-signal-lab/topics/bench-circuits'],
+  ['projects-search', '/projects?q=signal'],
   ['map', '/map'],
   ['map-focus', '/map?focus=test-signal-lab']
 ];
@@ -30,7 +36,11 @@ if (scale)
   reader.push(
     ['map-scale', '/map'],
     ['map-scale-focus', '/map?focus=scale-project-0012'],
-    ['map-scale-filter', '/map?category=Category%2003&tag=rust']
+    ['map-scale-filter', '/map?category=Category%2003&tag=rust'],
+    // A big project with topics, its filtered post list and one topic page.
+    ['project-scale-big', '/projects/scale-project-0000'],
+    ['blog-scale-filtered', '/blog?project=scale-project-0000&topic=scale-topic-02'],
+    ['topic-scale', '/projects/scale-project-0000/topics/scale-topic-02']
   );
 const admin = [
   ['preview-map', '/preview/map'],
@@ -41,6 +51,12 @@ const admin = [
     '/admin/?article=revision-history-in-practice&panel=settings&inspector=history'
   ],
   ['admin-editor-settings', '/admin/?article=publisle-feature-test&panel=settings'],
+  ['admin-post-topic', '/admin/?article=test-bench-notes&panel=settings'],
+  ['admin-project-topics', '/admin/?project=test-signal-lab&panel=settings'],
+  [
+    'admin-articles-filtered',
+    '/admin/?tab=articles&in_project=test-signal-lab&in_topic=bench-circuits'
+  ],
   ['admin-editor-live', '/admin/?article=publisle-feature-test&panel=preview'],
   ['admin-media', '/admin/?tab=media'],
   ['admin-comments', '/admin/?tab=comments'],
