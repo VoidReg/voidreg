@@ -47,3 +47,13 @@ test('URL updates encode values and retain moderation filters', () => {
   assert.equal(next.searchParams.get('m_source'), 'source-id');
   assert.equal(next.pathname, '/admin/');
 });
+test('sort, direction and page size come from the URL and reject unknown values', () => {
+  const route = adminRoute(url('?tab=projects&sort=title&dir=desc&per_page=50'));
+  assert.equal(route.sort, 'title');
+  assert.equal(route.dir, 'desc');
+  assert.equal(route.perPage, 50);
+  const bad = adminRoute(url('?sort=password&dir=sideways&per_page=7'));
+  assert.equal(bad.sort, '');
+  assert.equal(bad.dir, 'asc');
+  assert.equal(bad.perPage, 20);
+});

@@ -6,6 +6,11 @@ export class ApiError extends Error {
     super(message);
   }
 }
+let onUnauthorized: (() => void) | undefined;
+/** Called once per 401 so the shell can show the sign-in screen without each caller handling it. */
+export function setUnauthorizedHandler(handler: (() => void) | undefined) {
+  onUnauthorized = handler;
+}
 export async function adminRequest<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
   const csrf = document.cookie
     .split('; ')
@@ -25,6 +30,8 @@ export async function adminRequest<T>(path: string, method = 'GET', body?: unkno
   });
   if (!response.ok) {
     const data = await response.json().catch(() => null);
+    if (response.status === 401 && path !== '/session' && path !== '/login-options')
+      onUnauthorized?.();
     throw new ApiError(
       data?.error?.message ?? 'Request failed. Please try again.',
       response.status

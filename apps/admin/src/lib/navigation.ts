@@ -23,6 +23,11 @@ export function adminRoute(url: UrlLike) {
     page: Math.max(1, Math.min(1000000, Number(p.get('page')) || 1)) | 0,
     query: p.get('q') ?? '',
     status: p.get('status') ?? '',
+    sort: (['title', 'category', 'status', 'date'].includes(p.get('sort') ?? '')
+      ? p.get('sort')
+      : '') as '' | 'title' | 'category' | 'status' | 'date',
+    dir: p.get('dir') === 'desc' ? ('desc' as const) : ('asc' as const),
+    perPage: [10, 20, 50, 100].includes(Number(p.get('per_page'))) ? Number(p.get('per_page')) : 20,
     mode: p.get('mode') === 'preview' ? ('preview' as const) : ('write' as const),
     panel:
       p.get('panel') === 'settings'

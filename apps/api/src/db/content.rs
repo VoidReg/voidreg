@@ -680,6 +680,10 @@ pub struct ContentQuery {
     /// Category, case-insensitive exact match.
     pub category: Option<String>,
     pub ids: Option<String>,
+    /// Admin only: `title`, `category`, `status` or `date`. Anything else keeps the default order.
+    pub sort: Option<String>,
+    /// `desc` reverses the admin sort; any other value is ascending.
+    pub dir: Option<String>,
 }
 impl Db {
     pub async fn content_page(
@@ -774,10 +778,30 @@ impl Db {
         } else {
             page.min(((total + per_page - 1) / per_page).max(1))
         };
-        let order = if kind == "article" {
-            "public_date DESC, public_order ASC, name ASC"
+        let dir = if query.dir.as_deref() == Some("desc") {
+            "DESC"
         } else {
-            "public_order ASC, name ASC"
+            "ASC"
+        };
+        let chosen = if public {
+            None
+        } else {
+            match query.sort.as_deref() {
+                Some("title") => Some(format!("lower(json_extract({column}, '$.title')) {dir}")),
+                Some("category") => {
+                    Some(format!("lower(json_extract({column}, '$.category')) {dir}"))
+                }
+                Some("status") => Some(format!(
+                    "archived {dir}, json_extract({column}, '$.status') {dir}"
+                )),
+                Some("date") => Some(format!("public_date {dir}")),
+                _ => None,
+            }
+        };
+        let order = match chosen {
+            Some(order) => format!("{order}, name ASC"),
+            None if kind == "article" => "public_date DESC, public_order ASC, name ASC".to_owned(),
+            None => "public_order ASC, name ASC".to_owned(),
         };
         let mut select = toasty::sql::query(format!(
             "SELECT json_remove({column}, '$.document', '$.compiled', '$.sections') FROM content_entries WHERE {clause} ORDER BY {order} LIMIT ? OFFSET ?"
