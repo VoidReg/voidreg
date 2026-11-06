@@ -8,7 +8,7 @@ import { deflateSync } from 'node:zlib';
 import { sampleSchematic } from '@voidreg/publishing-ui/schematic/sample';
 import { extensions } from '../src/blocks';
 
-import { call, signIn, PASSWORD, type Json } from './admin-client';
+import { ApiFailure, call, signIn, PASSWORD, type Json } from './admin-client';
 
 // ---------------------------------------------------------------------------
 // Document helpers
@@ -556,6 +556,32 @@ async function upsert(kind: Kind, slug: string, fields: Json, publish: boolean):
   return stored;
 }
 
+async function ensureTopic(
+  projectId: string,
+  slug: string,
+  title: string,
+  summary: string,
+  sort: number
+) {
+  if (!projectId) return '';
+  try {
+    const found = await call<Stored>('GET', `/topics/${projectId}/${slug}`);
+    console.log(`unchanged topics/${slug}`);
+    return found.id ?? '';
+  } catch (error) {
+    if (!(error instanceof ApiFailure && error.status === 404)) throw error;
+  }
+  const created = await call<Stored>('POST', '/topics', {
+    project_id: projectId,
+    slug,
+    title,
+    summary,
+    sort_order: sort
+  });
+  console.log(`created topics/${slug}`);
+  return created.id ?? '';
+}
+
 async function main() {
   if (!PASSWORD) throw new Error('Set ADMIN_PASSWORD');
   await signIn();
@@ -611,7 +637,31 @@ async function main() {
   );
   const betaId = beta.id ?? beta.meta?.id ?? '';
 
-  const meta = (ids: string[]) => ({ project_ids: ids });
+  const benchTopic = await ensureTopic(
+    alphaId,
+    'bench-circuits',
+    'Bench circuits',
+    'Interactive circuits and measurements from the bench.',
+    10
+  );
+  const diagramTopic = await ensureTopic(
+    alphaId,
+    'diagrams',
+    'Diagrams',
+    'Diagram engines and schematic rendering.',
+    20
+  );
+  const historyTopic = await ensureTopic(
+    betaId,
+    'history',
+    'History and restore',
+    'How revisions, diffs and restore behave.',
+    10
+  );
+  const meta = (ids: string[], topic = '') => ({
+    project_ids: ids,
+    topic_id: topic || null
+  });
   await upsert(
     'articles',
     'publisle-feature-test',
@@ -620,7 +670,7 @@ async function main() {
       category: 'Test',
       summary: 'Every block type, diagram engine and interactive schematic in one article.',
       tags: ['Test', 'Publisle', 'Diagrams'],
-      meta: meta(alphaId ? [alphaId] : []),
+      meta: meta(alphaId ? [alphaId] : [], diagramTopic),
       document: kitchenSink(figure),
       featured: true
     },
@@ -634,8 +684,38 @@ async function main() {
       category: 'Test',
       summary: 'A long article for reading width, wrapping and history.',
       tags: ['Test', 'History'],
-      meta: meta(betaId ? [betaId] : []),
+      meta: meta(betaId ? [betaId] : [], historyTopic),
       document: longPost()
+    },
+    true
+  );
+  await upsert(
+    'articles',
+    'test-bench-notes',
+    {
+      title: 'Bench notes',
+      category: 'Test',
+      summary: 'A short post filed under a topic.',
+      tags: ['Test', 'Bench'],
+      meta: meta(alphaId ? [alphaId] : [], benchTopic),
+      document: document('Bench notes', [
+        paragraph(text('A short post that sits under the Bench circuits topic.'))
+      ])
+    },
+    true
+  );
+  await upsert(
+    'articles',
+    'test-signal-lab-misc',
+    {
+      title: 'Signal Lab odds and ends',
+      category: 'Test',
+      summary: 'A project post with no topic, listed under Other posts.',
+      tags: ['Test'],
+      meta: meta(alphaId ? [alphaId] : []),
+      document: document('Signal Lab odds and ends', [
+        paragraph(text('This post follows the project but is not filed under any topic.'))
+      ])
     },
     true
   );

@@ -4,17 +4,22 @@
 //
 //   SEED_ORIGIN=http://127.0.0.1:5174 ADMIN_PASSWORD=... pnpm --filter @voidreg/authoring seed:scale
 //   SEED_PROJECTS=1000 SEED_POSTS=5000 SEED_CATEGORIES=12 SEED_CONCURRENCY=8 (defaults shown)
-//   SEED_CLEAN=1 removes everything this script created (posts first, then projects)
+//   SEED_BIG_PROJECTS=10 SEED_TOPICS=8: the first projects are "big" and get topics, and about a
+//   quarter of all posts are filed under them, so topic sections and filters can be checked.
+//   SEED_CLEAN=1 removes everything this script created (posts, topics, then projects)
 import { ApiFailure, call, signIn, PASSWORD, type Json } from './admin-client';
 
 const PROJECTS = Number(process.env.SEED_PROJECTS ?? 1000);
 const POSTS = Number(process.env.SEED_POSTS ?? 5000);
 const CATEGORIES = Number(process.env.SEED_CATEGORIES ?? 12);
 const CONCURRENCY = Number(process.env.SEED_CONCURRENCY ?? 8);
+const BIG = Math.min(Number(process.env.SEED_BIG_PROJECTS ?? 10), PROJECTS);
+const TOPICS = Number(process.env.SEED_TOPICS ?? 8);
 const CLEAN = process.env.SEED_CLEAN === '1';
 const pad = (n: number, width: number) => String(n).padStart(width, '0');
 const projectSlug = (i: number) => `scale-project-${pad(i, 4)}`;
 const postSlug = (i: number) => `scale-post-${pad(i, 5)}`;
+const topicSlug = (t: number) => `scale-topic-${pad(t, 2)}`;
 const TAGS = ['scale', 'rust', 'svelte', 'dsp', 'graphics', 'embedded', 'web', 'tooling'];
 
 const documentOf = (title: string, seed: number) => ({
@@ -82,11 +87,47 @@ async function ensure(kind: 'projects' | 'articles', slug: string, fields: Json)
   return stored;
 }
 
+async function ensureTopic(projectId: string, t: number): Promise<string> {
+  const slug = topicSlug(t);
+  try {
+    return (await call<Stored>('GET', `/topics/${projectId}/${slug}`)).id ?? '';
+  } catch (error) {
+    if (!(error instanceof ApiFailure && error.status === 404)) throw error;
+  }
+  const created = await call<Stored>('POST', '/topics', {
+    project_id: projectId,
+    slug,
+    title: `Scale topic ${pad(t, 2)}`,
+    summary: `Generated topic ${t} for scale testing.`,
+    sort_order: (t + 1) * 10
+  });
+  return created.id ?? '';
+}
+
 async function clean() {
   for (const [kind, count, slugOf] of [
     ['articles', POSTS, postSlug],
+    ['topics', 0, topicSlug],
     ['projects', PROJECTS, projectSlug]
   ] as const) {
+    if (kind === 'topics') {
+      console.log('removing topics');
+      for (let i = 0; i < BIG; i++) {
+        const project = await find('projects', projectSlug(i));
+        if (!project?.id) continue;
+        for (let t = 0; t < TOPICS; t++) {
+          try {
+            const topic = await call<Stored>('GET', `/topics/${project.id}/${topicSlug(t)}`);
+            await call('DELETE', `/topics/${project.id}/${topicSlug(t)}`, {
+              expected_revision: topic.revision
+            });
+          } catch (error) {
+            if (!(error instanceof ApiFailure && error.status === 404)) throw error;
+          }
+        }
+      }
+      continue;
+    }
     console.log(`removing ${kind}`);
     await pool(
       Array.from({ length: count }, (_, i) => i),
@@ -143,19 +184,36 @@ async function main() {
       if (updated) await publish('projects', slug, updated);
     }
   );
+  // Topics for the big projects, so a few projects behave like large multi-part efforts.
+  const topicIds: string[][] = [];
+  await pool(
+    Array.from({ length: BIG }, (_, i) => i),
+    async (i) => {
+      topicIds[i] = [];
+      for (let t = 0; t < TOPICS; t++) topicIds[i][t] = await ensureTopic(ids[i], t);
+    }
+  );
   console.log('seeding posts');
   await pool(
     Array.from({ length: POSTS }, (_, i) => i),
     async (i) => {
       const title = `Scale post ${pad(i, 5)}`;
       // About one post in twenty follows no project, the rest spread evenly.
-      const linked = i % 20 !== 0 && ids.length ? [ids[i % PROJECTS]] : [];
+      let linked = i % 20 !== 0 && ids.length ? [ids[i % PROJECTS]] : [];
+      // A quarter of the posts go to the big projects; one in ten of those has no topic.
+      let topic: string | null = null;
+      if (BIG && TOPICS && i % 4 === 1) {
+        const big = i % BIG;
+        linked = [ids[big]];
+        const slot = Math.floor(i / BIG) % (TOPICS + Math.ceil(TOPICS / 9));
+        topic = topicIds[big]?.[slot] ?? null;
+      }
       await ensure('articles', postSlug(i), {
         title,
         category: `Category ${pad(i % CATEGORIES, 2)}`,
         summary: `Generated post ${i} for scale testing.`,
         tags: [TAGS[0], TAGS[1 + (i % (TAGS.length - 1))]],
-        meta: { project_ids: linked },
+        meta: { project_ids: linked, topic_id: topic },
         document: documentOf(title, 100000 + i)
       });
     }

@@ -36,6 +36,14 @@ connectors are not supported in this version.
 - `update_draft`: provide slug and `expected_revision` from the last read. Send
   optional metadata and either content format. Metadata-only edits preserve all
   blocks. Rich/interactive documents require structured editing.
+- `create_draft` and `update_draft` also accept `project` (a project slug to link)
+  and `topic` (a topic slug inside that project, or `null` to clear it). A topic
+  needs its project slug.
+- `list_topics`: topics, optionally for one project slug, with post counts.
+- `create_topic`: add a topic to a project. Topics go live immediately and only
+  appear on the site once they hold published posts.
+- `update_topic`: rename or re-describe a topic with its `expected_revision`.
+  Deleting topics is done by the owner in admin.
 
 On a conflict, fetch the current article and reconcile before retrying. Never
 blindly retry an old replacement with a newer revision. Unknown input fields and

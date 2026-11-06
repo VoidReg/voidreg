@@ -37,6 +37,7 @@ export const DIFF_FIELDS = [
   'pending_slug',
   'project_ids',
   'topic_id',
+  'topic_id',
   'related_project_ids',
   'repo_url',
   'demo_url',

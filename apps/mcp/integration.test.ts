@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createServer, type Server } from 'node:http';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { createHttpServer } from './http';
+import { filingMeta } from './tools';
 import { defaultData } from '@publisle/playground';
 import { extensions } from '@voidreg/authoring/blocks';
 import {
@@ -82,14 +83,20 @@ for (const mode of ['legacy', 'auto'] as const) {
       { versionNegotiation: { mode } }
     );
     try {
-      const missing = await fetch(origin + '/mcp', { method: 'POST', body: '{}' });
+      const missing = await fetch(origin + '/mcp', {
+        method: 'POST',
+        body: '{}'
+      });
       assert.equal(missing.status, 401);
       assert.equal(missing.headers.get('cache-control'), 'no-store');
       assert.equal(
         (
           await fetch(origin + '/mcp', {
             method: 'POST',
-            headers: { Authorization: 'Bearer ' + token, Origin: 'https://untrusted.example' },
+            headers: {
+              Authorization: 'Bearer ' + token,
+              Origin: 'https://untrusted.example'
+            },
             body: '{}'
           })
         ).status,
@@ -103,11 +110,14 @@ for (const mode of ['legacy', 'auto'] as const) {
       const listed = await client.listTools();
       assert.deepEqual(listed.tools.map((t) => t.name).sort(), [
         'create_draft',
+        'create_topic',
         'get_article',
         'get_block_catalog',
         'get_compilation',
         'list_articles',
+        'list_topics',
         'update_draft',
+        'update_topic',
         'validate_document'
       ]);
       const call = (name: string, args: Record<string, unknown>) =>
@@ -121,7 +131,14 @@ for (const mode of ['legacy', 'auto'] as const) {
         title: 'Title',
         document: {
           schemaVersion: 1,
-          blocks: [{ id: 'invalid', type: 'unknown:unknown', schemaVersion: 1, data: {} }]
+          blocks: [
+            {
+              id: 'invalid',
+              type: 'unknown:unknown',
+              schemaVersion: 1,
+              data: {}
+            }
+          ]
         }
       });
       assert(invalid.isError);
@@ -239,6 +256,33 @@ for (const mode of ['legacy', 'auto'] as const) {
     }
   });
 }
+
+test('filing a post resolves project and topic and keeps its other meta', async () => {
+  const calls: string[] = [];
+  const bridge = async (path: string) => {
+    calls.push(path);
+    if (path === '/projects/alpha') return { id: 'p1' };
+    if (path === '/topics/p1/firmware') return { id: 't1' };
+    throw new Error('unexpected ' + path);
+  };
+  const current = {
+    project_ids: ['p0'],
+    hero_image: '/media/a.png',
+    title: 'ignored'
+  };
+  assert.equal(await filingMeta(bridge, current, {}), undefined, 'nothing requested');
+  assert.deepEqual(await filingMeta(bridge, current, { project: 'alpha', topic: 'firmware' }), {
+    project_ids: ['p0', 'p1'],
+    hero_image: '/media/a.png',
+    topic_id: 't1'
+  });
+  assert.deepEqual(await filingMeta(bridge, current, { topic: null }), {
+    project_ids: ['p0'],
+    hero_image: '/media/a.png',
+    topic_id: null
+  });
+  await assert.rejects(() => filingMeta(bridge, current, { topic: 'firmware' }), /project slug/);
+});
 
 test('shared authoring escapes raw HTML and refuses lossy custom Markdown export', () => {
   const compiled = compileDocument(

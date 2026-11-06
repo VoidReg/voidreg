@@ -47,6 +47,61 @@ const metadata = {
   summary: z.string().trim().min(1).max(500)
 };
 const tags = z.array(z.string().trim().min(1).max(40)).max(20);
+/** Where a post is filed: a project and, optionally, one of that project's topics. */
+const filing = {
+  project: slug
+    .optional()
+    .describe('Project slug to link the post to. Required when setting a topic.'),
+  topic: slug
+    .nullable()
+    .optional()
+    .describe("Topic slug inside the project, or null to remove the post's topic.")
+};
+const META_KEYS = [
+  'project_ids',
+  'topic_id',
+  'related_project_ids',
+  'media_ids',
+  'seo_title',
+  'seo_description',
+  'social_image',
+  'hero_alt',
+  'hero_caption',
+  'hero_image',
+  'demo_url'
+] as const;
+/**
+ * Builds the `meta` for a post from its current meta plus the requested project and topic.
+ * Returns undefined when nothing about filing was requested, so other meta stays untouched.
+ */
+export async function filingMeta(
+  bridge: Bridge,
+  current: Record<string, unknown> | undefined,
+  input: { project?: string; topic?: string | null }
+): Promise<Record<string, unknown> | undefined> {
+  if (input.project === undefined && input.topic === undefined) return undefined;
+  const meta: Record<string, unknown> = {};
+  for (const key of META_KEYS) if (current && key in current) meta[key] = current[key];
+  const ids = new Set<string>(
+    Array.isArray(meta.project_ids) ? (meta.project_ids as string[]) : []
+  );
+  if (input.topic === null) {
+    meta.topic_id = null;
+  } else if (typeof input.topic === 'string') {
+    if (!input.project)
+      throw new BridgeError('Provide the project slug together with a topic.', 422);
+  }
+  if (input.project) {
+    const project = await bridge('/projects/' + input.project);
+    ids.add(String(project.id));
+    if (typeof input.topic === 'string') {
+      const topic = await bridge(`/topics/${project.id}/${input.topic}`);
+      meta.topic_id = topic.id;
+    }
+  }
+  meta.project_ids = [...ids];
+  return meta;
+}
 function validateInput(
   input: { markdown?: string; document?: unknown },
   title: string
@@ -67,7 +122,10 @@ function validateInput(
     return { diagnostics: imported.diagnostics };
   }
   const compiled = compileDocument(imported?.document ?? input.document, title);
-  return { ...compiled, diagnostics: [...(imported?.diagnostics ?? []), ...compiled.diagnostics] };
+  return {
+    ...compiled,
+    diagnostics: [...(imported?.diagnostics ?? []), ...compiled.diagnostics]
+  };
 }
 function result(value: Record<string, unknown>, isError = false) {
   return {
@@ -102,7 +160,11 @@ export function createTools(bridge: Bridge, publicOrigin: string) {
       {
         description,
         inputSchema: schema,
-        annotations: { readOnlyHint: readOnly, destructiveHint: !readOnly, openWorldHint: false }
+        annotations: {
+          readOnlyHint: readOnly,
+          destructiveHint: !readOnly,
+          openWorldHint: false
+        }
       },
       async (input) => {
         try {
@@ -156,7 +218,9 @@ export function createTools(bridge: Bridge, publicOrigin: string) {
       return result({
         article,
         ...(article.document
-          ? { archival_markdown: archivalMarkdown(parseDocument(article.document)).markdown }
+          ? {
+              archival_markdown: archivalMarkdown(parseDocument(article.document)).markdown
+            }
           : {}),
         ...(exported?.markdown ? { markdown: exported.markdown } : {}),
         diagnostics: exported?.diagnostics ?? []
@@ -202,14 +266,24 @@ export function createTools(bridge: Bridge, publicOrigin: string) {
   tool(
     'create_draft',
     'Create a saved draft from Markdown or a structured document. Does not publish.',
-    z.object({ ...metadata, tags: tags.optional(), slug: slug.optional(), ...content }).strict(),
+    z
+      .object({
+        ...metadata,
+        tags: tags.optional(),
+        slug: slug.optional(),
+        ...filing,
+        ...content
+      })
+      .strict(),
     false,
     async (input) => {
       const validated = validateInput(input, input.title);
       if (!validated.document) return failed(validated.diagnostics);
-      const { markdown: _, document: __, ...fields } = input;
+      const { markdown: _, document: __, project: ___, topic: ____, ...fields } = input;
+      const meta = await filingMeta(bridge, undefined, input);
       const article = await bridge('/articles', 'POST', {
         ...fields,
+        ...(meta ? { meta } : {}),
         document: validated.document,
         document_version: validated.document.schemaVersion,
         compiled: validated.artifact
@@ -232,6 +306,7 @@ export function createTools(bridge: Bridge, publicOrigin: string) {
         category: metadata.category.optional(),
         summary: metadata.summary.optional(),
         tags: tags.optional(),
+        ...filing,
         ...content
       })
       .strict(),
@@ -277,9 +352,18 @@ export function createTools(bridge: Bridge, publicOrigin: string) {
         Object.assign(validated, merged);
       }
       if (!validated.document) return failed(validated.diagnostics);
-      const { markdown: _, document: __, slug: ___, ...fields } = input;
+      const {
+        markdown: _,
+        document: __,
+        slug: ___,
+        project: ____,
+        topic: _____,
+        ...fields
+      } = input;
+      const meta = await filingMeta(bridge, current, input);
       const article = await bridge('/articles/' + input.slug, 'PUT', {
         ...fields,
+        ...(meta ? { meta } : {}),
         document: validated.document,
         document_version: validated.document.schemaVersion,
         compiled: validated.artifact
@@ -288,6 +372,73 @@ export function createTools(bridge: Bridge, publicOrigin: string) {
         article,
         diagnostics: validated.diagnostics,
         admin_url: `${publicOrigin}/admin/?article=${article.slug}`
+      });
+    }
+  );
+  tool(
+    'list_topics',
+    'List topics. Topics split a large project into parts, and posts are filed under at most one. Filter by project slug.',
+    z
+      .object({
+        project: slug.optional(),
+        page: z.number().int().min(1).max(1_000_000).default(1),
+        per_page: z.number().int().min(1).max(100).default(50)
+      })
+      .strict(),
+    true,
+    async (input) => {
+      const query = new URLSearchParams({
+        page: String(input.page),
+        per_page: String(input.per_page)
+      });
+      if (input.project) query.set('project', input.project);
+      return result(await bridge('/topics?' + query));
+    }
+  );
+  tool(
+    'create_topic',
+    'Create a topic inside a project. Topics are lightweight structure and go live immediately, but a topic with no published posts is not listed on the site. Then file drafts under it with create_draft or update_draft.',
+    z
+      .object({
+        project: slug,
+        title: z.string().trim().min(1).max(120),
+        summary: z.string().trim().max(400).optional(),
+        slug: slug.optional()
+      })
+      .strict(),
+    false,
+    async (input) => {
+      const project = await bridge('/projects/' + input.project);
+      const topic = await bridge('/topics', 'POST', {
+        project_id: project.id,
+        title: input.title,
+        ...(input.summary !== undefined ? { summary: input.summary } : {}),
+        ...(input.slug ? { slug: input.slug } : {})
+      });
+      return result({
+        topic,
+        admin_url: `${publicOrigin}/admin/?tab=projects&project=${input.project}`
+      });
+    }
+  );
+  tool(
+    'update_topic',
+    'Rename or re-describe a topic using its expected_revision. Deleting topics is done by the owner in admin.',
+    z
+      .object({
+        project: slug,
+        topic: slug,
+        expected_revision: z.number().int().min(1),
+        title: z.string().trim().min(1).max(120).optional(),
+        summary: z.string().trim().max(400).optional()
+      })
+      .strict(),
+    false,
+    async (input) => {
+      const project = await bridge('/projects/' + input.project);
+      const { project: _, topic: __, ...fields } = input;
+      return result({
+        topic: await bridge(`/topics/${project.id}/${input.topic}`, 'PUT', fields)
       });
     }
   );
