@@ -10,6 +10,7 @@
   import type { Article } from '@voidreg/publishing-ui/api';
   import SchemaPayload from '$lib/SchemaPayload.svelte';
   import { counterDefinition, extensions, registry } from '@voidreg/authoring/blocks';
+  import SchematicEditor from './SchematicEditor.svelte';
   import BlockSummary from './BlockSummary.svelte';
   import BlockInserter from './BlockInserter.svelte';
   import './workspace.css';
@@ -439,6 +440,11 @@
                   </div>
                   {#if block.type === 'voidreg:counter'}<SchemaPayload
                       schema={counterDefinition.descriptor.payloadSchema}
+                      value={(block.data as { payload: Record<string, unknown> }).payload}
+                      onchange={(payload) =>
+                        editor.updateBlock(block.id, { ...(block.data as object), payload })}
+                    />{/if}
+                  {#if block.type === 'voidreg:schematic'}<SchematicEditor
                       value={(block.data as { payload: Record<string, unknown> }).payload}
                       onchange={(payload) =>
                         editor.updateBlock(block.id, { ...(block.data as object), payload })}
