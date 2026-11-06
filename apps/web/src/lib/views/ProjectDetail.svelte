@@ -1,0 +1,99 @@
+<script lang="ts">
+  import { resolve } from '$app/paths';
+  import ReadingColumn from '$lib/components/ReadingColumn.svelte';
+  import ArticleBody from '@voidreg/publishing-ui/ArticleBody.svelte';
+  import ArticleCard from '$lib/publishing/ArticleCard.svelte';
+  import type { Article, Page } from '@voidreg/publishing-ui/api';
+  import type { Project } from '$lib/data/projects';
+  // Shared by the public project page and the private draft preview.
+  let { project, posts }: { project: Project; posts: Page<Article> } = $props();
+</script>
+
+<main id="main-content" class="site-container page-shell">
+  <ReadingColumn>
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href={resolve('/')}>Home</a><span>/</span><a href={resolve('/projects')}>Projects</a><span
+        >/</span
+      ><span aria-current="page">{project.title}</span>
+    </nav>
+  </ReadingColumn>
+  <article class="section-stack detail-article">
+    <ReadingColumn>
+      <header class="section-stack detail-header">
+        <p class="eyebrow">{project.category}</p>
+        <h1 class="display-heading">{project.title}</h1>
+        <p class="lead">{project.summary}</p>
+        {#if project.tags.length}<div class="tags">
+            {#each project.tags as tag (tag)}<span class="tag">{tag}</span>{/each}
+          </div>{/if}
+        <!-- eslint-disable svelte/no-navigation-without-resolve -- repository and demo links are external -->
+        {#if project.repo_url || project.demo_url}<div class="button-row">
+            {#if project.repo_url}<a class="button button-secondary" href={project.repo_url}
+                >Repository</a
+              >{/if}{#if project.demo_url}<a class="button button-secondary" href={project.demo_url}
+                >Live demo</a
+              >{/if}
+          </div>{/if}
+        <!-- eslint-enable svelte/no-navigation-without-resolve -->
+      </header>
+    </ReadingColumn>
+    {#if project.hero_image}<img
+        class="project-image"
+        src={project.hero_image}
+        alt={project.hero_alt ?? project.title}
+      />{/if}
+    <ArticleBody article={project as unknown as Article} />
+  </article>
+  {#if project.related?.length}<ReadingColumn>
+      <section class="section-stack" aria-labelledby="related-projects">
+        <h2 id="related-projects" class="section-heading">Related projects</h2>
+        <ul class="follows-list">
+          {#each project.related as related (related.id)}<li class="follows-item">
+              <span class="eyebrow">{related.category}</span>
+              <h3>
+                <a class="text-link" href={resolve('/projects/[slug]', { slug: related.slug })}
+                  >{related.title}</a
+                >
+              </h3>
+              <p>{related.summary}</p>
+            </li>{/each}
+        </ul>
+      </section>
+    </ReadingColumn>{/if}
+  {#if posts.total}<ReadingColumn>
+      <section class="section-stack" aria-labelledby="project-posts">
+        <h2 id="project-posts" class="section-heading">
+          Project log <span class="section-count">{posts.total}</span>
+        </h2>
+        <p class="lead">Posts that follow this project, newest first.</p>
+        <div class="note-list">
+          {#each posts.items as article (article.slug)}<ArticleCard {article} heading="h3" />{/each}
+        </div>
+        <nav class="button-row" aria-label="Related post pages">
+          {#if posts.page > 1}<a
+              href={resolve(`/projects/[slug]?page=${posts.page - 1}`, { slug: project.slug })}
+              >Previous</a
+            >{/if}{#if posts.page * posts.per_page < posts.total}<a
+              href={resolve(`/projects/[slug]?page=${posts.page + 1}`, { slug: project.slug })}
+              >Next</a
+            >{/if}
+        </nav>
+      </section>
+    </ReadingColumn>{/if}
+  <ReadingColumn>
+    <p class="button-row">
+      <a class="text-link" href={resolve('/projects')}>All projects</a>
+      <a class="text-link" href={resolve(`/map?focus=${encodeURIComponent(project.slug)}`)}
+        >See on the map</a
+      >
+    </p>
+  </ReadingColumn>
+</main>
+
+<style>
+  .project-image {
+    width: 100%;
+    height: auto;
+    border-radius: var(--radius);
+  }
+</style>

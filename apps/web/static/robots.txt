@@ -1,4 +1,5 @@
 User-agent: *
 Disallow: /admin/
+Disallow: /preview/
 
 Sitemap: https://www.voidreg.xyz/sitemap.xml
