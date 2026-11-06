@@ -4,7 +4,7 @@ import type { Project } from '$lib/data/projects';
 const escape = (s: string) =>
   s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;');
 export async function GET({ fetch }) {
-  const urls = ['/', '/about', '/projects', '/blog', '/privacy'].map((path) => ({
+  const urls = ['/', '/about', '/projects', '/blog', '/map', '/privacy'].map((path) => ({
     path,
     date: ''
   }));

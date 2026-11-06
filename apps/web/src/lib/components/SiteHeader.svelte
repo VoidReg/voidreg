@@ -24,6 +24,11 @@
         >
         <a
           class="nav-link"
+          aria-current={current('/map') ? 'page' : undefined}
+          href={resolve('/map')}>Map</a
+        >
+        <a
+          class="nav-link"
           aria-current={current('/about') ? 'page' : undefined}
           href={resolve('/about')}>About</a
         >
@@ -65,6 +70,12 @@
         aria-current={current('/projects') ? 'page' : undefined}
         href={resolve('/projects')}
         onclick={() => (menuOpen = false)}>Projects</a
+      >
+      <a
+        class="nav-link"
+        aria-current={current('/map') ? 'page' : undefined}
+        href={resolve('/map')}
+        onclick={() => (menuOpen = false)}>Map</a
       >
       <a
         class="nav-link"
