@@ -1,11 +1,10 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import KnowledgeMap from '$lib/map/KnowledgeMap.svelte';
-  import MapOutline from '$lib/map/MapOutline.svelte';
+  import MapSection from '$lib/map/MapSection.svelte';
   import Seo from '$lib/Seo.svelte';
   let { data } = $props();
-  const projects = $derived(data.graph.nodes.filter((n) => n.kind === 'project').length);
-  const posts = $derived(data.graph.nodes.filter((n) => n.kind === 'post').length);
+  const projects = $derived(data.graph.totals?.projects ?? 0);
+  const posts = $derived(data.graph.totals?.posts ?? 0);
 </script>
 
 <Seo
@@ -20,9 +19,9 @@
     <p class="eyebrow">Knowledge map</p>
     <h1 class="display-heading">Projects and the writing that follows them</h1>
     <p class="lead">
-      Each chip is a project and each pad below it is a post that follows that project. Traces above
-      the chips link related projects; turn on shared technologies to see what else they have in
-      common.
+      Projects are grouped by category. Each chip is a project; choose Show posts on a chip to list
+      the posts that follow it. Hover or focus a project to light up everything it connects to, and
+      filter by name, technology or category to narrow a large map.
     </p>
     <p class="hero-note">{projects} projects | {posts} posts</p>
   </header>
@@ -32,54 +31,12 @@
       <p>Projects and posts will appear here once they are published.</p>
     </div>
   {:else}
-    <section class="map-section" aria-label="Map">
-      <div class="map-desktop">
-        <KnowledgeMap graph={data.graph} focus={data.focus} />
-      </div>
-      <details class="map-outline" open>
-        <summary>Text outline</summary>
-        <MapOutline graph={data.graph} />
-      </details>
-    </section>
+    <MapSection
+      graph={data.graph}
+      expanded={data.expanded}
+      filter={data.filter}
+      open={data.open}
+      focus={data.focus}
+    />
   {/if}
 </main>
-
-<style>
-  .map-desktop {
-    display: none;
-  }
-
-  .map-outline {
-    border: 1px solid var(--border);
-    background: var(--card);
-    padding: 1.25rem 1.5rem;
-  }
-
-  .map-outline summary {
-    margin-bottom: 1rem;
-    cursor: pointer;
-    font-family: var(--font-code);
-    font-size: 0.75rem;
-    text-transform: uppercase;
-  }
-
-  .map-section {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 1.5rem;
-  }
-
-  @media (min-width: 48rem) {
-    .map-desktop {
-      display: block;
-    }
-
-    .map-outline:not([open]) {
-      padding-block: 0.75rem;
-    }
-
-    .map-outline:not([open]) summary {
-      margin-bottom: 0;
-    }
-  }
-</style>

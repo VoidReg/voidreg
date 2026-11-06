@@ -6,7 +6,7 @@
   import Seo from '$lib/Seo.svelte';
   let { data } = $props();
   const result = $derived(data.result);
-  const active = $derived(data.filters.find((f) => f.slug === data.project));
+  const active = $derived(data.active);
   const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
   const tagHref = (tag: string) => {
     const params = [];

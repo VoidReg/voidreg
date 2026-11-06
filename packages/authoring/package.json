@@ -24,6 +24,7 @@
   "scripts": {
     "test": "tsx --test src/*.test.ts",
     "seed:test-blog": "tsx scripts/seed-test-blog.ts",
+    "seed:scale": "tsx scripts/seed-scale.ts",
     "stress:publishing": "tsx scripts/stress-publishing.ts"
   },
   "devDependencies": {

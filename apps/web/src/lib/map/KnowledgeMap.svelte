@@ -1,186 +1,238 @@
 <script lang="ts">
+  import { page } from '$app/state';
+  import { SvelteURLSearchParams } from 'svelte/reactivity';
   import { resolve } from '$app/paths';
-  import { CHIP_H, CHIP_W, STANDALONE_ID, layoutGraph, neighbourhood, type Graph } from './layout';
+  import MapLane from './MapLane.svelte';
+  import {
+    categoriesOf,
+    lanesOf,
+    technologiesOf,
+    toggleOpen,
+    type MapFilter,
+    type MapModel
+  } from './layout';
 
   let {
-    graph,
+    model,
+    filter,
+    open = [],
     focus = '',
     preview = false
-  }: { graph: Graph; focus?: string; preview?: boolean } = $props();
+  }: {
+    model: MapModel;
+    filter: MapFilter;
+    /** Slugs of projects whose posts are listed, kept in the URL. */
+    open?: string[];
+    focus?: string;
+    preview?: boolean;
+  } = $props();
 
-  const layout = $derived(layoutGraph(graph));
-  const projectHref = (slug: string) =>
-    preview ? resolve('/preview/projects/[slug]', { slug }) : resolve('/projects/[slug]', { slug });
-  const postHref = (slug: string) =>
-    preview ? resolve('/preview/blog/[slug]', { slug }) : resolve('/blog/[slug]', { slug });
-
-  const technologies = $derived(
-    [
-      ...new Map(
-        graph.nodes
-          .filter((n) => n.kind === 'project')
-          .flatMap((n) => n.tags)
-          .map((t) => [t.toLowerCase(), t])
-      ).values()
-    ].sort((a, b) => a.localeCompare(b))
+  const lanes = $derived(lanesOf(model, filter));
+  const categories = $derived(categoriesOf(model));
+  const technologies = $derived(technologiesOf(model));
+  const openIds = $derived(
+    new Set(model.projects.filter((p) => open.includes(p.slug)).map((p) => p.id))
   );
+  const shown = $derived(lanes.reduce((sum, lane) => sum + lane.projects.length, 0));
+  const hasShared = $derived(model.edges.some((e) => e.kind === 'shared-tag'));
+  const filtered = $derived(Boolean(filter.q || filter.tag || filter.category));
+  const selected = $derived(model.projects.find((p) => p.slug === focus)?.id ?? '');
 
-  let tech = $state('');
   let showShared = $state(false);
   let hovered = $state('');
-  let focused = $state('');
-  const selected = $derived(graph.nodes.find((n) => n.slug === focus)?.id ?? '');
-  const active = $derived(hovered || focused || selected);
-  const lit = $derived(active ? neighbourhood(graph, active) : null);
+  const active = $derived(hovered || selected);
 
-  const hasTech = (id: string) =>
-    !tech ||
-    Boolean(
-      graph.nodes.find((n) => n.id === id)?.tags.some((t) => t.toLowerCase() === tech.toLowerCase())
-    );
-  // A node is dimmed when something else is active, or when it falls outside the technology filter.
-  const dimmed = (id: string, owner: string | null = null) => {
-    const projectId = owner ?? id;
-    if (tech && projectId !== STANDALONE_ID && !hasTech(projectId)) return true;
-    if (tech && projectId === STANDALONE_ID) return true;
-    return lit ? !lit.has(id) : false;
+  // Expansion and filters live in the URL, so a link shares exactly what is on screen.
+  const toggleHref = (slug: string) => {
+    const params = new SvelteURLSearchParams(page.url.search);
+    const next = toggleOpen(open, slug);
+    if (next.length) params.set('open', next.join(','));
+    else params.delete('open');
+    const query = params.toString();
+    return page.url.pathname + (query ? `?${query}` : '');
   };
-  const projectIds = $derived(
-    new Set(graph.nodes.filter((n) => n.kind === 'project').map((n) => n.id))
-  );
-  const traceLit = (ends: [string, string]) => Boolean(active) && ends.includes(active);
-  const traceDimmed = (ends: [string, string]) =>
-    (Boolean(active) && !ends.includes(active)) ||
-    (Boolean(tech) &&
-      (ends.includes(STANDALONE_ID) || ends.some((id) => projectIds.has(id) && !hasTech(id))));
+  const clearPath = $derived(page.url.pathname + (open.length ? `?open=${open.join(',')}` : ''));
 </script>
 
-<div class="map-tools">
-  {#if technologies.length}<div class="map-filter" role="group" aria-label="Filter by technology">
-      <p class="filter-label">Technology</p>
-      <ul class="chip-row">
-        <li>
-          <button type="button" class="chip" aria-pressed={tech === ''} onclick={() => (tech = '')}
-            >All</button
-          >
-        </li>
-        {#each technologies as t (t)}<li>
-            <button
-              type="button"
-              class="chip"
-              aria-pressed={tech.toLowerCase() === t.toLowerCase()}
-              onclick={() => (tech = tech.toLowerCase() === t.toLowerCase() ? '' : t)}>{t}</button
-            >
-          </li>{/each}
-      </ul>
-    </div>{/if}
-  <label class="map-toggle">
-    <input type="checkbox" bind:checked={showShared} />
-    Show links from shared technologies
+<form class="map-filters" method="get" role="search" aria-label="Filter the map">
+  <label class="map-field"
+    >Search projects<input
+      type="search"
+      name="q"
+      value={filter.q}
+      placeholder="Title or technology"
+      maxlength="80"
+    /></label
+  >
+  <label class="map-field"
+    >Technology<input
+      name="tag"
+      value={filter.tag}
+      list="map-technologies"
+      placeholder="Any technology"
+      maxlength="40"
+      autocomplete="off"
+    />
+    <datalist id="map-technologies">
+      {#each technologies as tag (tag)}<option value={tag}></option>{/each}
+    </datalist>
   </label>
+  <label class="map-field"
+    >Category<select name="category" value={filter.category}>
+      <option value="">All categories</option>
+      {#each categories as category (category.name)}
+        <option value={category.name} selected={filter.category === category.name}
+          >{category.name} ({category.count})</option
+        >
+      {/each}
+    </select></label
+  >
+  {#if open.length}<input type="hidden" name="open" value={open.join(',')} />{/if}
+  <div class="map-filter-actions">
+    <button type="submit" class="map-button">Apply</button>
+    {#if filtered}<a class="text-link" href={resolve(clearPath as '/map')}>Clear filters</a>{/if}
+  </div>
+</form>
+
+<div class="map-tools">
+  {#if hasShared}<label class="map-toggle">
+      <input type="checkbox" bind:checked={showShared} />
+      Show links from shared technologies
+    </label>{/if}
+  <p class="map-status" role="status">
+    {shown === model.projects.length
+      ? `${shown} ${shown === 1 ? 'project' : 'projects'}`
+      : `${shown} of ${model.projects.length} projects match`}
+    in {lanes.length}
+    {lanes.length === 1 ? 'category' : 'categories'}.
+    {#if model.mode === 'summary'}Use Show posts on a project to list its posts.{/if}
+  </p>
 </div>
 
 <ul class="map-legend" aria-label="Legend">
   <li><span class="legend-swatch" data-kind="stem"></span>Post follows project</li>
   <li><span class="legend-swatch" data-kind="related"></span>Related projects</li>
-  <li><span class="legend-swatch" data-kind="shared"></span>Shared technology</li>
-  {#if graph.draft}<li>
+  {#if hasShared}<li>
+      <span class="legend-swatch" data-kind="shared"></span>Shared technology
+    </li>{/if}
+  {#if model.projects.some((p) => p.draft || p.changed)}<li>
       <span class="legend-swatch" data-kind="draft"></span>Draft or edited
     </li>{/if}
 </ul>
 
-<div class="map-scroll" role="region" aria-label="Knowledge map, scrolls sideways">
-  <svg
-    class="map-svg"
-    class:show-shared={showShared}
-    width={layout.width}
-    height={layout.height}
-    viewBox={`0 0 ${layout.width} ${layout.height}`}
-    role="group"
-    aria-label="Knowledge map of projects and the posts that follow them"
-    focusable="false"
-  >
-    {#each layout.traces as trace (trace.key)}
-      <g
-        class="trace-group"
-        data-kind={trace.kind}
-        class:lit={traceLit(trace.ends)}
-        class:dim={traceDimmed(trace.ends)}
+<div class="lanes">
+  {#each lanes as lane, index (lane.name)}
+    <MapLane
+      name={lane.name}
+      projects={lane.projects}
+      {model}
+      open={openIds}
+      {active}
+      {showShared}
+      {preview}
+      eager={index === 0 || shown <= 40}
+      {toggleHref}
+      onactive={(id) => (hovered = id)}
+    />
+  {:else}
+    <p class="map-empty">
+      No projects match these filters. <a class="text-link" href={resolve(clearPath as '/map')}
+        >Clear filters</a
       >
-        <path class="trace" d={trace.d} />
-        {#each trace.terminals as [x, y] (x + ',' + y)}
-          <rect class="terminal" x={x - 4} y={y - 4} width="8" height="8" />
-        {/each}
-      </g>
-    {/each}
-
-    {#each layout.chips as chip (chip.id)}
-      {@const node = chip.node}
-      <g class="chip-node" class:dim={dimmed(chip.id)} class:lane={!node} class:draft={node?.draft}>
-        {#if node}<a
-            href={projectHref(node.slug)}
-            onmouseenter={() => (hovered = chip.id)}
-            onmouseleave={() => (hovered = '')}
-            onfocus={() => (focused = chip.id)}
-            onblur={() => (focused = '')}
-          >
-            <rect class="box" x={chip.x} y={chip.y} width={CHIP_W} height={CHIP_H} />
-            <text class="category" x={chip.x + 12} y={chip.y + 18}>{chip.category}</text>
-            {#each chip.lines as line, i (i)}<text
-                class="title"
-                x={chip.x + 12}
-                y={chip.y + 38 + i * 16}>{line}</text
-              >{/each}
-            {#if node.draft || node.changed}<text
-                class="badge"
-                x={chip.x + CHIP_W - 10}
-                y={chip.y + 18}
-                text-anchor="end">{node.draft ? 'DRAFT' : 'EDITED'}</text
-              >{/if}
-            <title>{node.title}</title>
-          </a>{:else}
-          <rect class="box" x={chip.x} y={chip.y} width={CHIP_W} height={CHIP_H} />
-          <text class="category" x={chip.x + 12} y={chip.y + 18}>{chip.category}</text>
-          <text class="title" x={chip.x + 12} y={chip.y + 38}>{chip.lines[0]}</text>
-        {/if}
-      </g>
-    {/each}
-
-    {#each layout.pads as pad (pad.key)}
-      <g
-        class="pad-node"
-        class:dim={dimmed(pad.node.id, pad.projectId ?? STANDALONE_ID)}
-        class:draft={pad.node.draft}
-      >
-        <a
-          href={postHref(pad.node.slug)}
-          onmouseenter={() => (hovered = pad.node.id)}
-          onmouseleave={() => (hovered = '')}
-          onfocus={() => (focused = pad.node.id)}
-          onblur={() => (focused = '')}
-        >
-          <rect class="hit" x={pad.x - 8} y={pad.y - 13} width={CHIP_W - 8} height="26" />
-          <rect class="pad" x={pad.x - 5} y={pad.y - 5} width="10" height="10" />
-          <text class="label" x={pad.x + 16} y={pad.y + 4}>{pad.label}</text>
-          <title>{pad.node.title}</title>
-        </a>
-      </g>
-    {/each}
-  </svg>
+    </p>
+  {/each}
 </div>
 
+{#if model.mode === 'full' ? model.standalone.length : model.unlinked}
+  <section class="standalone" aria-label="Standalone notes">
+    <h2 class="lane-title">Standalone notes</h2>
+    {#if model.mode === 'full'}
+      <ul class="standalone-list">
+        {#each model.standalone.slice(0, 12) as post (post.id)}<li>
+            <a
+              href={preview
+                ? resolve('/preview/blog/[slug]', { slug: post.slug })
+                : resolve('/blog/[slug]', { slug: post.slug })}>{post.title}</a
+            >
+          </li>{/each}
+      </ul>
+    {/if}
+    {#if !preview}<p class="map-status">
+        {model.unlinked}
+        {model.unlinked === 1 ? 'post does' : 'posts do'} not follow a project.
+        <a class="text-link" href={resolve('/blog')}>Browse all posts</a>
+      </p>{/if}
+  </section>
+{/if}
+
 <style>
-  .map-tools {
+  .map-filters {
     display: grid;
-    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+    align-items: end;
+    gap: 0.75rem 1rem;
     margin-bottom: 1rem;
+  }
+
+  .map-field {
+    display: grid;
+    gap: 0.25rem;
+    font-size: 0.8125rem;
+    color: var(--muted-foreground);
+  }
+
+  .map-field :where(input, select) {
+    min-height: 2.75rem;
+    border: 1px solid var(--input);
+    border-radius: var(--radius);
+    background: var(--background);
+    padding: 0.5rem 0.75rem;
+    color: var(--foreground);
+    font: inherit;
+    font-size: 0.9375rem;
+  }
+
+  .map-filter-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1rem;
+  }
+
+  .map-button {
+    min-height: 2.75rem;
+    border: 1px solid var(--foreground);
+    background: var(--foreground);
+    padding: 0.5rem 1.25rem;
+    color: var(--background);
+    font-size: 0.875rem;
+    cursor: pointer;
+  }
+
+  .map-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .map-status {
+    margin: 0;
+    color: var(--muted-foreground);
+    font-size: 0.875rem;
+  }
+
+  .map-empty {
+    margin: 0;
+    padding: 2rem 0;
   }
 
   .map-toggle {
     display: inline-flex;
     align-items: center;
     gap: 0.625rem;
-    justify-self: start;
     font-size: 0.875rem;
   }
 
@@ -245,191 +297,29 @@
     border-top: 2px dashed var(--foreground);
   }
 
-  .map-scroll {
-    overflow-x: auto;
-    border: 1px solid var(--border);
-    background: var(--background);
+  .lanes {
+    display: grid;
+    gap: 1.5rem;
   }
 
-  .map-svg {
-    display: block;
-    max-width: none;
+  .standalone {
+    display: grid;
+    gap: 0.5rem;
+    margin-top: 1.5rem;
   }
 
-  /* Traces */
-  .trace {
-    fill: none;
-    stroke: var(--foreground);
-    stroke-width: 1.5;
-    stroke-linejoin: miter;
-    transition: opacity var(--duration-medium) var(--ease-standard);
-  }
-
-  .trace-group[data-kind='related'] .trace {
-    stroke: var(--primary);
-    stroke-width: 2;
-  }
-
-  .trace-group[data-kind='shared-tag'] {
-    display: none;
-  }
-
-  .trace-group[data-kind='shared-tag'] .trace {
-    stroke: var(--muted-foreground);
-    stroke-width: 1;
-  }
-
-  .show-shared .trace-group[data-kind='shared-tag'],
-  .trace-group[data-kind='shared-tag'].lit {
-    display: inline;
-  }
-
-  .terminal {
-    fill: var(--background);
-    stroke: var(--primary);
-    stroke-width: 2;
-  }
-
-  .trace-group[data-kind='shared-tag'] .terminal {
-    stroke: var(--muted-foreground);
-    stroke-width: 1;
-  }
-
-  .trace-group.dim {
-    opacity: 0.15;
-  }
-
-  .trace-group.lit .trace {
-    stroke: var(--primary);
-    stroke-width: 2.5;
-    stroke-dasharray: 8 6;
-    animation: map-flow 1.2s linear infinite;
-  }
-
-  @keyframes map-flow {
-    to {
-      stroke-dashoffset: -14;
-    }
-  }
-
-  /* Project chips */
-  .chip-node a {
-    outline: none;
-    cursor: pointer;
-  }
-
-  .chip-node .box {
-    fill: var(--card);
-    stroke: var(--input);
-    stroke-width: 1.5;
-    transition:
-      fill var(--duration-fast) var(--ease-standard),
-      stroke var(--duration-fast) var(--ease-standard);
-  }
-
-  .chip-node.draft .box,
-  .chip-node.lane .box {
-    stroke-dasharray: 6 4;
-  }
-
-  .chip-node a:hover .box,
-  .chip-node a:focus-visible .box {
-    fill: var(--primary);
-    stroke: var(--primary);
-  }
-
-  .chip-node a:focus-visible .box {
-    stroke: var(--ring);
-    stroke-width: 3;
-  }
-
-  .chip-node .category {
-    fill: var(--muted-foreground);
-    font-family: var(--font-code);
-    font-size: 10px;
-    letter-spacing: 0.04em;
-  }
-
-  .chip-node .title {
-    fill: var(--foreground);
-    font-family: var(--font-ui);
-    font-size: 14px;
+  .lane-title {
+    margin: 0;
+    font-size: 1rem;
     font-weight: 500;
+    line-height: 1.5;
   }
 
-  .chip-node .badge {
-    fill: var(--foreground);
-    font-family: var(--font-code);
-    font-size: 10px;
-    font-weight: 600;
-  }
-
-  .chip-node a:hover :is(.category, .title, .badge),
-  .chip-node a:focus-visible :is(.category, .title, .badge) {
-    fill: var(--primary-foreground);
-  }
-
-  /* Post pads */
-  .pad-node a {
-    outline: none;
-    cursor: pointer;
-  }
-
-  .pad-node .hit {
-    fill: transparent;
-  }
-
-  .pad-node .pad {
-    fill: var(--background);
-    stroke: var(--primary);
-    stroke-width: 2;
-  }
-
-  .pad-node.draft .pad {
-    stroke-dasharray: 3 2;
-  }
-
-  .pad-node .label {
-    fill: var(--foreground);
-    font-family: var(--font-ui);
-    font-size: 12px;
-  }
-
-  .pad-node a:hover .label {
-    text-decoration: underline;
-  }
-
-  .pad-node a:hover .pad,
-  .pad-node a:focus-visible .pad {
-    fill: var(--primary);
-  }
-
-  .pad-node a:focus-visible .hit {
-    stroke: var(--ring);
-    stroke-width: 3;
-  }
-
-  .chip-node.dim,
-  .pad-node.dim {
-    opacity: 0.25;
-  }
-
-  .chip-node,
-  .pad-node {
-    transition: opacity var(--duration-medium) var(--ease-standard);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .trace-group.lit .trace {
-      animation: none;
-      stroke-dasharray: none;
-    }
-
-    .trace,
-    .chip-node,
-    .pad-node,
-    .chip-node .box {
-      transition: none;
-    }
+  .standalone-list {
+    display: grid;
+    gap: 0.25rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
   }
 </style>

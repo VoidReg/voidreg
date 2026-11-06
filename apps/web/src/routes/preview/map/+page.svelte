@@ -1,7 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import KnowledgeMap from '$lib/map/KnowledgeMap.svelte';
-  import MapOutline from '$lib/map/MapOutline.svelte';
+  import MapSection from '$lib/map/MapSection.svelte';
   let { data } = $props();
   const drafts = $derived(data.graph.nodes.filter((n) => n.draft).length);
   const changed = $derived(data.graph.nodes.filter((n) => n.changed && !n.draft).length);
@@ -22,45 +21,12 @@
       {drafts + changed === 1 ? 'item' : 'items'} shown. Links open the draft preview for each item.
     </p>
   </header>
-  <section class="map-section" aria-label="Map">
-    <div class="map-desktop">
-      <KnowledgeMap graph={data.graph} focus={data.focus} preview />
-    </div>
-    <details class="map-outline" open>
-      <summary>Text outline</summary>
-      <MapOutline graph={data.graph} preview />
-    </details>
-  </section>
+  <MapSection
+    graph={data.graph}
+    expanded={data.expanded}
+    filter={data.filter}
+    open={data.open}
+    focus={data.focus}
+    preview
+  />
 </main>
-
-<style>
-  .map-desktop {
-    display: none;
-  }
-
-  .map-section {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 1.5rem;
-  }
-
-  .map-outline {
-    border: 1px solid var(--border);
-    background: var(--card);
-    padding: 1.25rem 1.5rem;
-  }
-
-  .map-outline summary {
-    margin-bottom: 1rem;
-    cursor: pointer;
-    font-family: var(--font-code);
-    font-size: 0.75rem;
-    text-transform: uppercase;
-  }
-
-  @media (min-width: 48rem) {
-    .map-desktop {
-      display: block;
-    }
-  }
-</style>

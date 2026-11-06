@@ -17,11 +17,22 @@ export async function load({ fetch, url }) {
   ]);
   normalizePagination(url, result);
   // Only projects that have published posts are offered as filters.
-  const filters = projects.items.filter((p) => (p.post_count ?? 0) > 0);
+  // Only the most followed few are offered as chips so the row stays short at any scale.
+  const filters = projects.items
+    .filter((p) => (p.post_count ?? 0) > 0)
+    .sort((a, b) => (b.post_count ?? 0) - (a.post_count ?? 0) || a.title.localeCompare(b.title))
+    .slice(0, 20);
+  // The active project may fall outside that row, so it is resolved on its own.
+  const active = project
+    ? (filters.find((f) => f.slug === project) ??
+      (await publicContent<Project>('/projects/' + encodeURIComponent(project), fetch).catch(
+        () => null
+      )))
+    : null;
   // Most used tags that have posts; the list stays short however large the vocabulary grows.
   const tags = vocabulary.items
     .filter((t) => t.count_posts > 0)
     .slice(0, 24)
     .map((t) => ({ name: t.name, count: t.count_posts }));
-  return { result, project, tag, filters, tags };
+  return { result, project, tag, filters, tags, active: active ? { title: active.title } : null };
 }
