@@ -2,7 +2,6 @@
   import { untrack } from 'svelte';
   import Icon from './components/Icon.svelte';
   import { adminRequest } from './api';
-  import { catalog } from './stores/catalog.svelte';
   import { confirmDialog } from './ui/confirm.svelte';
   import { notify } from './ui/toast.svelte';
   import type { Article, Page } from '@voidreg/publishing-ui/api';
@@ -150,7 +149,6 @@
     acting = true;
     try {
       await run(article, action);
-      catalog.invalidate();
       await load();
       if (action === 'archive') {
         notify.success(`Archived "${article.title}".`, {
@@ -169,7 +167,6 @@
     try {
       const fresh = await adminRequest<Article>(`/${kind}/${article.slug}`);
       await run(fresh, 'restore');
-      catalog.invalidate();
       await load();
       notify.success('Restored.');
     } catch (cause) {
@@ -199,7 +196,6 @@
         failed.push(article.title);
       }
     }
-    catalog.invalidate();
     selected = new Set();
     await load();
     acting = false;

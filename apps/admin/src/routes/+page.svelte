@@ -12,7 +12,6 @@
   import LoginScreen from '$lib/LoginScreen.svelte';
   import ContentList from '$lib/ContentList.svelte';
   import { session } from '$lib/session.svelte';
-  import { catalog } from '$lib/stores/catalog.svelte';
   import { confirmDialog } from '$lib/ui/confirm.svelte';
   import { notify } from '$lib/ui/toast.svelte';
   import MediaLibrary from '$lib/MediaLibrary.svelte';
@@ -98,7 +97,6 @@
           loadedEditor = identity;
         }
         if (request !== routeRequest) return;
-        void catalog.ensure();
         if (route.mode === 'preview' && request === routeRequest) await compileSaved();
       } else {
         loadedEditor = '';
@@ -446,7 +444,6 @@
       message = '';
       saveFailures = 0;
       savedAt = new Date();
-      catalog.invalidate();
       return true;
     } catch (e) {
       report(e);
@@ -484,7 +481,6 @@
         contentKind === 'articles' && !(meta.project_ids ?? []).length
           ? 'Published. This post does not follow a project yet, so it sits under Standalone notes on the map. Link a project in Settings to connect it.'
           : 'Published.';
-      catalog.invalidate();
     } catch (e) {
       report(e);
     } finally {
@@ -502,7 +498,6 @@
       serverRevision = result.revision;
       status = 'draft';
       message = 'Returned to draft.';
-      catalog.invalidate();
     } catch (e) {
       report(e);
     } finally {
@@ -577,7 +572,6 @@
     bind:repo={repoUrl}
     kind={contentKind}
     selfId={meta.id ?? ''}
-    projects={catalog.items}
     onchange={changed}
   />{/snippet}
 <svelte:head

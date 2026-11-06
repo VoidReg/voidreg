@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { adminRequest } from './api';
-  import type { Article, ContentMeta } from '@voidreg/publishing-ui/api';
+  import type { Article, ContentMeta, Page } from '@voidreg/publishing-ui/api';
   import ChipPicker from './components/ChipPicker.svelte';
   import { normalizeTag, type Option } from './pickers';
   let {
@@ -10,7 +10,6 @@
     repo = $bindable(),
     kind,
     selfId = '',
-    projects,
     onchange
   }: {
     meta: ContentMeta;
@@ -18,7 +17,6 @@
     repo: string;
     kind: string;
     selfId?: string;
-    projects: Article[];
     onchange: () => void;
   } = $props();
   let media = $state<{ id: string; url: string; name: string; alt: string }[]>([]);
@@ -38,24 +36,40 @@
       hint: `${tag.count_projects} projects, ${tag.count_posts} posts`
     }));
   }
-  function toggleRelated(id: string, checked: boolean) {
-    meta = {
-      ...meta,
-      related_project_ids: checked
-        ? [...(meta.related_project_ids ?? []), id]
-        : (meta.related_project_ids ?? []).filter((p) => p !== id)
-    };
-    onchange();
+  // Projects are found by server search, never loaded as a whole catalogue, so this stays
+  // fast with thousands of projects. Titles of already linked ids are resolved in one request.
+  let titles = $state<Record<string, string>>({});
+  const titleOf = (project: Article) => project.title + (project.archived ? ' (Archived)' : '');
+  function remember(items: Article[]) {
+    const next = { ...titles };
+    for (const project of items) if (project.id) next[project.id] = titleOf(project);
+    titles = next;
   }
-  function toggle(id: string, checked: boolean) {
-    meta = {
-      ...meta,
-      project_ids: checked
-        ? [...(meta.project_ids ?? []), id]
-        : (meta.project_ids ?? []).filter((p) => p !== id)
-    };
-    onchange();
+  async function searchProjects(query: string, exclude = ''): Promise<Option[]> {
+    const found = await adminRequest<Page<Article>>(
+      `/projects?per_page=20&sort=title&q=${encodeURIComponent(query)}`
+    );
+    remember(found.items);
+    return found.items
+      .filter((project) => project.id && project.id !== exclude)
+      .map((project) => ({
+        value: project.id ?? '',
+        label: titleOf(project),
+        hint: project.category || undefined
+      }));
   }
+  $effect(() => {
+    const missing = [...(meta.project_ids ?? []), ...(meta.related_project_ids ?? [])].filter(
+      (id) => !(id in titles)
+    );
+    if (!missing.length) return;
+    void adminRequest<Page<Article>>(
+      `/projects?per_page=100&ids=${missing.slice(0, 100).map(encodeURIComponent).join(',')}`
+    )
+      .then((found) => remember(found.items))
+      .catch(() => undefined);
+  });
+  const projectLabel = (id: string) => titles[id] ?? 'Unknown project';
 </script>
 
 <section class="inspector-section" oninput={onchange}>
@@ -76,31 +90,28 @@
     {@render tagField()}
     <label class="editor-field">Repository URL<input type="url" bind:value={repo} /></label>
     <label class="editor-field">Demo URL<input type="url" bind:value={meta.demo_url} /></label>
-    <fieldset>
-      <legend>Related projects</legend>
-      <p class="editor-help">Related projects link both ways on the site and the map.</p>
-      {#each projects.filter((p) => p.id !== selfId) as project (project.id)}<label
-          class="editor-checkbox"
-          ><input
-            type="checkbox"
-            checked={(meta.related_project_ids ?? []).includes(project.id ?? '')}
-            onchange={(event) => toggleRelated(project.id ?? '', event.currentTarget.checked)}
-          />{project.title}{project.archived ? ' (Archived)' : ''}</label
-        >{:else}<p class="editor-help">Create another project to relate it here.</p>{/each}
-    </fieldset>
+    <ChipPicker
+      bind:values={
+        () => meta.related_project_ids ?? [], (value) => (meta.related_project_ids = value)
+      }
+      label="Related projects"
+      help="Related projects link both ways on the site and the map. Search by title."
+      placeholder="Search projects"
+      search={(query) => searchProjects(query, selfId)}
+      labelOf={projectLabel}
+      {onchange}
+    />
   {:else}
     {@render tagField()}
-    <fieldset>
-      <legend>Linked projects</legend>
-      <p class="editor-help">Published posts appear on each selected project.</p>
-      {#each projects as project (project.id)}<label class="editor-checkbox"
-          ><input
-            type="checkbox"
-            checked={(meta.project_ids ?? []).includes(project.id ?? '')}
-            onchange={(event) => toggle(project.id ?? '', event.currentTarget.checked)}
-          />{project.title}{project.archived ? ' (Archived)' : ''}</label
-        >{:else}<p class="editor-help">Create a project to link it here.</p>{/each}
-    </fieldset>
+    <ChipPicker
+      bind:values={() => meta.project_ids ?? [], (value) => (meta.project_ids = value)}
+      label="Linked projects"
+      help="Published posts appear on each selected project. Search by title."
+      placeholder="Search projects"
+      search={(query) => searchProjects(query)}
+      labelOf={projectLabel}
+      {onchange}
+    />
   {/if}
   <label class="editor-field"
     >Cover image<select bind:value={meta.hero_image}
