@@ -623,6 +623,9 @@
       {error}
       diagnostics={preview.diagnostics}
       {previewArticle}
+      previewExact={renderedAt === revision && !!renderedPreview}
+      rendering={compiling}
+      onrender={compileSaved}
       onchange={changed}
       onsave={save}
       onpublish={publish}

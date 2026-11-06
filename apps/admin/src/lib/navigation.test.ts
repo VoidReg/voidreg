@@ -65,3 +65,7 @@ test('list tag filter is part of the route', () => {
   assert.equal(adminRoute(url('?tab=projects&tag=Rust')).tag, 'Rust');
   assert.equal(adminRoute(url('?tab=projects')).tag, '');
 });
+test('live preview is a panel in the route', () => {
+  assert.equal(adminRoute(url('?article=a&panel=preview')).panel, 'preview');
+  assert.equal(adminRoute(url('?article=a&panel=nonsense')).panel, 'document');
+});

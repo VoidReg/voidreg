@@ -1,7 +1,7 @@
 export type AdminTab = 'articles' | 'projects' | 'media' | 'comments' | 'mcp';
 export type EditorView = {
   mode: 'write' | 'preview';
-  panel: 'document' | 'outline' | 'settings';
+  panel: 'document' | 'outline' | 'settings' | 'preview';
   inspector: 'article' | 'block' | 'history';
   block: string | null;
 };
@@ -35,7 +35,9 @@ export function adminRoute(url: UrlLike) {
         ? ('settings' as const)
         : p.get('panel') === 'outline'
           ? ('outline' as const)
-          : ('document' as const),
+          : p.get('panel') === 'preview'
+            ? ('preview' as const)
+            : ('document' as const),
     block: p.get('block'),
     inspector:
       p.get('inspector') === 'block'

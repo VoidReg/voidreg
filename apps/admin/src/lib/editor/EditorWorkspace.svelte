@@ -14,6 +14,7 @@
   import OutlinePanel from './OutlinePanel.svelte';
   import HistoryPanel from './HistoryPanel.svelte';
   import SaveStatus from './SaveStatus.svelte';
+  import LivePreview from './LivePreview.svelte';
   import ShortcutSheet from './ShortcutSheet.svelte';
   import ImportDialog from './ImportDialog.svelte';
   import Tabs from '$lib/ui/Tabs.svelte';
@@ -51,6 +52,9 @@
     error: string;
     diagnostics: readonly Diagnostic[];
     previewArticle: Article;
+    previewExact: boolean;
+    rendering: boolean;
+    onrender: () => unknown;
     onchange: () => void;
     onback: () => void;
     onsave: () => unknown;
@@ -89,6 +93,9 @@
     error,
     diagnostics,
     previewArticle,
+    previewExact,
+    rendering,
+    onrender,
     onchange,
     onback,
     onsave,
@@ -105,6 +112,33 @@
   const errors = $derived(diagnostics.filter((item) => item.level === 'error'));
   let shortcutsOpen = $state(false);
   let importOpen = $state(false);
+  // Side by side preview needs the wide layout (matches the 80rem container breakpoint).
+  let wide = $state(false);
+  $effect(() => {
+    const query = window.matchMedia('(min-width: 80rem)');
+    const update = () => (wide = query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  });
+  const blockIds = $derived(doc.blocks.map((block) => block.id));
+  let scrolledTo = $state<string | null>(null);
+  const syncTarget = $derived(selectedId ?? scrolledTo);
+  let frame = 0;
+  function trackScroll() {
+    if (panel !== 'preview' || !wide || frame) return;
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      const limit =
+        (document.querySelector('.editor-toolbar')?.getBoundingClientRect().bottom ?? 0) + 24;
+      for (const element of document.querySelectorAll<HTMLElement>('.document-block')) {
+        if (element.getBoundingClientRect().bottom > limit) {
+          scrolledTo = element.id.replace(/^editing-/, '');
+          return;
+        }
+      }
+    });
+  }
   let moreOpen = $state(false);
   function menuAction(run: () => unknown) {
     moreOpen = false;
@@ -125,7 +159,12 @@
   }
 
   async function select(id: BlockId) {
-    await onnavigate({ mode: 'write', panel: 'document', inspector: 'block', block: id });
+    await onnavigate({
+      mode: 'write',
+      panel: panel === 'preview' && wide ? 'preview' : 'document',
+      inspector: 'block',
+      block: id
+    });
     await tick();
     const element = document.getElementById(`editing-${id}`);
     element?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
@@ -208,14 +247,16 @@
   }
 </script>
 
-<svelte:window onkeydown={keydown} onclick={outsideMenu} />
+<svelte:window onkeydown={keydown} onclick={outsideMenu} onscroll={trackScroll} />
 <ShortcutSheet bind:open={shortcutsOpen} />
 <ImportDialog bind:open={importOpen} {onimport} />
 
 <div
   class="publishing-workspace"
   class:preview-mode={mode === 'preview'}
-  class:settings-visible={panel === 'settings' || (inspector === 'block' && !!selected)}
+  class:settings-visible={panel === 'settings' ||
+    (panel !== 'preview' && inspector === 'block' && !!selected)}
+  class:preview-visible={panel === 'preview'}
   data-panel={panel}
 >
   <header class="editor-topbar">
@@ -311,6 +352,12 @@
         aria-pressed={panel === 'settings' && inspector === 'history'}
         disabled={!storedSlug}
         onclick={() => showSettings('history')}>History</button
+      ><button
+        class="preview-toggle"
+        aria-pressed={panel === 'preview'}
+        disabled={mode === 'preview'}
+        onclick={() => onnavigate({ panel: panel === 'preview' ? 'document' : 'preview' })}
+        >Live preview</button
       >
     </div>
   </div>
@@ -550,6 +597,19 @@
       {/if}
     </div>
 
+    {#if panel === 'preview'}
+      <LivePreview
+        article={previewArticle}
+        {diagnostics}
+        {blockIds}
+        target={syncTarget}
+        exact={previewExact}
+        {rendering}
+        scrolls={wide}
+        onpick={(id) => select(id as BlockId)}
+        {onrender}
+      />
+    {/if}
     <aside class="editor-inspector" aria-label="Editor settings">
       <Tabs
         class="inspector-tabs"
