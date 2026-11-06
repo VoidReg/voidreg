@@ -265,7 +265,11 @@
       ><button
         aria-pressed={panel === 'settings' && inspector === 'history'}
         onclick={() => showSettings('history')}>History</button
-      ><button onclick={() => (shortcutsOpen = true)} aria-label="Keyboard shortcuts">?</button>
+      ><button
+        class="shortcuts-button"
+        onclick={() => (shortcutsOpen = true)}
+        aria-label="Keyboard shortcuts">?</button
+      >
     </div>
   </div>
   <div class="editor-statusbar">
