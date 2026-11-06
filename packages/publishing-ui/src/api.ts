@@ -6,6 +6,8 @@ export type ContentMeta = {
   has_unpublished_changes?: boolean;
   pending_slug?: string | null;
   project_ids?: string[];
+  /** Topic of one of the linked projects; the server keeps its project in `project_ids`. */
+  topic_id?: string | null;
   related_project_ids?: string[];
   media_ids?: string[];
   seo_title?: string;
@@ -17,9 +19,26 @@ export type ContentMeta = {
   demo_url?: string | null;
 };
 export type ProjectRef = { id: string; slug: string; title: string };
+/** Topic reference resolved on post listings, with its project's slug for links. */
+export type TopicRef = { id: string; slug: string; title: string; project_slug: string };
+/** A topic groups one project's posts. Counts cover published posts on public routes. */
+export type Topic = {
+  id: string;
+  slug: string;
+  title: string;
+  summary: string;
+  project_id: string;
+  sort_order: number;
+  status: 'draft' | 'published';
+  revision?: number;
+  post_count: number;
+  latest_post_at: string | null;
+  project: ProjectRef | null;
+};
 export type Article = ContentMeta & {
   /** Resolved by the listing endpoints so cards need no extra requests. */
   projects?: ProjectRef[];
+  topic?: TopicRef | null;
   tags?: string[];
   repo_url?: string | null;
   revision?: number;

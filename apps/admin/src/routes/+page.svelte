@@ -431,6 +431,11 @@
       );
       storedSlug = value.slug;
       tags = value.tags ?? tags;
+      // The server adds a topic's project to the post's links; mirror that without dropping edits.
+      const added = (value.project_ids ?? []).filter(
+        (id) => !(meta.project_ids ?? []).includes(id)
+      );
+      if (added.length) meta = { ...meta, project_ids: [...(meta.project_ids ?? []), ...added] };
       serverRevision = value.revision ?? 1;
       slug = value.pending_slug || value.slug;
       savedRevision = saving;
@@ -654,6 +659,8 @@
           query: route.query,
           status: route.status,
           tag: route.tag,
+          inProject: route.inProject,
+          inTopic: route.inTopic,
           sort: route.sort,
           dir: route.dir,
           perPage: route.perPage

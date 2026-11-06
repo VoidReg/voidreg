@@ -834,7 +834,8 @@ pub struct ContentQuery {
     pub project: Option<String>,
     /// Topic id, for posts.
     pub topic_id: Option<String>,
-    /// Topic slug inside the project selected by `project` or `project_id`, for posts.
+    /// Topic slug inside the project selected by `project` or `project_id`, for posts. The
+    /// value `none` selects posts without a topic.
     pub topic: Option<String>,
     /// Technology tag, case-insensitive exact match.
     pub tag: Option<String>,
@@ -903,7 +904,11 @@ impl Db {
             args.push(id.clone().into());
         }
         let mut topic_id = query.topic_id.clone();
-        if let Some(slug) = query.topic.as_deref().filter(|s| !s.is_empty()) {
+        // `topic=none` selects posts that are not filed under any topic ("Other posts").
+        let no_topic = query.topic.as_deref() == Some("none");
+        if no_topic {
+            conditions.push(format!("json_extract({column}, '$.topic_id') IS NULL"));
+        } else if let Some(slug) = query.topic.as_deref().filter(|s| !s.is_empty()) {
             // A topic slug only means something inside a project; unknown ones match nothing.
             topic_id = Some(match &project_id {
                 Some(project) => {
@@ -1136,13 +1141,8 @@ impl Db {
                     .unwrap_or(Value::Null);
             }
         } else if kind == "topic" {
-            let published_only = if public {
-                ""
-            } else {
-                " AND json_extract(e.working, '$.status') = 'published'"
-            };
             let sql = format!(
-                "SELECT json_extract(e.{column}, '$.topic_id'), count(*), coalesce(max(json_extract(e.{column}, '$.published_at')), '') FROM content_entries e WHERE e.kind = 'article' AND {visible}{published_only} AND json_extract(e.{column}, '$.topic_id') IN ({marks}) GROUP BY 1"
+                "SELECT json_extract(e.{column}, '$.topic_id'), count(*), coalesce(max(json_extract(e.{column}, '$.published_at')), '') FROM content_entries e WHERE e.kind = 'article' AND {visible} AND json_extract(e.{column}, '$.topic_id') IN ({marks}) GROUP BY 1"
             );
             let mut query = toasty::sql::query(sql);
             for id in &page_ids {

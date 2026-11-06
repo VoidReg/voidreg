@@ -4,7 +4,7 @@
   import { adminRequest } from './api';
   import { confirmDialog } from './ui/confirm.svelte';
   import { notify } from './ui/toast.svelte';
-  import type { Article, Page } from '@voidreg/publishing-ui/api';
+  import type { Article, Page, Topic } from '@voidreg/publishing-ui/api';
 
   type SortKey = '' | 'title' | 'category' | 'status' | 'date';
   interface Route {
@@ -12,6 +12,8 @@
     query: string;
     status: string;
     tag: string;
+    inProject: string;
+    inTopic: string;
     sort: SortKey;
     dir: 'asc' | 'desc';
     perPage: number;
@@ -45,6 +47,38 @@
       .catch(() => (knownTags = []));
   });
 
+  // Project and topic filters for posts. Projects are suggested by server search so the list
+  // stays bounded; topics load only once a project is chosen.
+  let projectChoices = $state<{ slug: string; title: string }[]>([]);
+  let topicChoices = $state<Topic[]>([]);
+  let projectTimer: ReturnType<typeof setTimeout> | undefined;
+  function suggestProjects(text: string) {
+    clearTimeout(projectTimer);
+    projectTimer = setTimeout(() => {
+      void adminRequest<Page<Article>>(
+        `/projects?per_page=20&sort=title&q=${encodeURIComponent(text)}`
+      )
+        .then((v) => (projectChoices = v.items.map(({ slug, title }) => ({ slug, title }))))
+        .catch(() => (projectChoices = []));
+    }, 150);
+  }
+  $effect(() => {
+    if (kind !== 'articles') return;
+    suggestProjects('');
+  });
+  $effect(() => {
+    const project = kind === 'articles' ? route.inProject : '';
+    if (!project) {
+      topicChoices = [];
+      return;
+    }
+    let live = true;
+    void adminRequest<Page<Topic>>(`/topics?project=${encodeURIComponent(project)}&per_page=100`)
+      .then((v) => live && (topicChoices = v.items))
+      .catch(() => live && (topicChoices = []));
+    return () => (live = false);
+  });
+
   async function load() {
     const request = ++requestId;
     loading = true;
@@ -56,6 +90,10 @@
       status: route.status,
       tag: route.tag
     });
+    if (kind === 'articles' && route.inProject) {
+      params.set('project', route.inProject);
+      if (route.inTopic) params.set('topic', route.inTopic);
+    }
     if (route.sort) {
       params.set('sort', route.sort);
       params.set('dir', route.dir);
@@ -80,6 +118,8 @@
       route.query,
       route.status,
       route.tag,
+      route.inProject,
+      route.inTopic,
       route.sort,
       route.dir,
       route.perPage
@@ -103,7 +143,9 @@
   const pages = $derived(Math.max(1, Math.ceil(total / route.perPage)));
   const first = $derived(total === 0 ? 0 : (route.page - 1) * route.perPage + 1);
   const last = $derived(Math.min(total, route.page * route.perPage));
-  const filtered = $derived(!!route.query || !!route.status || !!route.tag);
+  const filtered = $derived(
+    !!route.query || !!route.status || !!route.tag || !!route.inProject || !!route.inTopic
+  );
   const allSelected = $derived(items.length > 0 && items.every((i) => selected.has(i.slug)));
   const chosen = $derived(items.filter((i) => selected.has(i.slug)));
 
@@ -275,6 +317,40 @@
         >{#each knownTags as name (name)}<option value={name}></option>{/each}</datalist
       ></label
     >
+    {#if kind === 'articles'}
+      <label class="ui-field"
+        >Project<input
+          list="list-projects"
+          value={route.inProject}
+          placeholder="Any project (URL)"
+          autocomplete="off"
+          oninput={(event) => suggestProjects(event.currentTarget.value)}
+          onchange={(event) =>
+            onnavigate({
+              in_project: event.currentTarget.value.trim() || null,
+              in_topic: null,
+              page: null
+            })}
+        /><datalist id="list-projects"
+          >{#each projectChoices as choice (choice.slug)}<option value={choice.slug}
+              >{choice.title}</option
+            >{/each}</datalist
+        ></label
+      >
+      {#if route.inProject}
+        <label class="ui-field"
+          >Topic<select
+            value={route.inTopic}
+            onchange={(event) =>
+              onnavigate({ in_topic: event.currentTarget.value || null, page: null })}
+            ><option value="">Any topic</option><option value="none">No topic</option
+            >{#each topicChoices as topic (topic.id)}<option value={topic.slug}
+                >{topic.title}</option
+              >{/each}</select
+          ></label
+        >
+      {/if}
+    {/if}
     <label class="ui-field"
       >Per page<select
         value={String(route.perPage)}
@@ -292,7 +368,14 @@
         class="ui-btn ui-btn-quiet"
         onclick={() => {
           search = '';
-          onnavigate({ q: null, status: null, tag: null, page: null });
+          onnavigate({
+            q: null,
+            status: null,
+            tag: null,
+            in_project: null,
+            in_topic: null,
+            page: null
+          });
         }}>Clear filters</button
       >{/if}
   </form>
@@ -335,7 +418,14 @@
           class="ui-btn"
           onclick={() => {
             search = '';
-            onnavigate({ q: null, status: null, tag: null, page: null });
+            onnavigate({
+              q: null,
+              status: null,
+              tag: null,
+              in_project: null,
+              in_topic: null,
+              page: null
+            });
           }}>Clear filters</button
         >
       {:else}
@@ -409,6 +499,9 @@
                   >
                 {/if}
                 <span class="list-slug">/{article.slug}</span>
+                {#if article.topic}<span class="list-slug" title="Topic"
+                    >Topic: {article.topic.title}</span
+                  >{/if}
                 {#if article.tags?.length}<span class="list-tags" aria-label="Tags"
                     >{#each article.tags.slice(0, 3) as tag (tag)}<button
                         type="button"

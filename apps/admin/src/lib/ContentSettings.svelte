@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { adminRequest } from './api';
-  import type { Article, ContentMeta, Page } from '@voidreg/publishing-ui/api';
+  import type { Article, ContentMeta, Page, Topic } from '@voidreg/publishing-ui/api';
+  import TopicManager from './TopicManager.svelte';
   import ChipPicker from './components/ChipPicker.svelte';
   import { normalizeTag, type Option } from './pickers';
   let {
@@ -70,6 +71,43 @@
       .catch(() => undefined);
   });
   const projectLabel = (id: string) => titles[id] ?? 'Unknown project';
+
+  // Topics offered to a post come only from its linked projects, a bounded set per project.
+  const TOPIC_PROJECTS = 6;
+  let topicsByProject = $state<Record<string, Topic[]>>({});
+  let topicsFailed = $state(false);
+  const linkedIds = $derived((meta.project_ids ?? []).slice(0, TOPIC_PROJECTS));
+  $effect(() => {
+    if (kind === 'projects') return;
+    const missing = linkedIds.filter((id) => !(id in topicsByProject));
+    if (!missing.length) return;
+    for (const id of missing) {
+      void adminRequest<Page<Topic>>(`/topics?project_id=${encodeURIComponent(id)}&per_page=100`)
+        .then((found) => {
+          topicsByProject = { ...topicsByProject, [id]: found.items };
+          topicsFailed = false;
+        })
+        .catch(() => (topicsFailed = true));
+    }
+  });
+  const topicGroups = $derived(
+    linkedIds
+      .map((id) => ({ id, title: projectLabel(id), topics: topicsByProject[id] ?? [] }))
+      .filter((group) => group.topics.length)
+  );
+  // A topic only makes sense while its project stays linked, so removing the project clears it.
+  $effect(() => {
+    const current = meta.topic_id;
+    if (!current || kind === 'projects') return;
+    const ids = meta.project_ids ?? [];
+    const owner = Object.entries(topicsByProject).find(([, list]) =>
+      list.some((topic) => topic.id === current)
+    );
+    if (owner && !ids.includes(owner[0])) {
+      meta.topic_id = null;
+      onchange();
+    }
+  });
 </script>
 
 <section class="inspector-section" oninput={onchange}>
@@ -112,6 +150,24 @@
       labelOf={projectLabel}
       {onchange}
     />
+    {#if topicGroups.length}
+      <label class="editor-field"
+        >Topic<select
+          bind:value={() => meta.topic_id ?? '', (value) => (meta.topic_id = value || null)}
+          ><option value="">No topic (Other posts)</option
+          >{#each topicGroups as group (group.id)}<optgroup label={group.title}
+              >{#each group.topics as topic (topic.id)}<option value={topic.id}
+                  >{topic.title}</option
+                >{/each}</optgroup
+            >{/each}</select
+        ></label
+      >
+      <p class="editor-help">
+        Groups this post inside a linked project. Manage topics in the project editor.
+      </p>
+    {:else if topicsFailed}
+      <p class="editor-help" role="status">Topics could not be loaded for the linked projects.</p>
+    {/if}
   {/if}
   <label class="editor-field"
     >Cover image<select bind:value={meta.hero_image}
@@ -137,3 +193,15 @@
     >
   </details>
 </section>
+{#if kind === 'projects'}
+  <section class="inspector-section">
+    {#if selfId}
+      <TopicManager projectId={selfId} />
+    {:else}
+      <div>
+        <h2 class="sidebar-heading">Topics</h2>
+        <p class="editor-help">Save the project once to add topics.</p>
+      </div>
+    {/if}
+  </section>
+{/if}

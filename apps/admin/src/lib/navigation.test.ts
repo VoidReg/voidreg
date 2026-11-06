@@ -69,3 +69,10 @@ test('live preview is a panel in the route', () => {
   assert.equal(adminRoute(url('?article=a&panel=preview')).panel, 'preview');
   assert.equal(adminRoute(url('?article=a&panel=nonsense')).panel, 'document');
 });
+test('post list filters use their own keys so the project editor slug stays separate', () => {
+  const r = adminRoute(url('?tab=articles&in_project=alpha&in_topic=firmware'));
+  assert.equal(r.inProject, 'alpha');
+  assert.equal(r.inTopic, 'firmware');
+  assert.equal(r.item, null);
+  assert.equal(adminRoute(url('?tab=articles')).inProject, '');
+});

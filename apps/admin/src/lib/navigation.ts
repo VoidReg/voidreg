@@ -24,6 +24,9 @@ export function adminRoute(url: UrlLike) {
     query: p.get('q') ?? '',
     status: p.get('status') ?? '',
     tag: p.get('tag') ?? '',
+    // `project` already names the project being edited, so list filters use their own keys.
+    inProject: p.get('in_project') ?? '',
+    inTopic: p.get('in_topic') ?? '',
     sort: (['title', 'category', 'status', 'date'].includes(p.get('sort') ?? '')
       ? p.get('sort')
       : '') as '' | 'title' | 'category' | 'status' | 'date',
