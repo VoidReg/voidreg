@@ -550,7 +550,7 @@
     width: 3rem;
     height: 3rem;
     place-items: center;
-    border: 1px solid var(--border);
+    border: 1px solid var(--input);
     color: var(--foreground);
     transition:
       background-color var(--duration-fast) var(--ease-standard),
@@ -611,17 +611,17 @@
     align-items: end;
   }
 
-  .contact-copy {
+  .contact-band .contact-copy {
     display: grid;
     gap: 1.25rem;
     max-width: 44rem;
   }
 
-  .contact-copy .eyebrow {
+  .contact-band .contact-copy .eyebrow {
     color: var(--primary-foreground);
   }
 
-  .contact-copy p:not(.eyebrow) {
+  .contact-band .contact-copy p:not(.eyebrow) {
     font-size: 1.125rem;
     line-height: 1.5;
   }
@@ -652,7 +652,7 @@
     display: block;
     margin-bottom: 2rem;
     overflow: hidden;
-    color: var(--secondary);
+    color: var(--muted-foreground);
     font-size: 6rem;
     font-weight: 500;
     line-height: 1.25;
