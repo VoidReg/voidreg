@@ -71,7 +71,10 @@ async function makeArticle(name: string, title = 'Stress article'): Promise<Row>
   return row;
 }
 const save = (row: Pick<Row, 'slug' | 'revision'>, fields: Json) =>
-  call<Row>('PUT', `/articles/${row.slug}`, { expected_revision: row.revision, ...fields });
+  call<Row>('PUT', `/articles/${row.slug}`, {
+    expected_revision: row.revision,
+    ...fields
+  });
 async function compile(kind: 'articles' | 'projects', name: string, revision: number) {
   const started = await call<{ id: string }>('POST', `/${kind}/${name}/compile`, {
     expected_revision: revision
@@ -163,7 +166,10 @@ async function main() {
     });
     pub = await publicGet(`/blogs/${row.slug}`);
     check(pub.status === 404, `unpublished article is not public (${pub.status})`);
-    const again = await publish({ slug: row.slug, revision: unpublished.revision });
+    const again = await publish({
+      slug: row.slug,
+      revision: unpublished.revision
+    });
     pub = await publicGet(`/blogs/${row.slug}`);
     check(
       again.status === 'published' && pub.body?.title === 'Draft title',
@@ -241,7 +247,10 @@ async function main() {
       (await publicGet(`/blogs/${slug('rename-old')}`)).status === 200,
       'old slug still public before publish'
     );
-    const published = await publish({ slug: admin.slug, revision: admin.revision });
+    const published = await publish({
+      slug: admin.slug,
+      revision: admin.revision
+    });
     check(
       (await publicGet(`/blogs/${next}`)).status === 200,
       `new slug public after publish (${published.slug})`
@@ -269,13 +278,17 @@ async function main() {
     const linkedRevision = row.revision;
     row = await save(row, { title: 'After link' });
     await expectStatus(
-      call('DELETE', `/projects/${project.slug}`, { expected_revision: project.revision }),
+      call('DELETE', `/projects/${project.slug}`, {
+        expected_revision: project.revision
+      }),
       409,
       'a project with linked articles cannot be deleted'
     );
     row = await save(row, { meta: { project_ids: [] } });
     row = await publish(row); // the public copy must stop referencing the project too
-    await call('DELETE', `/projects/${project.slug}`, { expected_revision: project.revision });
+    await call('DELETE', `/projects/${project.slug}`, {
+      expected_revision: project.revision
+    });
     const outcome = await call<Row>(
       'POST',
       `/articles/${row.slug}/revisions/${linkedRevision}/restore`,
@@ -300,7 +313,10 @@ async function main() {
   await scenario('document limits and schema version are enforced', async () => {
     const row = await makeArticle('limits');
     await expectStatus(
-      save(row, { document: { ...doc('x', 'y'), schemaVersion: 99 }, document_version: 99 }),
+      save(row, {
+        document: { ...doc('x', 'y'), schemaVersion: 99 },
+        document_version: 99
+      }),
       422,
       'unsupported schemaVersion'
     );
@@ -324,14 +340,20 @@ async function main() {
       ...doc('x', 'y'),
       blocks: Array.from({ length: 10000 }, (_, i) => block(i + 1, 'p'))
     };
-    const accepted = await save(row, { document: maxBlocks, document_version: 1 }).then(
+    const accepted = await save(row, {
+      document: maxBlocks,
+      document_version: 1
+    }).then(
       () => true,
       () => false
     );
     check(accepted, '10,000 blocks is accepted');
     await expectStatus(
       save(
-        { slug: row.slug, revision: (await call<Row>('GET', `/articles/${row.slug}`)).revision },
+        {
+          slug: row.slug,
+          revision: (await call<Row>('GET', `/articles/${row.slug}`)).revision
+        },
         { compiled: { format: 'x', html: 'a'.repeat(4 * 1024 * 1024 + 10) } }
       ),
       [413, 422],
@@ -365,7 +387,9 @@ async function main() {
       'publishing with an unknown compilation id'
     );
     await expectStatus(
-      call('POST', `/articles/${row.slug}/publish`, { expected_revision: row.revision }),
+      call('POST', `/articles/${row.slug}/publish`, {
+        expected_revision: row.revision
+      }),
       [409, 422],
       'publishing without a compilation'
     );
@@ -376,7 +400,12 @@ async function main() {
     const bad = await save(row, {
       document: {
         ...doc('x', 'y'),
-        blocks: [block(1, '', 'publisle:math', { display: true, value: '\\frac{1}{' })]
+        blocks: [
+          block(1, '', 'publisle:math', {
+            display: true,
+            value: '\\frac{1}{'
+          })
+        ]
       },
       document_version: 1
     });
@@ -431,6 +460,123 @@ async function main() {
     check(two.items.length <= 2, 'per_page is honoured');
   });
 
+  await scenario('tags are normalized, bounded and searchable for posts and projects', async () => {
+    const tag = (name: string) => `st-${run}-${name}`;
+    const row = await makeArticle('tagged');
+    const tagged = await save(row, {
+      tags: [`  ${tag('Alpha')}  `, tag('alpha'), tag('beta'), 'x']
+    });
+    const stored = await call<Row & { tags?: string[] }>('GET', `/articles/${row.slug}`);
+    check(
+      JSON.stringify(stored.tags) === JSON.stringify([tag('Alpha'), tag('beta'), 'x']),
+      `tags trimmed and de-duplicated case-insensitively (${JSON.stringify(stored.tags)})`
+    );
+    await expectStatus(
+      save(tagged, { tags: Array.from({ length: 21 }, (_, i) => `t${i}`) }),
+      [400, 422],
+      'more than 20 tags is refused'
+    );
+    await expectStatus(save(tagged, { tags: ['x'.repeat(41)] }), [400, 422], 'long tag refused');
+    await expectStatus(
+      save(tagged, { tags: ['bad\u0001tag'] }),
+      [400, 422],
+      'control character refused'
+    );
+    const project = await call<Row>('POST', '/projects', {
+      slug: slug('tag-project'),
+      title: 'Tagged project',
+      category: 'Stress',
+      summary: 'Created by the stress suite.',
+      tags: [tag('beta'), tag('gamma')],
+      document: doc('Tagged project', 'Body.'),
+      document_version: 1
+    });
+    created.push({ kind: 'projects', slug: project.slug });
+    await expectStatus(
+      call('PUT', `/projects/${project.slug}`, {
+        expected_revision: project.revision,
+        tags: [{ not: 'text' }]
+      }),
+      [400, 422],
+      'project tags must be text'
+    );
+    const vocabulary = await call<{
+      items: { name: string; count_projects: number; count_posts: number }[];
+    }>('GET', `/tags?q=${encodeURIComponent(tag('beta'))}`);
+    const beta = vocabulary.items.find((item) => item.name === tag('beta'));
+    check(
+      beta?.count_posts === 1 && beta?.count_projects === 1,
+      `one shared vocabulary counts both kinds (${JSON.stringify(beta)})`
+    );
+    const published = await publish(tagged);
+    check(published.status === 'published', 'tagged article publishes');
+    const found = await publicGet(`/blogs?tag=${encodeURIComponent(tag('ALPHA'))}`);
+    check(
+      found.status === 200 && found.body.items.some((item: Row) => item.slug === row.slug),
+      'public list filters by tag, case-insensitively'
+    );
+    const publicTags = await publicGet(`/tags?q=${encodeURIComponent(tag('alpha'))}`);
+    check(
+      publicTags.body.items.some((item: { name: string }) => item.name === tag('Alpha')),
+      'public vocabulary lists tags of published posts'
+    );
+  });
+
+  await scenario('graph modes stay bounded and per-project focus works', async () => {
+    const row = await makeArticle('graph');
+    const project = await call<Row>('POST', '/projects', {
+      slug: slug('graph-project'),
+      title: 'Graph project',
+      category: 'Stress',
+      summary: 'Created by the stress suite.',
+      tags: ['st-graph'],
+      document: doc('Graph project', 'Body.'),
+      document_version: 1
+    });
+    created.push({ kind: 'projects', slug: project.slug });
+    await save(row, { meta: { project_ids: [project.id] } });
+    const summary = await call<{
+      mode: string;
+      nodes: { kind: string }[];
+      totals: { projects: number };
+    }>('GET', '/graph?summary=1');
+    check(summary.mode === 'summary', 'summary mode is honoured');
+    check(
+      summary.nodes.every((n) => n.kind === 'project'),
+      'summary carries projects only'
+    );
+    const one = await call<{
+      mode: string;
+      nodes: { slug: string; kind: string }[];
+      posts_total: number;
+    }>('GET', `/graph?project=${project.slug}`);
+    check(one.mode === 'project' && one.posts_total === 1, 'project mode counts its posts');
+    check(
+      one.nodes.some((n) => n.kind === 'post' && n.slug === row.slug),
+      'project mode lists the linked draft post'
+    );
+    await expectStatus(
+      call('GET', '/graph?project=no-such-project'),
+      404,
+      'unknown project is 404'
+    );
+    const full = await call<{
+      mode: string;
+      nodes: unknown[];
+      totals: { projects: number; posts: number };
+    }>('GET', '/graph');
+    const total = full.totals.projects + full.totals.posts;
+    check(
+      total > 300
+        ? full.mode === 'summary' && full.nodes.length <= full.totals.projects
+        : full.mode === 'full',
+      `default graph mode follows the size guard (${total} nodes, mode ${full.mode})`
+    );
+    const started = Date.now();
+    await call('GET', '/graph');
+    check(Date.now() - started < 3000, 'graph responds within 3s at the current catalogue size');
+  });
+
   await scenario('revision compare data is complete for large documents', async () => {
     let row = await makeArticle('compare');
     row = await save(row, {
@@ -444,10 +590,9 @@ async function main() {
       'GET',
       `/articles/${row.slug}/revisions?limit=100`
     );
-    const snapshot = await call<{ snapshot: { document: { blocks: unknown[] } } }>(
-      'GET',
-      `/articles/${row.slug}/revisions/${list.items[0].revision}`
-    );
+    const snapshot = await call<{
+      snapshot: { document: { blocks: unknown[] } };
+    }>('GET', `/articles/${row.slug}/revisions/${list.items[0].revision}`);
     check(snapshot.snapshot.document.blocks.length === 400, 'snapshot returns every block');
   });
 }
@@ -456,7 +601,9 @@ async function cleanup() {
   for (const item of created.reverse()) {
     try {
       const row = await call<Row>('GET', `/${item.kind}/${item.slug}`);
-      await call('DELETE', `/${item.kind}/${item.slug}`, { expected_revision: row.revision });
+      await call('DELETE', `/${item.kind}/${item.slug}`, {
+        expected_revision: row.revision
+      });
     } catch {
       /* already gone or renamed */
     }

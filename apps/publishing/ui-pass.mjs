@@ -18,8 +18,20 @@ const reader = [
   ['post-kitchen-sink', '/blog/publisle-feature-test'],
   ['post-long', '/blog/revision-history-in-practice'],
   ['project', '/projects/test-signal-lab'],
-  ['map', '/map']
+  ['blog-tag', '/blog?tag=test'],
+  ['map', '/map'],
+  ['map-open', '/map?open=test-signal-lab']
 ];
+// With a large catalogue seeded (seed:scale), also check the grouped map and filters at scale.
+// Long pages are captured at viewport height so the lanes' on-demand drawing is what is judged.
+const scale = process.env.SCALE === '1';
+const viewportOnly = new Set(['map-scale', 'map-scale-open', 'map-scale-filter']);
+if (scale)
+  reader.push(
+    ['map-scale', '/map'],
+    ['map-scale-open', '/map?open=scale-project-0012,scale-project-0013'],
+    ['map-scale-filter', '/map?category=Category%2003&tag=rust']
+  );
 const admin = [
   ['admin-articles', '/admin/'],
   ['admin-editor', '/admin/?article=publisle-feature-test'],
@@ -27,6 +39,8 @@ const admin = [
     'admin-history',
     '/admin/?article=revision-history-in-practice&panel=settings&inspector=history'
   ],
+  ['admin-editor-settings', '/admin/?article=publisle-feature-test&panel=settings'],
+  ['admin-editor-live', '/admin/?article=publisle-feature-test&panel=preview'],
   ['admin-media', '/admin/?tab=media'],
   ['admin-comments', '/admin/?tab=comments'],
   ['admin-mcp', '/admin/?tab=mcp']
@@ -48,7 +62,12 @@ function audit() {
       .filter(Boolean)
       .map(Number);
     const scale = value.startsWith('color(') ? 255 : 1;
-    return { r: parts[0] * scale, g: parts[1] * scale, b: parts[2] * scale, a: parts[3] ?? 1 };
+    return {
+      r: parts[0] * scale,
+      g: parts[1] * scale,
+      b: parts[2] * scale,
+      a: parts[3] ?? 1
+    };
   };
   const over = (top, under) => ({
     r: top.r * top.a + under.r * (1 - top.a),
@@ -194,7 +213,9 @@ for (const theme of themes) {
       await page.goto(origin + path, { waitUntil: 'networkidle' });
       await page.waitForTimeout(600);
       // Dismiss the consent banner so it does not hide content in screenshots.
-      const banner = page.getByRole('button', { name: /reject non-essential/i });
+      const banner = page.getByRole('button', {
+        name: /reject non-essential/i
+      });
       if (await banner.count())
         await banner
           .first()
@@ -214,7 +235,7 @@ for (const theme of themes) {
         for (const item of items) report(label, `${kind}: ${item}`);
       await page.screenshot({
         path: `${outDir}/${name}-${width}-${theme}.png`,
-        fullPage: !name.startsWith('admin')
+        fullPage: !name.startsWith('admin') && !viewportOnly.has(name)
       });
       pages++;
     };

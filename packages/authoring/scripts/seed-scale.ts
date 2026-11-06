@@ -25,7 +25,9 @@ const documentOf = (title: string, seed: number) => ({
       id: `018f5e01-0000-4000-8000-${seed.toString(16).padStart(12, '0')}`,
       type: 'publisle:paragraph',
       schemaVersion: 1,
-      data: { content: [{ type: 'text', value: `${title} is generated test content.` }] }
+      data: {
+        content: [{ type: 'text', value: `${title} is generated test content.` }]
+      }
     }
   ]
 });
@@ -91,7 +93,9 @@ async function clean() {
       async (i) => {
         const stored = await find(kind, slugOf(i));
         if (stored)
-          await call('DELETE', `/${kind}/${slugOf(i)}`, { expected_revision: stored.revision });
+          await call('DELETE', `/${kind}/${slugOf(i)}`, {
+            expected_revision: stored.revision
+          });
       }
     );
   }
