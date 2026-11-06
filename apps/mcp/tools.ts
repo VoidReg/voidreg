@@ -46,6 +46,7 @@ const metadata = {
   category: z.string().trim().min(1).max(80),
   summary: z.string().trim().min(1).max(500)
 };
+const tags = z.array(z.string().trim().min(1).max(40)).max(20);
 function validateInput(
   input: { markdown?: string; document?: unknown },
   title: string
@@ -201,7 +202,7 @@ export function createTools(bridge: Bridge, publicOrigin: string) {
   tool(
     'create_draft',
     'Create a saved draft from Markdown or a structured document. Does not publish.',
-    z.object({ ...metadata, slug: slug.optional(), ...content }).strict(),
+    z.object({ ...metadata, tags: tags.optional(), slug: slug.optional(), ...content }).strict(),
     false,
     async (input) => {
       const validated = validateInput(input, input.title);
@@ -230,6 +231,7 @@ export function createTools(bridge: Bridge, publicOrigin: string) {
         title: metadata.title.optional(),
         category: metadata.category.optional(),
         summary: metadata.summary.optional(),
+        tags: tags.optional(),
         ...content
       })
       .strict(),

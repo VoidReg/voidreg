@@ -2,6 +2,8 @@
   import { onMount } from 'svelte';
   import { adminRequest } from './api';
   import type { Article, ContentMeta } from '@voidreg/publishing-ui/api';
+  import ChipPicker from './components/ChipPicker.svelte';
+  import { normalizeTag, type Option } from './pickers';
   let {
     meta = $bindable(),
     tags = $bindable(),
@@ -12,7 +14,7 @@
     onchange
   }: {
     meta: ContentMeta;
-    tags: string;
+    tags: string[];
     repo: string;
     kind: string;
     selfId?: string;
@@ -26,6 +28,16 @@
       .then((v) => (media = v.items))
       .catch(() => (error = 'Media could not be loaded. Open Media to retry.'));
   });
+  async function searchTags(query: string): Promise<Option[]> {
+    const found = await adminRequest<{
+      items: { name: string; count_projects: number; count_posts: number }[];
+    }>(`/tags?limit=20&q=${encodeURIComponent(query)}`);
+    return found.items.map((tag) => ({
+      value: tag.name,
+      label: tag.name,
+      hint: `${tag.count_projects} projects, ${tag.count_posts} posts`
+    }));
+  }
   function toggleRelated(id: string, checked: boolean) {
     meta = {
       ...meta,
@@ -47,11 +59,21 @@
 </script>
 
 <section class="inspector-section" oninput={onchange}>
+  {#snippet tagField()}
+    <ChipPicker
+      bind:values={tags}
+      label={kind === 'projects' ? 'Technologies and tags' : 'Tags'}
+      help="Press Enter or comma to add a tag. Tags are shared by projects and posts, and projects with common tags are linked on the map."
+      placeholder="Add a tag"
+      search={searchTags}
+      createValue={normalizeTag}
+      max={20}
+      {onchange}
+    />
+  {/snippet}
   {#if kind === 'projects'}
     <h2 class="sidebar-heading">Project details</h2>
-    <label class="editor-field"
-      >Technologies and tags<input bind:value={tags} placeholder="Rust, ESP32, Wi-Fi CSI" /></label
-    >
+    {@render tagField()}
     <label class="editor-field">Repository URL<input type="url" bind:value={repo} /></label>
     <label class="editor-field">Demo URL<input type="url" bind:value={meta.demo_url} /></label>
     <fieldset>
@@ -67,6 +89,7 @@
         >{:else}<p class="editor-help">Create another project to relate it here.</p>{/each}
     </fieldset>
   {:else}
+    {@render tagField()}
     <fieldset>
       <legend>Linked projects</legend>
       <p class="editor-help">Published posts appear on each selected project.</p>

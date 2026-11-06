@@ -12,6 +12,7 @@
     page: number;
     query: string;
     status: string;
+    tag: string;
     sort: SortKey;
     dir: 'asc' | 'desc';
     perPage: number;
@@ -38,6 +39,13 @@
   let search = $state(untrack(() => route.query));
   let requestId = 0;
 
+  let knownTags = $state<string[]>([]);
+  $effect(() => {
+    void adminRequest<{ items: { name: string }[] }>('/tags?limit=100')
+      .then((v) => (knownTags = v.items.map((t) => t.name)))
+      .catch(() => (knownTags = []));
+  });
+
   async function load() {
     const request = ++requestId;
     loading = true;
@@ -46,7 +54,8 @@
       page: String(route.page),
       per_page: String(route.perPage),
       q: route.query,
-      status: route.status
+      status: route.status,
+      tag: route.tag
     });
     if (route.sort) {
       params.set('sort', route.sort);
@@ -66,7 +75,16 @@
     }
   }
   $effect(() => {
-    void [kind, route.page, route.query, route.status, route.sort, route.dir, route.perPage];
+    void [
+      kind,
+      route.page,
+      route.query,
+      route.status,
+      route.tag,
+      route.sort,
+      route.dir,
+      route.perPage
+    ];
     untrack(() => {
       selected = new Set();
       void load();
@@ -86,7 +104,7 @@
   const pages = $derived(Math.max(1, Math.ceil(total / route.perPage)));
   const first = $derived(total === 0 ? 0 : (route.page - 1) * route.perPage + 1);
   const last = $derived(Math.min(total, route.page * route.perPage));
-  const filtered = $derived(!!route.query || !!route.status);
+  const filtered = $derived(!!route.query || !!route.status || !!route.tag);
   const allSelected = $derived(items.length > 0 && items.every((i) => selected.has(i.slug)));
   const chosen = $derived(items.filter((i) => selected.has(i.slug)));
 
@@ -250,6 +268,18 @@
       ></label
     >
     <label class="ui-field"
+      >Tag<input
+        list="list-tags"
+        value={route.tag}
+        placeholder="Any tag"
+        autocomplete="off"
+        onchange={(event) =>
+          onnavigate({ tag: event.currentTarget.value.trim() || null, page: null })}
+      /><datalist id="list-tags"
+        >{#each knownTags as name (name)}<option value={name}></option>{/each}</datalist
+      ></label
+    >
+    <label class="ui-field"
       >Per page<select
         value={String(route.perPage)}
         onchange={(event) =>
@@ -266,7 +296,7 @@
         class="ui-btn ui-btn-quiet"
         onclick={() => {
           search = '';
-          onnavigate({ q: null, status: null, page: null });
+          onnavigate({ q: null, status: null, tag: null, page: null });
         }}>Clear filters</button
       >{/if}
   </form>
@@ -309,7 +339,7 @@
           class="ui-btn"
           onclick={() => {
             search = '';
-            onnavigate({ q: null, status: null, page: null });
+            onnavigate({ q: null, status: null, tag: null, page: null });
           }}>Clear filters</button
         >
       {:else}
@@ -383,6 +413,16 @@
                   >
                 {/if}
                 <span class="list-slug">/{article.slug}</span>
+                {#if article.tags?.length}<span class="list-tags" aria-label="Tags"
+                    >{#each article.tags.slice(0, 3) as tag (tag)}<button
+                        type="button"
+                        class="list-tag"
+                        title={`Show items tagged ${tag}`}
+                        onclick={() => onnavigate({ tag, page: null })}>{tag}</button
+                      >{/each}{#if article.tags.length > 3}<span class="list-tag more"
+                        >+{article.tags.length - 3}</span
+                      >{/if}</span
+                  >{/if}
               </th>
               <td>
                 <span
@@ -479,9 +519,29 @@
   }
   .list-filters {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 10rem 7rem auto;
+    grid-template-columns: minmax(0, 1fr) 10rem 10rem 7rem auto;
     gap: 0.75rem;
     align-items: end;
+  }
+  .list-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-top: 0.25rem;
+  }
+  .list-tag {
+    border: 1px solid var(--border);
+    background: transparent;
+    padding: 0 0.5rem;
+    min-height: 1.5rem;
+    color: var(--muted-foreground);
+    font: inherit;
+    font-size: 0.75rem;
+    cursor: pointer;
+  }
+  button.list-tag:hover {
+    border-color: var(--foreground);
+    color: var(--foreground);
   }
   .list-bulk {
     display: flex;

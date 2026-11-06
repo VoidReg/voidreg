@@ -115,7 +115,7 @@
     void applyRoute();
   });
   let meta = $state<ContentMeta>({}),
-    tagsText = $state(''),
+    tags = $state<string[]>([]),
     repoUrl = $state('');
   const route = $derived(adminRoute(page.url));
   const contentKind = $derived(tab === 'projects' ? 'projects' : 'articles');
@@ -374,7 +374,7 @@
       savedAt = null;
       slug = value?.pending_slug || storedSlug;
       meta = value ?? {};
-      tagsText = value?.tags?.join(', ') ?? '';
+      tags = value?.tags ?? [];
       repoUrl = value?.repo_url ?? '';
       title = value?.title ?? '';
       category = value?.category ?? '';
@@ -412,13 +412,10 @@
         ...(contentKind === 'projects'
           ? {
               ...meta,
-              tags: tagsText
-                .split(',')
-                .map((t) => t.trim())
-                .filter(Boolean),
+              tags,
               repo_url: repoUrl || null
             }
-          : { meta }),
+          : { meta, tags }),
         slug: slug || (storedSlug ? undefined : 'draft-' + crypto.randomUUID()),
         title,
         category,
@@ -435,6 +432,7 @@
         payload
       );
       storedSlug = value.slug;
+      tags = value.tags ?? tags;
       serverRevision = value.revision ?? 1;
       slug = value.pending_slug || value.slug;
       savedRevision = saving;
@@ -575,7 +573,7 @@
 
 {#snippet contentSettings()}<ContentSettings
     bind:meta
-    bind:tags={tagsText}
+    bind:tags
     bind:repo={repoUrl}
     kind={contentKind}
     selfId={meta.id ?? ''}
@@ -658,6 +656,7 @@
           page: route.page,
           query: route.query,
           status: route.status,
+          tag: route.tag,
           sort: route.sort,
           dir: route.dir,
           perPage: route.perPage

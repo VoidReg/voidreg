@@ -619,6 +619,7 @@ async function main() {
       title: 'Publisle feature test',
       category: 'Test',
       summary: 'Every block type, diagram engine and interactive schematic in one article.',
+      tags: ['Test', 'Publisle', 'Diagrams'],
       meta: meta(alphaId ? [alphaId] : []),
       document: kitchenSink(figure),
       featured: true
@@ -632,6 +633,7 @@ async function main() {
       title: 'Revision history in practice',
       category: 'Test',
       summary: 'A long article for reading width, wrapping and history.',
+      tags: ['Test', 'History'],
       meta: meta(betaId ? [betaId] : []),
       document: longPost()
     },

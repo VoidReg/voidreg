@@ -61,3 +61,7 @@ test('history is a valid inspector tab and unknown tabs fall back to the article
   assert.equal(adminRoute(url('?article=a&panel=settings&inspector=history')).inspector, 'history');
   assert.equal(adminRoute(url('?article=a&inspector=nope')).inspector, 'article');
 });
+test('list tag filter is part of the route', () => {
+  assert.equal(adminRoute(url('?tab=projects&tag=Rust')).tag, 'Rust');
+  assert.equal(adminRoute(url('?tab=projects')).tag, '');
+});

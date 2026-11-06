@@ -10,6 +10,7 @@
     publishedAt,
     readingTime,
     projects = [],
+    tags = [],
     heading = 'h3'
   }: {
     slug: string;
@@ -19,6 +20,7 @@
     publishedAt?: string | null;
     readingTime?: number | null;
     projects?: { slug: string; title: string }[];
+    tags?: string[];
     heading?: 'h2' | 'h3';
   } = $props();
 </script>
@@ -45,6 +47,13 @@
         {#each projects as project (project.slug)}<li>
             <a class="chip" href={resolve('/projects/[slug]', { slug: project.slug })}
               >{project.title}</a
+            >
+          </li>{/each}
+      </ul>{/if}
+    {#if tags.length}<ul class="chip-row note-tags" aria-label="Tags">
+        {#each tags as tag (tag)}<li>
+            <a class="chip" href={resolve(`/blog?tag=${encodeURIComponent(tag)}` as '/blog')}
+              >{tag}</a
             >
           </li>{/each}
       </ul>{/if}

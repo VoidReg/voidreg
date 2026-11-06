@@ -325,3 +325,121 @@
   font-family: var(--font-code);
   font-size: 0.75rem;
 }
+
+/* Chip picker: tags and linked projects */
+.ui-picker {
+  position: relative;
+  display: grid;
+  gap: 0.375rem;
+}
+.ui-picker-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+.ui-picker-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  border: 1px solid var(--input);
+  border-radius: var(--radius);
+  background: var(--background);
+  padding: 0.375rem;
+  min-height: 2.75rem;
+}
+.ui-picker-box:focus-within {
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
+}
+.ui-picker-chips {
+  display: contents;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ui-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid var(--border);
+  background: var(--secondary);
+  padding: 0 0 0 0.5rem;
+  min-height: 2rem;
+  font-size: 0.8125rem;
+  max-width: 100%;
+}
+.ui-chip > span {
+  overflow-wrap: anywhere;
+}
+.ui-chip-remove {
+  border: 0;
+  background: transparent;
+  min-width: 2rem;
+  min-height: 2rem;
+  color: var(--muted-foreground);
+  font: inherit;
+  cursor: pointer;
+}
+.ui-chip-remove:hover {
+  background: var(--foreground);
+  color: var(--background);
+}
+.ui-picker-input {
+  flex: 1 1 8rem;
+  min-width: 6rem;
+  border: 0 !important;
+  outline: 0 !important;
+  background: transparent;
+  padding: 0.375rem 0.5rem;
+  color: var(--foreground);
+  font: inherit;
+  font-size: 0.875rem;
+}
+.ui-picker-list {
+  position: absolute;
+  inset-inline: 0;
+  top: 100%;
+  z-index: 40;
+  display: grid;
+  max-height: 16rem;
+  overflow-y: auto;
+  margin: 0.125rem 0 0;
+  padding: 0;
+  border: 1px solid var(--foreground);
+  background: var(--background);
+  list-style: none;
+}
+.ui-picker-list button {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0.5rem 0.75rem;
+  min-height: 2.5rem;
+  color: var(--foreground);
+  font-size: 0.875rem;
+  text-align: start;
+  cursor: pointer;
+}
+.ui-picker-list li.active button,
+.ui-picker-list button:hover {
+  background: var(--secondary);
+}
+.ui-picker-list small {
+  margin-inline-start: auto;
+  color: var(--muted-foreground);
+}
+.ui-picker-create {
+  border: 1px solid var(--foreground);
+  padding: 0 0.375rem;
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.ui-picker-empty {
+  padding: 0.625rem 0.75rem;
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+}

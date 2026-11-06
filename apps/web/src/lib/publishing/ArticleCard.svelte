@@ -13,4 +13,5 @@
   publishedAt={article.published_at}
   readingTime={article.reading_time_minutes}
   projects={article.projects}
+  tags={article.tags ?? []}
 />

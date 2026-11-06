@@ -7,9 +7,17 @@
   let { data } = $props();
   const result = $derived(data.result);
   const active = $derived(data.filters.find((f) => f.slug === data.project));
+  const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+  const tagHref = (tag: string) => {
+    const params = [];
+    if (data.project) params.push('project=' + encodeURIComponent(data.project));
+    if (tag) params.push('tag=' + encodeURIComponent(tag));
+    return (params.length ? `/blog?${params.join('&')}` : '/blog') as '/blog';
+  };
   const href = (page: number) => {
     const params = [];
     if (data.project) params.push('project=' + encodeURIComponent(data.project));
+    if (data.tag) params.push('tag=' + encodeURIComponent(data.tag));
     if (page > 1) params.push('page=' + page);
     return params.length ? `/blog?${params.join('&')}` : '/blog';
   };
@@ -42,9 +50,33 @@
           </li>{/each}
       </ul>
     </nav>{/if}
-  {#if data.project}<p class="filter-status" role="status">
-      {#if active}Posts following {active.title}.{:else}No project matches this filter.{/if}
-      <a class="text-link" href={resolve('/blog')}>Clear filter</a>
+  {#if data.tags.length || data.tag}<nav aria-label="Filter posts by tag">
+      <p class="filter-label">Tag</p>
+      <ul class="chip-row">
+        <li>
+          <a class="chip" href={resolve(tagHref(''))} aria-current={data.tag ? undefined : 'true'}
+            >All</a
+          >
+        </li>
+        {#each data.tags as tag (tag.name)}<li>
+            <a
+              class="chip"
+              href={resolve(tagHref(tag.name))}
+              aria-current={same(data.tag, tag.name) ? 'true' : undefined}
+              >{tag.name} <span class="chip-count">{tag.count}</span></a
+            >
+          </li>{/each}
+        {#if data.tag && !data.tags.some((t) => same(t.name, data.tag))}<li>
+            <a class="chip" href={resolve(tagHref(data.tag))} aria-current="true">{data.tag}</a>
+          </li>{/if}
+      </ul>
+    </nav>{/if}
+  {#if data.project || data.tag}<p class="filter-status" role="status">
+      {#if data.project}{#if active}Posts following {active.title}.{:else}No project matches this
+          filter.{/if}{/if}
+      {#if data.tag}{result.total}
+        {result.total === 1 ? 'post is' : 'posts are'} tagged {data.tag}.{/if}
+      <a class="text-link" href={resolve('/blog')}>Clear filters</a>
     </p>{/if}
   {#if result.items.length === 0}<EmptyContent kind="articles" heading="h2" />
   {:else}

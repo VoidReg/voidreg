@@ -34,6 +34,13 @@
         <p class="eyebrow">{article.category}</p>
         <h1 class="display-heading">{article.title}</h1>
         <p class="lead">{article.summary}</p>
+        {#if article.tags?.length}<ul class="chip-row" aria-label="Tags">
+            {#each article.tags as tag (tag)}<li>
+                <a class="chip" href={resolve(`/blog?tag=${encodeURIComponent(tag)}` as '/blog')}
+                  >{tag}</a
+                >
+              </li>{/each}
+          </ul>{/if}
         <p>
           {#if article.published_at}<time datetime={article.published_at}
               >{new Date(article.published_at).toLocaleDateString('en', {
