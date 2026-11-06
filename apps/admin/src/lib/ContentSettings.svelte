@@ -7,6 +7,7 @@
     tags = $bindable(),
     repo = $bindable(),
     kind,
+    selfId = '',
     projects,
     onchange
   }: {
@@ -14,6 +15,7 @@
     tags: string;
     repo: string;
     kind: string;
+    selfId?: string;
     projects: Article[];
     onchange: () => void;
   } = $props();
@@ -24,6 +26,15 @@
       .then((v) => (media = v.items))
       .catch(() => (error = 'Media could not be loaded. Open Media to retry.'));
   });
+  function toggleRelated(id: string, checked: boolean) {
+    meta = {
+      ...meta,
+      related_project_ids: checked
+        ? [...(meta.related_project_ids ?? []), id]
+        : (meta.related_project_ids ?? []).filter((p) => p !== id)
+    };
+    onchange();
+  }
   function toggle(id: string, checked: boolean) {
     meta = {
       ...meta,
@@ -43,6 +54,18 @@
     >
     <label class="editor-field">Repository URL<input type="url" bind:value={repo} /></label>
     <label class="editor-field">Demo URL<input type="url" bind:value={meta.demo_url} /></label>
+    <fieldset>
+      <legend>Related projects</legend>
+      <p class="editor-help">Related projects link both ways on the site and the map.</p>
+      {#each projects.filter((p) => p.id !== selfId) as project (project.id)}<label
+          class="editor-checkbox"
+          ><input
+            type="checkbox"
+            checked={(meta.related_project_ids ?? []).includes(project.id ?? '')}
+            onchange={(event) => toggleRelated(project.id ?? '', event.currentTarget.checked)}
+          />{project.title}{project.archived ? ' (Archived)' : ''}</label
+        >{:else}<p class="editor-help">Create another project to relate it here.</p>{/each}
+    </fieldset>
   {:else}
     <fieldset>
       <legend>Linked projects</legend>

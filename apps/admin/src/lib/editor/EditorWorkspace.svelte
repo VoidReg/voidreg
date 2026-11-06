@@ -106,6 +106,15 @@
   );
   const wordCount = $derived(outlineText(doc.blocks).trim().match(/\S+/g)?.length ?? 0);
 
+  // The site app serves private draft previews under /preview (admin session required).
+  function openSitePreview() {
+    window.open(
+      `/preview/${kind === 'projects' ? 'projects' : 'blog'}/${encodeURIComponent(storedSlug)}`,
+      '_blank',
+      'noopener'
+    );
+  }
+
   async function select(id: BlockId) {
     await onnavigate({ mode: 'write', panel: 'document', inspector: 'block', block: id });
     await tick();
@@ -192,7 +201,14 @@
       <h1 class="workspace-title">{kind === 'projects' ? 'Project editor' : 'Article editor'}</h1>
     </div>
     <div class="editor-primary-actions">
-      <button class="editor-button secondary" disabled={busy || conflict} onclick={onsave}
+      <button
+        class="editor-button secondary"
+        disabled={busy || conflict || dirty || !storedSlug}
+        title={dirty || !storedSlug
+          ? 'Save first to preview the saved draft on the site'
+          : 'Open the saved draft on the site in a new tab'}
+        onclick={openSitePreview}>Site preview</button
+      ><button class="editor-button secondary" disabled={busy || conflict} onclick={onsave}
         >Save</button
       ><button
         class="editor-button primary"

@@ -521,7 +521,10 @@
       status = 'published';
       loadedEditor = contentKind + ':' + storedSlug;
       await navigate({ [contentKind === 'projects' ? 'project' : 'article']: storedSlug }, true);
-      message = 'Published.';
+      message =
+        contentKind === 'articles' && !(meta.project_ids ?? []).length
+          ? 'Published. This post does not follow a project yet, so it sits under Standalone notes on the map. Link a project in Settings to connect it.'
+          : 'Published.';
       await dashboard();
     } catch (e) {
       report(e);
@@ -623,6 +626,7 @@
     bind:tags={tagsText}
     bind:repo={repoUrl}
     kind={contentKind}
+    selfId={meta.id ?? ''}
     projects={allProjects}
     onchange={changed}
   />{/snippet}
@@ -746,12 +750,19 @@
         <section class="section-stack">
           <div class="admin-bar">
             <h2>{contentKind === 'projects' ? 'Projects' : 'Articles'}</h2>
-            <button
-              class="button"
-              disabled={busy}
-              onclick={() => goto(editorLink(), { reset: false })}
-              >New {contentKind === 'projects' ? 'project' : 'article'}</button
-            >
+            <div class="button-row">
+              <!-- eslint-disable svelte/no-navigation-without-resolve -- the draft map is served by the site app -->
+              <a class="button button-secondary" href="/preview/map" target="_blank" rel="noopener"
+                >Preview map</a
+              >
+              <!-- eslint-enable svelte/no-navigation-without-resolve -->
+              <button
+                class="button"
+                disabled={busy}
+                onclick={() => goto(editorLink(), { reset: false })}
+                >New {contentKind === 'projects' ? 'project' : 'article'}</button
+              >
+            </div>
           </div>
           <form
             class="content-filters"
