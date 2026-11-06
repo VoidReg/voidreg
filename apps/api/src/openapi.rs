@@ -55,7 +55,7 @@ use crate::error::{ErrorBody, ErrorDetail};
         v1::admin::moderation::moderate,
         v1::admin::comments::list_comments,
         v1::admin::comments::approve_comment,
-        v1::admin::content::graph, v1::admin::content::list, v1::admin::content::get_one, v1::admin::content::create,
+        v1::admin::revisions::list, v1::admin::revisions::show, v1::admin::revisions::restore, v1::admin::content::graph, v1::admin::content::list, v1::admin::content::get_one, v1::admin::content::create,
         v1::admin::content::update, v1::admin::content::remove, v1::admin::content::action,
         v1::admin::media::list, v1::admin::media::upload, v1::admin::media::update, v1::admin::media::remove,
         v1::admin::comments::delete_comment

@@ -10,6 +10,7 @@ use crate::util::{now_rfc3339, sha256_hex};
 
 pub mod content;
 pub mod graph;
+mod history;
 mod media;
 mod models;
 pub mod moderation;
@@ -721,6 +722,7 @@ async fn apply_schema(db: &mut toasty::Db) -> Result<(), AppError> {
 const SCHEMA_STATEMENTS: &[&str] = &[
     r#"CREATE TABLE IF NOT EXISTS content_entries (id BLOB PRIMARY KEY NOT NULL, name TEXT NOT NULL UNIQUE, kind TEXT NOT NULL, working TEXT NOT NULL, published TEXT, revision BIGINT NOT NULL, archived BOOLEAN NOT NULL, deleted BOOLEAN NOT NULL, public_order BIGINT NOT NULL, public_date TEXT NOT NULL)"#,
     r#"CREATE INDEX IF NOT EXISTS content_entries_listing ON content_entries(kind, deleted, archived, public_date, public_order)"#,
+    r#"CREATE TABLE IF NOT EXISTS content_revisions (entry_id BLOB NOT NULL, revision BIGINT NOT NULL, event TEXT NOT NULL, created_at TEXT NOT NULL, title TEXT NOT NULL, blocks BIGINT NOT NULL, words BIGINT NOT NULL, snapshot TEXT NOT NULL, PRIMARY KEY (entry_id, revision))"#,
     r#"CREATE TABLE IF NOT EXISTS content_aliases (id BLOB PRIMARY KEY NOT NULL, name TEXT NOT NULL UNIQUE, owner TEXT NOT NULL)"#,
     r#"CREATE TABLE IF NOT EXISTS media_assets (id BLOB PRIMARY KEY NOT NULL, filename TEXT NOT NULL UNIQUE, metadata TEXT NOT NULL)"#,
     r#"CREATE TABLE IF NOT EXISTS "mcp_tokens" ("id" BLOB NOT NULL, "token_hash" TEXT NOT NULL, "identity_id" TEXT NOT NULL, "name" TEXT NOT NULL, "created_at" TEXT NOT NULL, "expires_at" TEXT NOT NULL, "last_used_at" TEXT, PRIMARY KEY ("id"))"#,

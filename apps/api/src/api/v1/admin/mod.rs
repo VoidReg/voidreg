@@ -7,6 +7,7 @@ pub mod content;
 pub mod mcp;
 pub mod media;
 pub mod moderation;
+pub mod revisions;
 pub mod session;
 
 pub fn configure(cfg: &mut ServiceConfig) {
@@ -38,6 +39,9 @@ pub fn configure(cfg: &mut ServiceConfig) {
         .service(comments::list_comments)
         .service(comments::approve_comment)
         .service(comments::delete_comment)
+        .service(revisions::list)
+        .service(revisions::show)
+        .service(revisions::restore)
         .service(content::graph)
         .service(content::list)
         .service(content::get_one)

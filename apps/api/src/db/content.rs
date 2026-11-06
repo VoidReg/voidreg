@@ -146,7 +146,7 @@ impl Db {
         }
         Ok(())
     }
-    async fn entry(
+    pub(super) async fn entry(
         db: &mut dyn toasty::Executor,
         kind: &str,
         slug: &str,
@@ -202,7 +202,7 @@ impl Db {
         Ok(())
     }
     /// Normalizes and validates project relations; articles never carry them.
-    async fn check_related(
+    pub(super) async fn check_related(
         db: &mut dyn toasty::Executor,
         kind: &str,
         own_id: Option<&str>,
@@ -347,6 +347,7 @@ impl Db {
         })
         .exec(&mut db)
         .await?;
+        Self::record_revision(&mut db, &id, 1, "create", &value).await?;
         db.commit().await?;
         Ok(value)
     }
@@ -358,8 +359,9 @@ impl Db {
         mut value: Value,
         draft_only: bool,
     ) -> Result<Value, AppError> {
-        let mut db = self.inner.lock().await;
-        let row = Self::entry(&mut *db, kind, slug).await?;
+        let mut guard = self.inner.lock().await;
+        let mut db = guard.transaction().await?;
+        let row = Self::entry(&mut db, kind, slug).await?;
         if row.revision != expected {
             return Err(AppError::Conflict(
                 "content changed; reload before saving".into(),
@@ -383,17 +385,19 @@ impl Db {
         value["updated_at"] = json!(now_rfc3339());
         value["has_unpublished_changes"] = json!(true);
         validate_meta(&value)?;
-        Self::check_related(&mut *db, kind, Some(&row.id.to_string()), &mut value).await?;
+        Self::check_related(&mut db, kind, Some(&row.id.to_string()), &mut value).await?;
         let id = row.id;
         let revision = expected + 1;
         let working = value.to_string();
         // One lock protects local read/modify/write; revision predicate protects
         // against external writers sharing the database.
         let changed = toasty::sql::query("UPDATE content_entries SET working = ?, revision = ? WHERE id = ? AND revision = ? RETURNING revision")
-            .bind(working).bind(revision).bind(id.as_bytes().to_vec()).bind(expected).column_types([toasty::stmt::Type::I64]).exec(&mut *db).await?;
+            .bind(working).bind(revision).bind(id.as_bytes().to_vec()).bind(expected).column_types([toasty::stmt::Type::I64]).exec(&mut db).await?;
         if changed.is_empty() {
             return Err(AppError::Conflict("content changed; reload".into()));
         }
+        Self::record_revision(&mut db, &id, revision, "save", &value).await?;
+        db.commit().await?;
         Ok(value)
     }
     /// Regenerate only an existing public artifact; never publish the working document.
@@ -441,6 +445,7 @@ impl Db {
                 "Content changed; retry publication refresh.".into(),
             ));
         }
+        Self::record_revision(&mut db, &row.id, expected + 1, "refresh", &working).await?;
         db.commit().await?;
         Ok(working)
     }
@@ -645,6 +650,14 @@ impl Db {
             .column_types([toasty::stmt::Type::I64]).exec(&mut db).await?;
         if changed.is_empty() {
             return Err(AppError::Conflict("content changed; reload".into()));
+        }
+        if action != "delete" {
+            let event = if action == "restore" {
+                "restore-archive"
+            } else {
+                action
+            };
+            Self::record_revision(&mut db, &row.id, expected + 1, event, &value).await?;
         }
         db.commit().await?;
         Ok(value)
@@ -894,7 +907,7 @@ fn validate_slug(slug: &str) -> Result<(), AppError> {
     }
     Ok(())
 }
-fn validate_meta(v: &Value) -> Result<(), AppError> {
+pub(super) fn validate_meta(v: &Value) -> Result<(), AppError> {
     validate_slug(v["slug"].as_str().unwrap_or(""))?;
     if let Some(slug) = v["pending_slug"].as_str() {
         validate_slug(slug)?;

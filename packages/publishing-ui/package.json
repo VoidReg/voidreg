@@ -24,5 +24,11 @@
   },
   "peerDependencies": {
     "svelte": "^5.0.0"
+  },
+  "scripts": {
+    "test": "tsx --test src/*.test.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.15"
   }
 }
