@@ -255,6 +255,7 @@
 
   .board-shell {
     position: relative;
+    container: map / inline-size;
   }
 
   .standalone {

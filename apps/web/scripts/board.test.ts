@@ -8,6 +8,7 @@ import {
   buildBoard,
   bundlesOf,
   chipAt,
+  chipNear,
   circuitOf,
   lodFor,
   matchingChips,
@@ -387,4 +388,14 @@ test('the portrait layout is taller than the landscape one for the same catalogu
   for (let i = 0; i < tall.modules.length; i++)
     for (let j = i + 1; j < tall.modules.length; j++)
       assert.ok(!intersects(tall.modules[i], tall.modules[j]));
+});
+
+test('chipNear picks the closest chip within a tolerance and prefers a direct hit', () => {
+  const board = buildBoard(buildModel(summary(100, 4)));
+  const chip = board.chips[10];
+  assert.equal(chipNear(board, chip.x + 3, chip.y + 3, 0)?.id, chip.id);
+  // Just outside the chip, in the gap, only a tolerance finds it.
+  assert.equal(chipNear(board, chip.x + chip.w + 4, chip.y + 10, 0), null);
+  assert.equal(chipNear(board, chip.x + chip.w + 4, chip.y + 10, 8)?.id !== undefined, true);
+  assert.equal(chipNear(board, -500, -500, 20), null);
 });

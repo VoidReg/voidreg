@@ -10,7 +10,7 @@ import { mkdir } from 'node:fs/promises';
 const origin = (process.env.SEED_ORIGIN ?? 'http://127.0.0.1:5174').replace(/\/$/, '');
 const password = process.env.ADMIN_PASSWORD;
 const outDir = process.argv[2] ?? '/tmp/voidreg-ui-pass';
-const widths = [375, 768, 1440];
+const widths = [375, 768, 1024, 1440];
 const themes = ['light', 'dark'];
 const reader = [
   ['home', '/'],
@@ -188,6 +188,22 @@ async function boardPass(page, name, width, theme, shot) {
   const chips = () => page.locator('.board .chip').count();
   const lod = () => board.getAttribute('data-lod');
 
+  // On touch screens a tap zooms into a group first, because a finger cannot pick one tile.
+  const touch = await page.evaluate(() => matchMedia('(pointer: coarse)').matches);
+  if (touch && (await lod()) === 'far') {
+    await page.touchscreen.tap(centre.x, centre.y);
+    await page.waitForTimeout(900);
+    if ((await lod()) === 'far') report(label, 'tapping a far away board did not zoom in');
+    await shot(`${name}-tap`);
+    await page.locator('.board button[aria-label="Fit the whole board"]').click();
+    await page.waitForTimeout(700);
+  }
+  for (const button of await page.locator('.board .controls button').all()) {
+    const rect = await button.boundingBox();
+    if (rect && (rect.width < 40 || rect.height < 40))
+      report(label, `map control is ${Math.round(rect.width)}x${Math.round(rect.height)}`);
+  }
+
   // Scripted wheel: zooming in must change the level of detail and keep the DOM bounded.
   const before = await transform();
   await page.mouse.move(centre.x, centre.y);
@@ -233,6 +249,21 @@ async function boardPass(page, name, width, theme, shot) {
     report(label, 'focused project drew no traces');
   if (!(await panel.getByRole('link', { name: 'Open project' }).count()))
     report(label, 'panel has no Open project link');
+  // Wide boards put the panel beside the map; narrow ones use a bottom sheet over it.
+  const panelBox = await panel.boundingBox();
+  const boardBox = await board.boundingBox();
+  const sheet = boardBox.width < 832;
+  if (
+    sheet
+      ? panelBox.width < boardBox.width - 4 || panelBox.height > boardBox.height * 0.55
+      : panelBox.width > boardBox.width * 0.5
+  )
+    report(
+      label,
+      `panel layout is wrong: ${Math.round(panelBox.width)}x${Math.round(panelBox.height)}`
+    );
+  if (panelBox.x + panelBox.width > boardBox.x + boardBox.width + 1)
+    report(label, 'panel spills out of the board');
   const dimmed = await page.locator('.board .chip.dim').count();
   const lit = await page.locator('.board .chip:not(.dim)').count();
   if (!dimmed && (await lod()) !== 'far') report(label, 'nothing is dimmed around the circuit');
@@ -269,6 +300,9 @@ for (const theme of themes) {
   for (const width of widths) {
     const context = await browser.newContext({
       viewport: { width, height: 900 },
+      // Phones and portrait tablets are driven by touch, so taps and pinch paths are exercised.
+      hasTouch: width <= 768,
+      isMobile: width <= 768,
       colorScheme: theme,
       storageState: session
     });

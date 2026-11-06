@@ -6,16 +6,17 @@
     board,
     view,
     size,
+    width: WIDTH = 168,
     onnavigate
   }: {
     board: Board;
+    width?: number;
     view: View;
     size: Size;
     /** Called with the world point the person chose, to centre the main view on it. */
     onnavigate: (x: number, y: number) => void;
   } = $props();
 
-  const WIDTH = 168;
   const height = $derived(Math.max(48, Math.min(132, (board.height * WIDTH) / board.width)));
   const fitted = $derived(Math.min(WIDTH / board.width, height / board.height));
   const vp = $derived(visibleRect(view, size));

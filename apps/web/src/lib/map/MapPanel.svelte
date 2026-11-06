@@ -266,7 +266,8 @@
     font-size: 0.875rem;
   }
 
-  @media (max-width: 47.99rem) {
+  /* Beside the board when it is wide, a bottom sheet when it is not. Matches SIDE_PANEL_MIN. */
+  @container map (max-width: 51.99rem) {
     .panel {
       top: auto;
       left: 1px;
@@ -274,6 +275,16 @@
       height: 46%;
       border-top: 1px solid var(--foreground);
       border-left: 0;
+      padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));
+    }
+  }
+
+  @media (pointer: coarse) {
+    .rows a,
+    .rows button {
+      display: flex;
+      align-items: center;
+      min-height: 2.75rem;
     }
   }
 </style>

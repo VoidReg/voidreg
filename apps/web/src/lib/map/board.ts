@@ -214,6 +214,27 @@ export function chipAt(board: Board, x: number, y: number): BoardChip | null {
   return i === undefined ? null : board.chips[i];
 }
 
+/**
+ * The chip closest to a world point within `tolerance`, so small tiles stay easy to hit when the
+ * board is zoomed out and for fingers. A point inside a chip always wins.
+ */
+export function chipNear(board: Board, x: number, y: number, tolerance: number): BoardChip | null {
+  let best: BoardChip | null = null;
+  let bestDistance = Infinity;
+  for (const i of board.index.query(x - tolerance, y - tolerance, x + tolerance, y + tolerance)) {
+    const c = board.chips[i];
+    const d = Math.hypot(
+      Math.max(c.x - x, 0, x - (c.x + c.w)),
+      Math.max(c.y - y, 0, y - (c.y + c.h))
+    );
+    if (d <= tolerance && d < bestDistance) {
+      best = c;
+      bestDistance = d;
+    }
+  }
+  return best;
+}
+
 export type Dir = 'left' | 'right' | 'up' | 'down';
 
 /** Nearest chip in a direction, used by arrow-key navigation. */

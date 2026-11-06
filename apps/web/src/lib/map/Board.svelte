@@ -8,7 +8,7 @@
     LOD_MID,
     buildBoard,
     bundlesOf,
-    chipAt,
+    chipNear,
     circuitOf,
     lodFor,
     boundsOf,
@@ -53,6 +53,8 @@
     onfocus: (id: string) => void;
   } = $props();
 
+  /** Board width from which the panel sits beside the board; narrower boards get a bottom sheet. */
+  const SIDE_PANEL_MIN = 832;
   let size = $state({ w: 0, h: 0 });
   const board = $derived(buildBoard(model, size.w > 0 && size.w < 640));
   const circuit = $derived(focusId ? circuitOf(board, model, focusId) : null);
@@ -78,7 +80,11 @@
   const shown = $derived(ready ? view : fit(board, { w: 1200, h: 720 }));
   const lod = $derived(lodFor(shown.k));
   const inset = $derived<Inset>(
-    !panelOpen ? {} : size.w >= 768 ? { right: 340 } : { bottom: Math.round(size.h * 0.46) }
+    !panelOpen
+      ? {}
+      : size.w >= SIDE_PANEL_MIN
+        ? { right: 340 }
+        : { bottom: Math.round(size.h * 0.46) }
   );
   const world = $derived.by(() => {
     const now = visibleRect(shown, size.w ? size : { w: 1200, h: 720 });
@@ -186,6 +192,8 @@
 
   // Focusing a project frames its circuit; clearing the focus leaves the view where it is.
   let framed = '';
+  /** Set once the person moves the view after a project is focused, so late posts do not undo it. */
+  let touched = false;
   let plated = '';
   $effect(() => {
     const id = focusId;
@@ -201,11 +209,13 @@
         framed = id;
         plated = c.plate ? id : '';
         following = false;
+        touched = false;
         go(frameCircuit());
       } else if (c.plate && plated !== id) {
         // Posts arrived after the project was focused: bring the plate into view.
         plated = id;
-        go(reveal(view, c.plate, board, dims(), 40));
+        const free = { w: dims().w - (inset.right ?? 0), h: dims().h - (inset.bottom ?? 0) };
+        go(touched ? reveal(view, c.plate, board, free, 40) : frameCircuit());
       }
     });
   });
@@ -230,6 +240,7 @@
 
   function interact(next: View, animate = false) {
     following = false;
+    touched = true;
     go(next, animate);
   }
   const centre = $derived({
@@ -273,6 +284,7 @@
     const p = local(e);
     pointers.set(e.pointerId, p);
     drag = pointers.size === 1 ? { x: p[0], y: p[1], moved: false } : null;
+    if (pointers.size > 1) hover = '';
   }
   function move(e: PointerEvent) {
     const p = local(e);
@@ -280,7 +292,7 @@
     if (!previous) {
       if (e.pointerType === 'mouse') {
         const [wx, wy] = toWorld(shown, p[0], p[1]);
-        hover = chipAt(board, wx, wy)?.id ?? '';
+        hover = chipNear(board, wx, wy, 6 / shown.k)?.id ?? '';
       }
       return;
     }
@@ -310,10 +322,21 @@
     if (!pointers.size) {
       drag = null;
       panning = false;
+    } else if (pointers.size === 1) {
+      // One finger of a pinch lifted: carry on panning with the other.
+      const [rest] = pointers.values();
+      drag = { x: rest[0], y: rest[1], moved: true };
     }
     if (!wasTap || e.type === 'pointercancel') return;
-    const [wx, wy] = toWorld(shown, ...local(e));
-    const chip = chipAt(board, wx, wy);
+    const [px, py] = local(e);
+    const [wx, wy] = toWorld(shown, px, py);
+    const touch = e.pointerType !== 'mouse';
+    // Zoomed far out, a finger cannot pick one tile, so a tap zooms in to that spot first.
+    if (touch && lod === 'far' && !focusId) {
+      interact(zoomAt(view, px, py, (LOD_MID * 1.5) / view.k, board, size), true);
+      return;
+    }
+    const chip = chipNear(board, wx, wy, (touch ? 14 : 6) / shown.k);
     if (chip) {
       cursor = chip.id;
       onfocus(chip.id);
@@ -322,7 +345,16 @@
       const module = board.modules.find(
         (m) => wx >= m.x && wx <= m.x + m.w && wy >= m.y && wy <= m.y + m.h
       );
-      if (module) interact(zoomToRect(module, board, size, { maxK: 0.9, pad: 40 }), true);
+      if (module) {
+        // Frame the whole module, but never so far out that its chips stay as bare tiles.
+        const framed = zoomToRect(module, board, size, { maxK: 0.9, pad: 40 });
+        interact(
+          framed.k >= LOD_MID
+            ? framed
+            : zoomAt(view, px, py, (LOD_MID * 1.5) / view.k, board, size),
+          true
+        );
+      }
     }
   }
 
@@ -609,6 +641,7 @@
   />
   <Minimap
     {board}
+    width={size.w < 640 ? 112 : 168}
     view={shown}
     size={dims()}
     onnavigate={(wx, wy) =>
@@ -620,7 +653,10 @@
         )
       )}
   />
-  <p class="hint" aria-hidden="true">Drag to pan. Ctrl + scroll or pinch to zoom.</p>
+  <p class="hint" aria-hidden="true">
+    <span class="fine">Drag to pan. Ctrl + scroll or pinch to zoom.</span>
+    <span class="coarse">Drag to pan, pinch to zoom, tap a group.</span>
+  </p>
   <p class="sr-only" role="status" aria-live="polite">{announce}</p>
 </div>
 
@@ -653,6 +689,7 @@
   .board {
     position: relative;
     height: clamp(30rem, 76vh, 58rem);
+    height: clamp(28rem, 72svh, 58rem);
     overflow: hidden;
     border: 1px solid var(--border);
     background: var(--background);
@@ -665,6 +702,8 @@
     touch-action: none;
     user-select: none;
     -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
   }
 
   .board-svg {
@@ -1027,9 +1066,27 @@
     white-space: nowrap;
   }
 
-  @media (max-width: 47.99rem) {
-    .hint {
+  .hint .coarse {
+    display: none;
+  }
+
+  @media (pointer: coarse) {
+    .hint .fine {
       display: none;
+    }
+
+    .hint .coarse {
+      display: inline;
+    }
+  }
+
+  /* On small boards the hint sits beside the smaller overview and wraps. */
+  @container map (max-width: 40rem) {
+    .hint {
+      right: 0.5rem;
+      bottom: 0.5rem;
+      max-width: calc(100% - 9.5rem);
+      text-align: right;
     }
   }
 </style>
