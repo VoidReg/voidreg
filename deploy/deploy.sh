@@ -73,10 +73,12 @@ for service in "${services[@]}"; do
       remote+=$'(cd .. && mkdir -p apps/admin/build && find apps/admin/build -mindepth 1 -delete && docker build -f apps/admin/Dockerfile --target export --output type=local,dest=apps/admin/build . && chmod 755 apps/admin/build)\n' ;;
   esac
 done
-# The API container address can change; nginx must re-resolve upstreams.
-remote+=$'docker compose -f compose.yaml up -d --no-deps nginx\n'
+# nginx is recreated every time. The sync replaces deploy/nginx/default.conf with a new file, and
+# a single-file bind mount keeps showing the old one to a running container, so a reload alone
+# would keep serving a stale config. Recreating also re-resolves upstream addresses.
+remote+=$'docker compose -f compose.yaml up -d --no-deps --force-recreate nginx\n'
+remote+=$'sleep 2\n'
 remote+=$'docker compose -f compose.yaml exec -T nginx nginx -t\n'
-remote+=$'docker compose -f compose.yaml exec -T nginx nginx -s reload\n'
 remote+=$'docker compose -f compose.yaml ps\n'
 case " ${services[*]} " in
   *" api "*)

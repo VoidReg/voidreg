@@ -36,8 +36,8 @@ the server:
 - `web`, `mcp`, `publishing`: builds the image from the synced source and recreates the
   container, waiting for its health check.
 - `admin`: builds the static files into `apps/admin/build`, which nginx serves at `/admin/`.
-- Always last: recreates nginx so upstream addresses refresh, tests its configuration and
-  reloads it.
+- Always last: recreates nginx (a reload would keep serving the old config, because the sync
+  replaces the bind-mounted file) and tests its configuration.
 
 The API image is published by CI to `ghcr.io/voidreg/voidreg-site-api`. New GHCR packages
 start private: either make the package public in its settings, or run `docker login ghcr.io`
