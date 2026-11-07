@@ -3,8 +3,6 @@ use serde_json::json;
 use crate::config::Config;
 use crate::error::AppError;
 
-const RESEND_URL: &str = "https://api.resend.com/emails";
-
 /// Removes control characters (so no header or line can be injected) and caps the length.
 fn single_line(value: &str, max: usize) -> String {
     value
@@ -57,7 +55,7 @@ pub async fn send_contact(
         .map_err(|err| AppError::Internal(err.to_string()))?;
 
     let response = client
-        .post(RESEND_URL)
+        .post(&config.resend_api_url)
         .bearer_auth(&config.resend_api_key)
         .header("Idempotency-Key", format!("voidreg-contact-{key}"))
         .json(&contact_mail(config, name, reply_to, message))

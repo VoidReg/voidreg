@@ -10,6 +10,8 @@ pub struct Config {
     pub auth_token: String,
     pub cors_origins: Vec<String>,
     pub resend_api_key: String,
+    /// Where mail is posted. Only tests and local runs change it from Resend's endpoint.
+    pub resend_api_url: String,
     pub resend_domain: String,
     pub resend_from_user: String,
     pub contact_to_email: String,
@@ -138,6 +140,8 @@ impl Config {
             auth_token,
             cors_origins,
             resend_api_key,
+            resend_api_url: optional_env("RESEND_API_URL")
+                .unwrap_or_else(|| "https://api.resend.com/emails".to_owned()),
             resend_domain,
             resend_from_user,
             contact_to_email,
@@ -177,6 +181,7 @@ impl Config {
             auth_token: String::new(),
             cors_origins: vec!["http://localhost:5173".to_owned()],
             resend_api_key: "re_test".to_owned(),
+            resend_api_url: "https://api.resend.com/emails".to_owned(),
             resend_domain: "mail.example.com".to_owned(),
             resend_from_user: "form".to_owned(),
             contact_to_email: "admin@example.com".to_owned(),

@@ -247,3 +247,95 @@ async fn the_site_wide_daily_cap_holds_even_across_many_sources() {
     .await;
     assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
 }
+
+/// Serves one canned HTTP response per connection and returns each raw request it received.
+async fn mock_resend(
+    status: u16,
+    requests: usize,
+) -> (String, tokio::task::JoinHandle<Vec<String>>) {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/emails", listener.local_addr().unwrap());
+    let handle = tokio::spawn(async move {
+        let mut seen = Vec::new();
+        for _ in 0..requests {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut data = Vec::new();
+            let mut chunk = [0u8; 4096];
+            loop {
+                let n = socket.read(&mut chunk).await.unwrap();
+                data.extend_from_slice(&chunk[..n]);
+                let text = String::from_utf8_lossy(&data).to_string();
+                if let Some(head_end) = text.find("\r\n\r\n") {
+                    let length = text[..head_end]
+                        .lines()
+                        .find_map(|line| {
+                            line.to_lowercase()
+                                .strip_prefix("content-length:")
+                                .and_then(|v| v.trim().parse::<usize>().ok())
+                        })
+                        .unwrap_or(0);
+                    if data.len() >= head_end + 4 + length {
+                        break;
+                    }
+                }
+                if n == 0 {
+                    break;
+                }
+            }
+            seen.push(String::from_utf8_lossy(&data).to_string());
+            let reply = format!(
+                "HTTP/1.1 {status} X\r\ncontent-type: application/json\r\ncontent-length: 2\r\nconnection: close\r\n\r\n{{}}"
+            );
+            socket.write_all(reply.as_bytes()).await.unwrap();
+            socket.shutdown().await.unwrap();
+        }
+        seen
+    });
+    (url, handle)
+}
+
+#[actix_web::test]
+async fn messages_are_emailed_through_resend_and_failures_never_lose_them() {
+    for (status, outcome) in [(200, "delivered"), (500, "failed")] {
+        let (url, server) = mock_resend(status, 1).await;
+        let mut config = Config::for_test();
+        config.resend_api_key = "re_live_key".to_owned();
+        config.resend_api_url = url;
+        let db = db().await;
+        let app = test::init_service(build(db.clone(), config.clone())).await;
+
+        let resp: Value = test::call_and_read_body_json(
+            &app,
+            post(
+                &config,
+                "203.0.113.9",
+                body(&config, "Please call me back."),
+            )
+            .to_request(),
+        )
+        .await;
+        // The visitor sees success either way, because the message itself is kept.
+        assert_eq!(resp["status"], "received");
+        assert_eq!(
+            db.contact_summary().await.unwrap(),
+            (1, vec![outcome.into()])
+        );
+
+        let request = server.await.unwrap().remove(0);
+        let lower = request.to_lowercase();
+        assert!(lower.starts_with("post /emails "));
+        assert!(lower.contains("authorization: bearer re_live_key"));
+        assert!(lower.contains("idempotency-key: voidreg-contact-"));
+        let payload: Value =
+            serde_json::from_str(request.split("\r\n\r\n").nth(1).unwrap()).unwrap();
+        assert_eq!(payload["to"][0], "admin@example.com");
+        assert_eq!(payload["reply_to"], "ada@example.com");
+        assert!(
+            payload["text"]
+                .as_str()
+                .unwrap()
+                .contains("Please call me back.")
+        );
+    }
+}
