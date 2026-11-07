@@ -1,16 +1,12 @@
 import { cachedText, everything } from '$lib/server/catalog';
+import { textResponse } from '$lib/server/http';
 import { newest, sitemapXml, type SitemapUrl } from '$lib/server/sitemap';
 import type { Article, Topic } from '@voidreg/publishing-ui/api';
 import type { Project } from '$lib/data/projects';
 
-export async function GET({ fetch }) {
+export async function GET({ fetch, request }) {
   const xml = await cachedText('sitemap', () => build(fetch));
-  return new Response(xml, {
-    headers: {
-      'Content-Type': 'application/xml; charset=utf-8',
-      'Cache-Control': 'public, max-age=3600'
-    }
-  });
+  return textResponse(request, xml, 'application/xml; charset=utf-8', { maxAge: 3600 });
 }
 
 async function build(fetch: typeof globalThis.fetch) {

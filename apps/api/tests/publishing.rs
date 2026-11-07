@@ -244,7 +244,7 @@ async fn oauth_start_requires_pkce_and_provider_bound_state() {
         .uri("/api/v1/auth/providers")
         .to_request();
     let available: Value = test::call_and_read_body_json(&app, request).await;
-    assert_eq!(available, json!(["google", "github"]));
+    assert_eq!(available, json!(["github", "google"]));
     for provider in ["google", "github"] {
         let req = test::TestRequest::get()
             .uri(&format!("/api/v1/auth/{provider}/start"))

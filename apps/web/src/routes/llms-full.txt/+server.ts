@@ -1,17 +1,21 @@
-import { catalog } from '$lib/server/catalog';
+import { newest } from '$lib/server/catalog';
+import { textResponse } from '$lib/server/http';
 import { publicContent } from '$lib/server/content';
 import { articleMarkdown } from '$lib/server/llm';
 import { absolute } from '$lib/seo';
-import { TtlCache } from '$lib/ttl-cache';
+import { StaleCache } from '$lib/ttl-cache';
 import type { Article } from '@voidreg/publishing-ui/api';
 
 // One document with the text of every post, capped so it stays cheap to build and to fetch.
 const LIMIT = 1_000_000;
-const cache = new TtlCache<string>(600_000, 1);
+// Posts are read newest first until the size budget is spent. A post averages a few KB, so this
+// many candidates is plenty, and it keeps the cost flat however many posts exist.
+const CANDIDATES = 600;
+const cache = new StaleCache<string>(600_000, 86_400_000, 1);
 
-export async function GET({ fetch }) {
+export async function GET({ fetch, request }) {
   const text = await cache.get('all', async () => {
-    const { articles } = await catalog(fetch);
+    const { items: articles } = await newest<Article>('blogs', CANDIDATES, fetch);
     const parts: string[] = [];
     let size = 0;
     let used = 0;
@@ -44,10 +48,5 @@ export async function GET({ fetch }) {
       );
     return parts.length ? parts.join('\n\n---\n\n') + '\n' : 'No posts are published yet.\n';
   });
-  return new Response(text, {
-    headers: {
-      'Content-Type': 'text/plain; charset=utf-8',
-      'Cache-Control': 'public, max-age=3600'
-    }
-  });
+  return textResponse(request, text, 'text/plain; charset=utf-8', { maxAge: 3600 });
 }

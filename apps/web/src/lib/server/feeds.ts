@@ -11,7 +11,9 @@ const escape = (s: string) =>
     .replaceAll('"', '&quot;');
 
 /** Large sites keep the index readable: the newest entries, then a pointer to the sitemap. */
-const INDEX_LIMIT = 500;
+export const INDEX_LIMIT = 500;
+/** Posts in the RSS feed. */
+export const FEED_ITEMS = 50;
 
 const line = (item: { title: string; summary?: string }, url: string) =>
   '- [' + item.title + '](' + url + ')' + (item.summary ? ': ' + describe(item.summary) : '');
@@ -31,7 +33,13 @@ const more = (total: number, noun: string) =>
     : [];
 
 /** The llms.txt index: what the site is, how to read it, and a Markdown link per page. */
-export function llmsIndex(projects: Project[], articles: Article[]) {
+export function llmsIndex(
+  projects: Project[],
+  articles: Article[],
+  totals: { projects?: number; articles?: number } = {}
+) {
+  const projectTotal = Math.max(totals.projects ?? 0, projects.length);
+  const articleTotal = Math.max(totals.articles ?? 0, articles.length);
   return (
     [
       '# ' + SITE_NAME,
@@ -47,7 +55,7 @@ export function llmsIndex(projects: Project[], articles: Article[]) {
             ...projects
               .slice(0, INDEX_LIMIT)
               .map((p) => line(p, absolute('/projects/' + p.slug + '.md'))),
-            ...more(projects.length, 'projects')
+            ...more(projectTotal, 'projects')
           ]
         : ['No projects are published yet.']),
       '',
@@ -58,7 +66,7 @@ export function llmsIndex(projects: Project[], articles: Article[]) {
             ...articles
               .slice(0, INDEX_LIMIT)
               .map((a) => line(a, absolute('/blog/' + a.slug + '.md'))),
-            ...more(articles.length, 'posts')
+            ...more(articleTotal, 'posts')
           ]
         : ['No posts are published yet.']),
       '',
@@ -81,7 +89,7 @@ const rfc822 = (iso: string | null | undefined) =>
 
 export function rssFeed(articles: Article[]) {
   const items = articles
-    .slice(0, 50)
+    .slice(0, FEED_ITEMS)
     .map((a) => {
       const url = absolute('/blog/' + a.slug);
       const date = rfc822(a.published_at ?? a.updated_at);

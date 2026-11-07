@@ -1,15 +1,12 @@
-import { cachedText, everything } from '$lib/server/catalog';
-import { rssFeed } from '$lib/server/feeds';
+import { cachedText, newest } from '$lib/server/catalog';
+import { FEED_ITEMS, rssFeed } from '$lib/server/feeds';
+import { textResponse } from '$lib/server/http';
 import type { Article } from '@voidreg/publishing-ui/api';
 
-export async function GET({ fetch }) {
+// Only the newest posts go in a feed, so one page of the API is enough, however many posts exist.
+export async function GET({ fetch, request }) {
   const xml = await cachedText('rss', async () =>
-    rssFeed(await everything<Article>('blogs', fetch))
+    rssFeed((await newest<Article>('blogs', FEED_ITEMS, fetch)).items)
   );
-  return new Response(xml, {
-    headers: {
-      'Content-Type': 'application/rss+xml; charset=utf-8',
-      'Cache-Control': 'public, max-age=3600'
-    }
-  });
+  return textResponse(request, xml, 'application/rss+xml; charset=utf-8');
 }

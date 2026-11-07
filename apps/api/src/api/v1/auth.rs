@@ -426,8 +426,9 @@ fn signed_in(
     }
 }
 
+/// GitHub is listed first: it is the sign-in most readers of this site already use.
 fn available_providers(config: &Config) -> Vec<String> {
-    ["google", "github"]
+    ["github", "google"]
         .into_iter()
         .filter(|provider| config.oauth_provider(provider).is_some())
         .map(str::to_owned)

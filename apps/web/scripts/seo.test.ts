@@ -102,6 +102,15 @@ test('RSS and llms.txt list published content and stay well formed', () => {
   assert(index.includes('https://www.voidreg.xyz/agents'));
   assert(!index.includes('\u2014'));
   assert(llmsIndex([], []).includes('No posts are published yet.'));
+  // A truncated list still reports the real size of the catalogue.
+  const partial = llmsIndex(
+    [],
+    Array.from({ length: 500 }, (_, i) => ({ ...article, slug: 'p' + i })) as never[],
+    {
+      articles: 9000
+    }
+  );
+  assert(partial.includes('Showing the newest 500 of 9000 posts'));
 });
 
 test('markdown twins carry front matter, one heading and related links', () => {
