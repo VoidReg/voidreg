@@ -18,28 +18,26 @@ const mono = url(
 
 const html = `<!doctype html><meta charset="utf-8"><style>
 @font-face{font-family:Sans;font-weight:600;src:url(${sans(600)})}
-@font-face{font-family:Sans;font-weight:700;src:url(${sans(700)})}
 @font-face{font-family:Mono;font-weight:400;src:url(${mono})}
 *{box-sizing:border-box;margin:0}
 html,body{width:1200px;height:630px;overflow:hidden;background:#0b0f14;color:#f5f5f5}
-.frame{position:relative;width:1200px;height:630px;padding:72px 80px;display:flex;flex-direction:column;justify-content:space-between}
+.frame{position:relative;width:1200px;height:630px;padding:72px 88px;display:flex;flex-direction:column;justify-content:center;gap:44px}
 .grid{position:absolute;inset:0;background:
  linear-gradient(#ffffff0d 1px,transparent 1px) 0 0/60px 60px,
  linear-gradient(90deg,#ffffff0d 1px,transparent 1px) 0 0/60px 60px;
- mask-image:radial-gradient(circle at 82% 50%,#000 0,transparent 62%)}
-.brand{position:relative;display:flex;align-items:center;gap:20px;font:700 40px/1 Sans}
-.brand img{width:56px;height:56px}
-.copy{position:relative;max-width:700px}
-h1{font:700 88px/1.02 Sans;letter-spacing:-0.02em}
-h1 span{color:#c2410c}
-p{margin-top:28px;font:400 26px/1.4 Mono;color:#a3a3a3}
-.url{position:relative;font:400 24px/1 Mono;color:#737373}
-.mark{position:absolute;right:40px;top:85px;width:460px;height:460px}
+ mask-image:radial-gradient(circle at 30% 50%,#000 0,transparent 70%)}
+.logo{position:relative;display:flex;align-items:center;gap:36px}
+.logo img{width:176px;height:176px}
+.logo span{font:600 168px/1 Sans;letter-spacing:-0.02em}
+.logo b{font-weight:600;color:#c2410c}
+.tag{position:relative;font:600 44px/1.2 Sans;color:#d4d4d4}
+.sub{position:relative;margin-top:-20px;font:400 26px/1.4 Mono;color:#8a8a8a}
+.url{position:absolute;right:88px;bottom:56px;font:400 24px/1 Mono;color:#737373}
 </style><div class="frame"><div class="grid"></div>
-<div class="brand"><img src="${url('src/lib/assets/brand-mark-dark.svg')}" alt="">Voidreg</div>
-<div class="copy"><h1>Deep dive into the <span>Void</span></h1><p>Projects, notes and a knowledge map</p></div>
-<div class="url">www.voidreg.xyz</div>
-<img class="mark" src="${url('src/lib/assets/hero-mark-dark.svg')}" alt=""></div>`;
+<div class="logo"><img src="${url('src/lib/assets/brand-mark-dark.svg')}" alt=""><span>Void<b>reg</b></span></div>
+<div class="tag">Deep dive into the Void</div>
+<div class="sub">Projects, notes and a knowledge map</div>
+<div class="url">www.voidreg.xyz</div></div>`;
 
 const dir = mkdtempSync(join(tmpdir(), 'og-'));
 const page = join(dir, 'og.html');
