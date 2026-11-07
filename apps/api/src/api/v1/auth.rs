@@ -1,12 +1,13 @@
 use actix_web::http::header;
-use actix_web::{HttpRequest, HttpResponse, delete, get, web};
+use actix_web::{HttpRequest, HttpResponse, delete, get, patch, web};
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use serde::Deserialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
-use crate::auth::extract::OptionalCommenter;
+use crate::auth::extract::{OptionalCommenter, RequiredCommenter};
+use crate::auth::rate::RateLimiter;
 use crate::auth::{
     OAUTH_STATE_COOKIE, OAUTH_VERIFIER_COOKIE, SESSION_KIND_ADMIN, SESSION_KIND_COMMENTER,
     admin_csrf_cookie, admin_session_cookie, commenter_expired_cookie, commenter_session_cookie,
@@ -15,7 +16,10 @@ use crate::auth::{
 };
 use crate::config::Config;
 use crate::db::Db;
-use crate::domain::CommenterSessionResponse;
+use crate::domain::{
+    CommenterIdentity, CommenterProfile, CommenterSessionResponse, ProfileDeleteQuery,
+    ProfileUpdate,
+};
 use crate::error::AppError;
 use crate::util::constant_time_eq;
 
@@ -31,6 +35,8 @@ const GITHUB_EMAILS_URL: &str = "https://api.github.com/user/emails";
 pub struct OAuthStartQuery {
     pub purpose: Option<String>,
     pub return_to: Option<String>,
+    /// Connect this provider to the signed-in profile instead of signing in.
+    pub link: Option<bool>,
 }
 
 #[cfg_attr(feature = "swagger", utoipa::path(
@@ -40,7 +46,8 @@ pub struct OAuthStartQuery {
     params(
         ("provider" = String, Path, description = "google or github"),
         ("purpose" = Option<String>, Query, description = "admin or commenter, default commenter"),
-        ("return_to" = Option<String>, Query, description = "Local /blog/{slug} path for commenter sign-in")
+        ("return_to" = Option<String>, Query, description = "Local /blog/{slug} or /account path for commenter sign-in"),
+        ("link" = Option<bool>, Query, description = "Connect this provider to the signed-in profile")
     ),
     responses(
         (status = 302, description = "Redirect to the provider"),
@@ -66,13 +73,15 @@ pub async fn start(
         .return_to
         .as_deref()
         .filter(|_| purpose == "commenter");
-    if return_to.is_some_and(|path| !safe_article_return(path)) {
+    if return_to.is_some_and(|path| !safe_return(path)) {
         return Err(AppError::BadRequest("invalid return location".to_owned()));
     }
+    let link = purpose == "commenter" && query.link.unwrap_or(false);
     let state = format!(
-        "{provider}:{purpose}:{}:{}",
+        "{provider}:{purpose}:{}:{}:{}",
         crate::util::random_token(),
-        URL_SAFE_NO_PAD.encode(return_to.unwrap_or_default())
+        URL_SAFE_NO_PAD.encode(return_to.unwrap_or_default()),
+        u8::from(link)
     );
     let mut response = HttpResponse::Found();
     response.insert_header((header::CACHE_CONTROL, "no-store"));
@@ -169,8 +178,24 @@ pub async fn callback(
     if !matches!(purpose, "admin" | "commenter") {
         return Err(AppError::BadRequest("invalid sign-in purpose".to_owned()));
     }
+    let return_to = expected_state
+        .split(':')
+        .nth(3)
+        .and_then(|value| URL_SAFE_NO_PAD.decode(value).ok())
+        .and_then(|value| String::from_utf8(value).ok())
+        .filter(|path| safe_return(path));
+    let link = purpose == "commenter" && expected_state.split(':').nth(4) == Some("1");
     if query.error.is_some() {
-        return redirect_after_failure(&config, purpose, "sign_in_cancelled", None);
+        let mut response = redirect_after_failure(&config, purpose, "sign_in_cancelled", None)?;
+        if purpose == "commenter" {
+            send_to(
+                &config,
+                &mut response,
+                return_to.as_deref(),
+                Some("sign_in_cancelled"),
+            )?;
+        }
+        return Ok(response);
     }
     let code = query
         .code
@@ -193,29 +218,64 @@ pub async fn callback(
         other => return Err(oauth_unavailable(other)),
     };
 
-    let return_to = expected_state
-        .split(':')
-        .nth(3)
-        .and_then(|value| URL_SAFE_NO_PAD.decode(value).ok())
-        .and_then(|value| String::from_utf8(value).ok())
-        .filter(|path| safe_article_return(path));
+    if link && let Some(profile_id) = current_profile(&db, &request).await? {
+        let mut response = finish_link(&db, &config, &provider, profile, &profile_id).await?;
+        send_to(&config, &mut response, return_to.as_deref(), None)?;
+        return Ok(response);
+    }
     let mut response = finish_sign_in(&db, &config, &provider, purpose, profile).await?;
-    if purpose == "commenter"
-        && let Some(path) = return_to
-    {
-        let location = format!("{}{path}", config.public_base_url);
-        response.headers_mut().insert(
-            header::LOCATION,
-            location
-                .parse()
-                .map_err(|_| AppError::BadRequest("invalid return location".to_owned()))?,
-        );
+    if purpose == "commenter" {
+        send_to(&config, &mut response, return_to.as_deref(), None)?;
     }
     Ok(response)
 }
 
-fn safe_article_return(path: &str) -> bool {
-    path.starts_with("/blog/")
+/// Points a redirect at the page the person came from, when there is one.
+fn send_to(
+    config: &Config,
+    response: &mut HttpResponse,
+    path: Option<&str>,
+    error: Option<&str>,
+) -> Result<(), AppError> {
+    let Some(path) = path else {
+        return Ok(());
+    };
+    let mut location = format!("{}{path}", config.public_base_url);
+    if let Some(error) = error {
+        location.push_str(&format!("?auth_error={}", urlencode(error)));
+    }
+    response.headers_mut().insert(
+        header::LOCATION,
+        location
+            .parse()
+            .map_err(|_| AppError::BadRequest("invalid return location".to_owned()))?,
+    );
+    Ok(())
+}
+
+/// The profile of the commenter session sent with this request, if any.
+async fn current_profile(db: &Db, request: &HttpRequest) -> Result<Option<String>, AppError> {
+    let Some(token) = cookie_token(request, crate::auth::COMMENTER_SESSION_COOKIE) else {
+        return Ok(None);
+    };
+    let Some(session) = db
+        .get_live_session(&crate::auth::hash_token(&token))
+        .await?
+    else {
+        return Ok(None);
+    };
+    if session.kind != SESSION_KIND_COMMENTER {
+        return Ok(None);
+    }
+    match session.identity_id {
+        Some(identity_id) => db.profile_id_for_identity(&identity_id).await,
+        None => Ok(None),
+    }
+}
+
+/// Only article pages and the account page may receive a commenter after sign-in.
+fn safe_return(path: &str) -> bool {
+    (path.starts_with("/blog/") || path == "/account")
         && path.len() <= 512
         && !path.contains(['\\', '\r', '\n'])
         && !path.contains("//")
@@ -244,6 +304,10 @@ async fn finish_sign_in(
             profile.avatar_url.as_deref(),
         )
         .await?;
+    if purpose == "commenter" {
+        db.attach_profile(&identity, profile.email_verified, None)
+            .await?;
+    }
 
     let (token, token_hash) = new_session_token();
     db.create_session(
@@ -254,7 +318,11 @@ async fn finish_sign_in(
         },
         &token_hash,
         Some(&identity.id),
-        config.admin_session_ttl_hours,
+        if purpose == "admin" {
+            config.admin_session_ttl_hours
+        } else {
+            config.commenter_session_ttl_hours
+        },
     )
     .await?;
 
@@ -279,6 +347,46 @@ async fn finish_sign_in(
     Ok(response.finish())
 }
 
+/// Connects another provider to the profile of the signed-in commenter. The
+/// current session stays as it is; only the new provider joins the profile.
+async fn finish_link(
+    db: &Db,
+    config: &Config,
+    provider: &str,
+    profile: OAuthProfile,
+    profile_id: &str,
+) -> Result<HttpResponse, AppError> {
+    let identity = db
+        .upsert_identity(
+            provider,
+            &profile.subject,
+            &profile.email,
+            &profile.name,
+            profile.avatar_url.as_deref(),
+        )
+        .await?;
+    let failure = match db
+        .attach_profile(&identity, profile.email_verified, Some(profile_id))
+        .await
+    {
+        Ok(_) => None,
+        Err(AppError::Conflict(_)) => Some("already_linked"),
+        Err(other) => return Err(other),
+    };
+    let mut response = HttpResponse::Found();
+    response.insert_header((header::CACHE_CONTROL, "no-store"));
+    response.insert_header((header::REFERRER_POLICY, "no-referrer"));
+    for cookie in expired_oauth_cookies(config) {
+        response.cookie(cookie);
+    }
+    let mut location = format!("{}/account", config.public_base_url);
+    if let Some(error) = failure {
+        location.push_str(&format!("?auth_error={error}"));
+    }
+    response.insert_header((header::LOCATION, location));
+    Ok(response.finish())
+}
+
 #[cfg_attr(feature = "swagger", utoipa::path(
     get,
     path = "/api/v1/auth/session",
@@ -288,8 +396,42 @@ async fn finish_sign_in(
     )
 ))]
 #[get("/auth/session")]
-pub async fn show_session(commenter: OptionalCommenter) -> Result<HttpResponse, AppError> {
-    Ok(HttpResponse::Ok().json(CommenterSessionResponse::from(commenter.identity)))
+pub async fn show_session(
+    commenter: OptionalCommenter,
+    config: web::Data<Config>,
+) -> Result<HttpResponse, AppError> {
+    let body = match (commenter.identity, commenter.profile) {
+        (Some(identity), Some(profile)) => signed_in(identity, profile, &config),
+        _ => CommenterSessionResponse::signed_out(available_providers(&config)),
+    };
+    Ok(HttpResponse::Ok()
+        .insert_header((header::CACHE_CONTROL, "no-store"))
+        .json(body))
+}
+
+fn signed_in(
+    identity: CommenterIdentity,
+    profile: CommenterProfile,
+    config: &Config,
+) -> CommenterSessionResponse {
+    CommenterSessionResponse {
+        authenticated: true,
+        identity: Some(CommenterIdentity {
+            name: profile.display_name.clone(),
+            avatar_url: profile.avatar_url.clone(),
+            ..identity
+        }),
+        profile: Some(profile),
+        providers: Some(available_providers(config)),
+    }
+}
+
+fn available_providers(config: &Config) -> Vec<String> {
+    ["google", "github"]
+        .into_iter()
+        .filter(|provider| config.oauth_provider(provider).is_some())
+        .map(str::to_owned)
+        .collect()
 }
 
 #[cfg_attr(feature = "swagger", utoipa::path(
@@ -306,20 +448,180 @@ pub async fn clear_session(
     config: web::Data<Config>,
     request: HttpRequest,
 ) -> Result<HttpResponse, AppError> {
+    crate::auth::same_origin_check(&request)?;
     if let Some(token) = cookie_token(&request, crate::auth::COMMENTER_SESSION_COOKIE) {
         db.delete_session(&crate::auth::hash_token(&token)).await?;
     }
+    Ok(signed_out_response(&config))
+}
+
+fn signed_out_response(config: &Config) -> HttpResponse {
+    HttpResponse::Ok()
+        .insert_header((header::CACHE_CONTROL, "no-store"))
+        .cookie(commenter_expired_cookie(config))
+        .json(CommenterSessionResponse::signed_out(available_providers(
+            config,
+        )))
+}
+
+const PROFILE_WRITES_PER_HOUR: usize = 30;
+
+fn check_profile_rate(limiter: &RateLimiter, profile_id: &str) -> Result<(), AppError> {
+    if limiter.check(
+        &format!("profile:{profile_id}"),
+        PROFILE_WRITES_PER_HOUR,
+        std::time::Duration::from_secs(3600),
+    ) {
+        Ok(())
+    } else {
+        Err(AppError::TooManyRequests(
+            "Too many profile changes. Try again later.".to_owned(),
+        ))
+    }
+}
+
+#[cfg_attr(feature = "swagger", utoipa::path(
+    patch,
+    path = "/api/v1/auth/profile",
+    tag = "auth",
+    request_body = ProfileUpdate,
+    responses(
+        (status = 200, description = "Updated profile", body = CommenterSessionResponse),
+        (status = 401, description = "Not signed in", body = crate::error::ErrorBody),
+        (status = 409, description = "Display name taken", body = crate::error::ErrorBody),
+        (status = 422, description = "Invalid display name", body = crate::error::ErrorBody)
+    )
+))]
+#[patch("/auth/profile")]
+pub async fn update_profile(
+    db: web::Data<Db>,
+    config: web::Data<Config>,
+    limiter: web::Data<RateLimiter>,
+    commenter: RequiredCommenter,
+    payload: web::Json<ProfileUpdate>,
+    request: HttpRequest,
+) -> Result<HttpResponse, AppError> {
+    crate::auth::same_origin_check(&request)?;
+    let context = commenter.0;
+    check_profile_rate(&limiter, &context.profile.id)?;
+    let profile = db
+        .update_profile(&context.profile.id, &context.identity.id, &payload)
+        .await?;
     Ok(HttpResponse::Ok()
-        .cookie(commenter_expired_cookie(&config))
-        .json(CommenterSessionResponse {
-            authenticated: false,
-            identity: None,
-        }))
+        .insert_header((header::CACHE_CONTROL, "no-store"))
+        .json(signed_in(context.identity, profile, &config)))
+}
+
+#[cfg_attr(feature = "swagger", utoipa::path(
+    delete,
+    path = "/api/v1/auth/identities/{identity_id}",
+    tag = "auth",
+    params(("identity_id" = String, Path, description = "Connected account to disconnect")),
+    responses(
+        (status = 200, description = "Updated profile", body = CommenterSessionResponse),
+        (status = 409, description = "Last or current account", body = crate::error::ErrorBody)
+    )
+))]
+#[delete("/auth/identities/{identity_id}")]
+pub async fn unlink_identity(
+    db: web::Data<Db>,
+    config: web::Data<Config>,
+    limiter: web::Data<RateLimiter>,
+    commenter: RequiredCommenter,
+    path: web::Path<String>,
+    request: HttpRequest,
+) -> Result<HttpResponse, AppError> {
+    crate::auth::same_origin_check(&request)?;
+    let context = commenter.0;
+    check_profile_rate(&limiter, &context.profile.id)?;
+    let profile = db
+        .unlink_account(
+            &context.profile.id,
+            &context.identity.id,
+            &path.into_inner(),
+            |provider, subject| config.admin_identity_allowed(provider, subject),
+        )
+        .await?;
+    Ok(HttpResponse::Ok()
+        .insert_header((header::CACHE_CONTROL, "no-store"))
+        .json(signed_in(context.identity, profile, &config)))
+}
+
+#[cfg_attr(feature = "swagger", utoipa::path(
+    delete,
+    path = "/api/v1/auth/sessions",
+    tag = "auth",
+    responses((status = 200, description = "Signed out on every device", body = CommenterSessionResponse))
+))]
+#[delete("/auth/sessions")]
+pub async fn clear_sessions(
+    db: web::Data<Db>,
+    config: web::Data<Config>,
+    commenter: RequiredCommenter,
+    request: HttpRequest,
+) -> Result<HttpResponse, AppError> {
+    crate::auth::same_origin_check(&request)?;
+    db.delete_profile_sessions(&commenter.0.profile.id).await?;
+    Ok(signed_out_response(&config))
+}
+
+#[cfg_attr(feature = "swagger", utoipa::path(
+    get,
+    path = "/api/v1/auth/profile/export",
+    tag = "auth",
+    responses((status = 200, description = "Profile and comments as JSON"))
+))]
+#[get("/auth/profile/export")]
+pub async fn export_profile(
+    db: web::Data<Db>,
+    commenter: RequiredCommenter,
+) -> Result<HttpResponse, AppError> {
+    let data = db.export_profile(&commenter.0.profile.id).await?;
+    Ok(HttpResponse::Ok()
+        .insert_header((header::CACHE_CONTROL, "no-store"))
+        .insert_header((
+            header::CONTENT_DISPOSITION,
+            "attachment; filename=\"voidreg-profile.json\"",
+        ))
+        .json(data))
+}
+
+#[cfg_attr(feature = "swagger", utoipa::path(
+    delete,
+    path = "/api/v1/auth/profile",
+    tag = "auth",
+    params(ProfileDeleteQuery),
+    responses(
+        (status = 200, description = "Profile deleted", body = CommenterSessionResponse),
+        (status = 403, description = "Owner or moderated accounts", body = crate::error::ErrorBody)
+    )
+))]
+#[delete("/auth/profile")]
+pub async fn delete_profile(
+    db: web::Data<Db>,
+    config: web::Data<Config>,
+    limiter: web::Data<RateLimiter>,
+    commenter: RequiredCommenter,
+    query: web::Query<ProfileDeleteQuery>,
+    request: HttpRequest,
+) -> Result<HttpResponse, AppError> {
+    crate::auth::same_origin_check(&request)?;
+    let context = commenter.0;
+    check_profile_rate(&limiter, &context.profile.id)?;
+    db.delete_profile(
+        &context.profile.id,
+        query.remove_comments,
+        |provider, subject| config.admin_identity_allowed(provider, subject),
+    )
+    .await?;
+    Ok(signed_out_response(&config))
 }
 
 struct OAuthProfile {
     subject: String,
     email: String,
+    /// True only when the provider vouches for the email, so it may link profiles.
+    email_verified: bool,
     name: String,
     avatar_url: Option<String>,
 }
@@ -444,6 +746,7 @@ async fn fetch_google_profile(access_token: &str) -> Result<OAuthProfile, AppErr
         subject: json_string(&profile, "sub")
             .ok_or_else(|| AppError::Internal("google profile missing subject".to_owned()))?,
         email: json_string(&profile, "email").unwrap_or_default(),
+        email_verified: true,
         name: json_string(&profile, "name").unwrap_or_default(),
         avatar_url: json_string(&profile, "picture"),
     })
@@ -507,44 +810,66 @@ async fn fetch_github_profile(
         .and_then(Value::as_u64)
         .map(|id| id.to_string())
         .ok_or_else(|| AppError::Internal("github profile missing subject".to_owned()))?;
-    let mut email = json_string(&profile, "email").unwrap_or_default();
-    if include_email && email.is_empty() {
-        let emails: Value = client
-            .get(GITHUB_EMAILS_URL)
-            .bearer_auth(access_token)
-            .header(reqwest::header::USER_AGENT, "voidreg-api")
-            .header(reqwest::header::ACCEPT, "application/vnd.github+json")
-            .send()
-            .await
-            .map_err(|err| AppError::Internal(format!("github emails request failed: {err}")))?
-            .error_for_status()
-            .map_err(|err| AppError::Internal(format!("github emails rejected: {err}")))?
-            .json()
-            .await
-            .map_err(|err| AppError::Internal(format!("github emails invalid: {err}")))?;
-        email = emails
-            .as_array()
-            .and_then(|entries| {
-                entries.iter().find(|entry| {
-                    entry
-                        .get("primary")
-                        .and_then(Value::as_bool)
-                        .unwrap_or(false)
-                })
-            })
-            .and_then(|entry| entry.get("email").and_then(Value::as_str))
-            .unwrap_or_default()
-            .to_owned();
+    let public_email = json_string(&profile, "email").unwrap_or_default();
+    let mut email = public_email.clone();
+    let mut email_verified = false;
+    if include_email {
+        // Only an address GitHub marks verified may link accounts. A failed
+        // lookup keeps sign-in working with the public address, unverified.
+        let emails: Option<Value> = async {
+            client
+                .get(GITHUB_EMAILS_URL)
+                .bearer_auth(access_token)
+                .header(reqwest::header::USER_AGENT, "voidreg-api")
+                .header(reqwest::header::ACCEPT, "application/vnd.github+json")
+                .send()
+                .await
+                .ok()?
+                .error_for_status()
+                .ok()?
+                .json()
+                .await
+                .ok()
+        }
+        .await;
+        if let Some((address, verified)) = emails.as_ref().and_then(github_email) {
+            email = address;
+            email_verified = verified;
+        }
     }
 
     Ok(OAuthProfile {
         subject,
         email,
+        email_verified,
         name: json_string(&profile, "name")
             .or_else(|| json_string(&profile, "login"))
             .unwrap_or_else(|| "GitHub user".to_owned()),
         avatar_url: json_string(&profile, "avatar_url"),
     })
+}
+
+/// Picks the primary verified address, else any verified one, else the primary.
+fn github_email(emails: &Value) -> Option<(String, bool)> {
+    let entries = emails.as_array()?;
+    let flag = |entry: &Value, key: &str| entry.get(key).and_then(Value::as_bool).unwrap_or(false);
+    let address = |entry: &Value| {
+        entry
+            .get("email")
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+    };
+    entries
+        .iter()
+        .find(|e| flag(e, "primary") && flag(e, "verified"))
+        .or_else(|| entries.iter().find(|e| flag(e, "verified")))
+        .and_then(|e| address(e).map(|a| (a, true)))
+        .or_else(|| {
+            entries
+                .iter()
+                .find(|e| flag(e, "primary"))
+                .and_then(|e| address(e).map(|a| (a, false)))
+        })
 }
 
 fn json_string(value: &Value, key: &str) -> Option<String> {
@@ -579,11 +904,7 @@ fn urlencode(value: &str) -> String {
 ))]
 #[get("/auth/providers")]
 pub async fn providers(config: web::Data<Config>) -> HttpResponse {
-    let available: Vec<&str> = ["google", "github"]
-        .into_iter()
-        .filter(|provider| config.oauth_provider(provider).is_some())
-        .collect();
-    HttpResponse::Ok().json(available)
+    HttpResponse::Ok().json(available_providers(&config))
 }
 
 #[cfg(test)]
@@ -595,6 +916,7 @@ mod admin_oauth_tests {
         OAuthProfile {
             subject: subject.to_owned(),
             email: "owner@example.com".to_owned(),
+            email_verified: true,
             name: "Owner".to_owned(),
             avatar_url: None,
         }
@@ -729,6 +1051,159 @@ mod admin_oauth_tests {
         )
         .await;
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    fn commenter_profile(subject: &str, email: &str, verified: bool) -> OAuthProfile {
+        OAuthProfile {
+            subject: subject.to_owned(),
+            email: email.to_owned(),
+            email_verified: verified,
+            name: "Ada".to_owned(),
+            avatar_url: None,
+        }
+    }
+
+    #[actix_web::test]
+    async fn commenter_sign_in_joins_verified_emails_and_lasts_the_commenter_ttl() {
+        let db = database().await;
+        let mut config = Config::for_test();
+        config.commenter_session_ttl_hours = 720;
+        let mut profiles = Vec::new();
+        for (provider, subject, email, verified) in [
+            ("github", "1", "ada@example.com", true),
+            ("google", "g1", "Ada@Example.com", true),
+            ("github", "2", "ada@example.com", false),
+        ] {
+            let response = finish_sign_in(
+                &db,
+                &config,
+                provider,
+                "commenter",
+                commenter_profile(subject, email, verified),
+            )
+            .await
+            .unwrap();
+            let cookie = response
+                .cookies()
+                .find(|c| c.name() == crate::auth::COMMENTER_SESSION_COOKIE)
+                .unwrap();
+            assert_eq!(
+                cookie.max_age(),
+                Some(actix_web::cookie::time::Duration::hours(720))
+            );
+            let identity = db.find_identity(provider, subject).await.unwrap().unwrap();
+            profiles.push(
+                db.profile_id_for_identity(&identity.id)
+                    .await
+                    .unwrap()
+                    .unwrap(),
+            );
+        }
+        assert_eq!(profiles[0], profiles[1]);
+        assert_ne!(profiles[0], profiles[2]);
+    }
+
+    #[actix_web::test]
+    async fn linking_while_signed_in_keeps_the_session_and_rejects_foreign_profiles() {
+        let db = database().await;
+        let config = Config::for_test();
+        for (provider, subject, email) in [
+            ("github", "1", "ada@example.com"),
+            ("google", "g9", "grace@example.com"),
+        ] {
+            finish_sign_in(
+                &db,
+                &config,
+                provider,
+                "commenter",
+                commenter_profile(subject, email, true),
+            )
+            .await
+            .unwrap();
+        }
+        let github = db.find_identity("github", "1").await.unwrap().unwrap();
+        let profile = db
+            .profile_id_for_identity(&github.id)
+            .await
+            .unwrap()
+            .unwrap();
+        let linked = finish_link(
+            &db,
+            &config,
+            "google",
+            commenter_profile("g1", "other@example.com", true),
+            &profile,
+        )
+        .await
+        .unwrap();
+        assert!(
+            !linked
+                .cookies()
+                .any(|c| c.name() == crate::auth::COMMENTER_SESSION_COOKIE)
+        );
+        assert!(
+            linked
+                .headers()
+                .get(header::LOCATION)
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .ends_with("/account")
+        );
+        let google = db.find_identity("google", "g1").await.unwrap().unwrap();
+        assert_eq!(
+            db.profile_id_for_identity(&google.id).await.unwrap(),
+            Some(profile.clone())
+        );
+
+        let stolen = finish_link(
+            &db,
+            &config,
+            "google",
+            commenter_profile("g9", "grace@example.com", true),
+            &profile,
+        )
+        .await
+        .unwrap();
+        assert!(
+            stolen
+                .headers()
+                .get(header::LOCATION)
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .ends_with("/account?auth_error=already_linked")
+        );
+    }
+
+    #[actix_web::test]
+    async fn github_emails_link_only_when_the_provider_verified_them() {
+        let verified = serde_json::json!([
+            {"email": "old@example.com", "primary": false, "verified": true},
+            {"email": "main@example.com", "primary": true, "verified": true}
+        ]);
+        assert_eq!(
+            github_email(&verified),
+            Some(("main@example.com".to_owned(), true))
+        );
+        let secondary = serde_json::json!([
+            {"email": "main@example.com", "primary": true, "verified": false},
+            {"email": "old@example.com", "primary": false, "verified": true}
+        ]);
+        assert_eq!(
+            github_email(&secondary),
+            Some(("old@example.com".to_owned(), true))
+        );
+        let none =
+            serde_json::json!([{"email": "main@example.com", "primary": true, "verified": false}]);
+        assert_eq!(
+            github_email(&none),
+            Some(("main@example.com".to_owned(), false))
+        );
+        assert_eq!(
+            github_email(&serde_json::json!({"message": "Bad credentials"})),
+            None
+        );
     }
 
     #[actix_web::test]

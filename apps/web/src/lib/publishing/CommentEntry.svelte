@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import Avatar from '$lib/components/Avatar.svelte';
   import Icon from '$lib/components/Icon.svelte';
-  import { age, initial, type DiscussionComment } from './discussion';
+  import { age, type DiscussionComment } from './discussion';
   let {
     comment,
     onreply,
@@ -27,7 +28,13 @@
   class:threaded
   aria-label={'Comment by ' + comment.author_name}
 >
-  <span class="avatar" aria-hidden="true">{initial(comment.author_name)}</span>
+  <span class="avatar-cell"
+    ><Avatar
+      name={comment.author_name}
+      src={comment.removed ? null : comment.avatar_url}
+      size={reply ? 32 : 40}
+    /></span
+  >
   {#if threaded}<span class="rail" aria-hidden="true"></span>{/if}
   <div class="main">
     <header>
@@ -69,24 +76,13 @@
     grid-template-columns: 2rem minmax(0, 1fr);
     column-gap: 0.75rem;
   }
-  .avatar {
+  .avatar-cell {
     display: grid;
     grid-row: 1;
     grid-column: 1;
-    place-items: center;
-    width: 2.5rem;
-    height: 2.5rem;
-    border: 1px solid var(--border);
-    border-radius: 50%;
-    background: var(--secondary);
-    color: var(--secondary-foreground);
-    font: 600 0.9375rem/1 var(--font-ui);
+    align-self: start;
   }
-  .reply .avatar {
-    width: 2rem;
-    height: 2rem;
-    font-size: 0.8125rem;
-  }
+
   /* The line that ties open replies back to the comment they answer. */
   .rail {
     grid-row: 2;

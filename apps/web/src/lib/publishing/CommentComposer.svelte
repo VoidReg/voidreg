@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { request } from '@voidreg/publishing-ui/api';
+  import Avatar from '$lib/components/Avatar.svelte';
   import type { DiscussionComment } from './discussion';
   let {
     slug,
@@ -10,7 +11,7 @@
     oncancel
   }: {
     slug: string;
-    identity?: { name: string };
+    identity?: { name: string; avatar_url?: string };
     target?: DiscussionComment;
     onposted: (status: string) => Promise<void>;
     oncancel?: () => void;
@@ -55,8 +56,11 @@
 
 <form class="publishing-form discussion-composer" onsubmit={submit} aria-busy={busy}>
   {#if target}<p class="composing">Replying to <strong>{target.author_name}</strong></p>{/if}
-  {#if !identity}<label
-      >Name<input bind:value={name} required maxlength="80" autocomplete="name" /></label
+  {#if identity}<p class="posting-as">
+      <Avatar name={identity.name} src={identity.avatar_url} size={32} />
+      <span>Posting as <strong>{identity.name}</strong></span>
+    </p>
+  {:else}<label>Name<input bind:value={name} required maxlength="80" autocomplete="name" /></label
     >{/if}
   <label for={'comment-body-' + key}>{target ? 'Your reply' : 'Join the discussion'}</label>
   <textarea
@@ -109,6 +113,18 @@
     font-size: 0.875rem;
   }
   .composing strong {
+    color: var(--foreground);
+  }
+  .posting-as {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    margin: 0;
+    color: var(--muted-foreground);
+    font-size: 0.875rem;
+  }
+  .posting-as strong {
+    overflow-wrap: anywhere;
     color: var(--foreground);
   }
   .placeholder-note {

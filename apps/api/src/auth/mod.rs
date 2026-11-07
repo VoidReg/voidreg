@@ -101,7 +101,7 @@ pub fn commenter_session_cookie(config: &Config, token: &str) -> Cookie<'static>
         .same_site(SameSite::Lax)
         .secure(secure_cookies(config))
         .path("/api/v1")
-        .max_age(CookieDuration::hours(config.admin_session_ttl_hours))
+        .max_age(CookieDuration::hours(config.commenter_session_ttl_hours))
         .finish()
 }
 
@@ -235,6 +235,31 @@ pub fn csrf_check(request: &actix_web::HttpRequest) -> Result<(), AppError> {
         Ok(())
     } else {
         Err(AppError::Forbidden("CSRF token mismatch".to_owned()))
+    }
+}
+
+/// Rejects writes whose browser-reported origin is not this site. Cookie
+/// sessions are SameSite=Lax already; this also stops sibling subdomains.
+pub fn same_origin_check(request: &actix_web::HttpRequest) -> Result<(), AppError> {
+    let allowed = |origin: &str| {
+        request
+            .app_data::<actix_web::web::Data<Config>>()
+            .is_some_and(|config| {
+                let origin = origin.trim_end_matches('/');
+                origin == config.public_base_url.trim_end_matches('/')
+                    || config
+                        .cors_origins
+                        .iter()
+                        .any(|o| o == "*" || o.trim_end_matches('/') == origin)
+            })
+    };
+    let header = |name: &str| request.headers().get(name).and_then(|v| v.to_str().ok());
+    match (header("Origin"), header("Sec-Fetch-Site")) {
+        (Some(origin), _) if allowed(origin) => Ok(()),
+        (Some(_), _) | (None, Some("cross-site" | "same-site")) => Err(AppError::Forbidden(
+            "cross-origin request blocked".to_owned(),
+        )),
+        _ => Ok(()),
     }
 }
 

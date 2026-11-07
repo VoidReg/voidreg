@@ -18,7 +18,10 @@ pub use comment::{
 };
 pub use contact::{ContactFormResponse, ContactRequest, ContactResponse};
 pub use health::HealthResponse;
-pub use identity::{CommenterIdentity, CommenterSessionResponse};
+pub use identity::{
+    CommenterIdentity, CommenterProfile, CommenterSessionResponse, LinkedAccount,
+    ProfileDeleteQuery, ProfileUpdate,
+};
 pub use newsletter::{NewsletterRequest, NewsletterResponse};
 pub use project::{ContentSection, MediaPlaceholder, Project, ProjectListResponse, RelatedProject};
 

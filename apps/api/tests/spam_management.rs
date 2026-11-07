@@ -403,7 +403,7 @@ async fn moderation_http_auth_csrf_ip_block_and_payload_limits() {
             test::TestRequest::post()
                 .uri("/api/v1/blogs/discussion/comments")
                 .peer_addr(peer.parse().unwrap())
-                .set_json(json!({"name":"Reader","body":"IPv6 blocked"}))
+                .set_json(json!({"name":"Visitor","body":"IPv6 blocked"}))
                 .to_request(),
         )
         .await;
@@ -415,7 +415,7 @@ async fn moderation_http_auth_csrf_ip_block_and_payload_limits() {
             test::TestRequest::post()
                 .uri("/api/v1/blogs/discussion/comments")
                 .peer_addr("198.51.100.8:4000".parse().unwrap())
-                .set_json(json!({"name":"Reader","body":"Duplicate HTTP verification"}))
+                .set_json(json!({"name":"Visitor","body":"Duplicate HTTP verification"}))
                 .to_request(),
         )
         .await;

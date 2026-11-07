@@ -15,6 +15,7 @@ mod history;
 mod media;
 mod models;
 pub mod moderation;
+pub mod profile;
 // Sample content exists only in debug builds, so a release binary cannot write it to a real database.
 #[cfg(debug_assertions)]
 mod seed;
@@ -109,7 +110,11 @@ impl Db {
     pub async fn migrate(&self) -> Result<(), AppError> {
         let mut db = self.inner.lock().await;
         apply_schema(&mut db).await?;
-        for statement in moderation::SCHEMA.iter().chain(contact::SCHEMA) {
+        for statement in moderation::SCHEMA
+            .iter()
+            .chain(contact::SCHEMA)
+            .chain(profile::SCHEMA)
+        {
             moderation::sql(&mut *db, (*statement).into(), vec![]).await?;
         }
         moderation::backfill_ancestors(&mut *db).await?;
@@ -130,7 +135,11 @@ impl Db {
     pub async fn seed_if_empty(&self) -> Result<(), AppError> {
         let mut db = self.inner.lock().await;
         apply_schema(&mut db).await?;
-        for statement in moderation::SCHEMA.iter().chain(contact::SCHEMA) {
+        for statement in moderation::SCHEMA
+            .iter()
+            .chain(contact::SCHEMA)
+            .chain(profile::SCHEMA)
+        {
             moderation::sql(&mut *db, (*statement).into(), vec![]).await?;
         }
         seed::seed_if_empty(&mut db).await?;

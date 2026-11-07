@@ -42,7 +42,23 @@ The manual workflow builds a Node artifact instead of deploying static Pages.
 Development proxies `/api` to localhost:8080. `VOIDREG_API_PROXY` overrides that
 target. Public reads use bounded memory caching and ETag revalidation; errors can
 be retried. Comments render plain text and remain hidden until approved.
-Configured OAuth providers are discovered from `/api/v1/auth/providers`.
+Configured OAuth providers arrive with `/api/v1/auth/session`.
+
+## Commenter accounts
+
+Signing in with GitHub or Google is optional; guests can still comment and wait for review.
+One person is one profile (`profiles` and `identity_profiles` in `apps/api/src/db/profile.rs`):
+a verified email shared by two providers joins them, and `/account` can connect or disconnect
+providers explicitly. The profile owns the public display name and the show/hide photo choice.
+Photos reach readers only through `/api/v1/avatars/<profile id>`, which fetches from GitHub or
+Google server side (`AVATAR_HOSTS` adds test hosts), so providers never see who reads a post.
+
+`src/lib/session.svelte.ts` holds the shared browser-only session used by the header
+`AccountMenu`, the discussion and the `/account` page. `/account` is `noindex` and disallowed
+in `robots.txt`. It offers display name, photo, connected accounts, sign out everywhere, a JSON
+export and account deletion (comments become "Deleted user", or are removed on request).
+Accounts under an active moderation block, and owner accounts, cannot delete or disconnect
+themselves, so those actions cannot launder a block.
 
 PublisleArticle renders sanitized artifacts and activates only local host-approved
 islands from `packages/publishing-ui/src/renderers.ts`. Unknown implementations keep the

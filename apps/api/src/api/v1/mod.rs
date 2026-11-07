@@ -2,6 +2,7 @@ use actix_web::web::ServiceConfig;
 
 pub mod admin;
 pub mod auth;
+pub mod avatars;
 pub mod blogs;
 pub mod comments;
 pub mod contact;
@@ -44,6 +45,12 @@ pub fn configure(cfg: &mut ServiceConfig) {
     .service(auth::callback)
     .service(auth::show_session)
     .service(auth::clear_session)
+    .service(auth::clear_sessions)
+    .service(auth::update_profile)
+    .service(auth::delete_profile)
+    .service(auth::export_profile)
+    .service(auth::unlink_identity)
+    .service(avatars::show)
     .service(
         actix_web::web::scope("/admin")
             .wrap(actix_web::middleware::DefaultHeaders::new().add(("Cache-Control", "no-store")))

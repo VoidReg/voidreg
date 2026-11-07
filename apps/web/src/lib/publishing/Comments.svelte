@@ -1,16 +1,21 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { apiBase, request, type Page } from '@voidreg/publishing-ui/api';
+  import { request, type Page } from '@voidreg/publishing-ui/api';
+  import { resolve } from '$app/paths';
+  import { page } from '$app/state';
+  import { authErrorMessage, providerLabel, session, signInUrl } from '$lib/session.svelte';
   import type { DiscussionComment } from './discussion';
   import CommentEntry from './CommentEntry.svelte';
   import CommentComposer from './CommentComposer.svelte';
+  import Avatar from '$lib/components/Avatar.svelte';
   import Icon from '$lib/components/Icon.svelte';
   let { slug }: { slug: string } = $props();
   type Replies = Page<DiscussionComment> & { loading: boolean; error: string; open: boolean };
   let comments = $state<Page<DiscussionComment>>({ items: [], page: 1, per_page: 20, total: 0 });
   let replies = $state<Record<string, Replies>>({});
-  let providers = $state<string[]>([]),
-    identity = $state<{ name: string } | undefined>();
+  const identity = $derived(session.signedIn ? session.data?.identity : undefined);
+  const providers = $derived(session.signedIn ? [] : (session.data?.providers ?? []));
+  const authError = $derived(authErrorMessage(page.url.searchParams.get('auth_error')));
   let loading = $state(true),
     error = $state(''),
     notice = $state('');
@@ -66,12 +71,7 @@
   }
   onMount(() => {
     void load();
-    void request<string[]>('/auth/providers')
-      .then((v) => (providers = v))
-      .catch(() => {});
-    void request<{ identity?: { name: string } }>('/auth/session')
-      .then((s) => (identity = s.identity))
-      .catch(() => {});
+    void session.load();
   });
   function reply(comment: DiscussionComment) {
     if (target && target.id !== comment.id && !confirm('Discard your unfinished reply?')) return;
@@ -122,8 +122,7 @@
   }
   async function signOut() {
     try {
-      await request('/auth/session', { method: 'DELETE' });
-      identity = undefined;
+      await session.signOut();
     } catch (e) {
       error = (e as Error).message;
     }
@@ -141,21 +140,35 @@
       Ask a question, share an idea, or reply to another reader. Anonymous contributions are
       reviewed before appearing.
     </p>
-    {#if identity}<p class="signed-in">
-        Signed in as <strong>{identity.name}</strong>.
-        <button type="button" class="link-button" onclick={signOut}>Sign out</button>
-      </p>
-    {:else if providers.length}<div class="button-row">
-        {#each providers as provider (provider)}
-          <!-- eslint-disable svelte/no-navigation-without-resolve -->
-          <a
-            class="button button-secondary"
-            href={`${apiBase}/auth/${provider}/start?return_to=${encodeURIComponent(returnTo)}`}
-            >Continue with {provider === 'github' ? 'GitHub' : 'Google'}</a
-          >
-          <!-- eslint-enable svelte/no-navigation-without-resolve -->
-        {/each}
-      </div>{/if}
+    {#if authError}<p role="alert" class="problem">{authError}</p>{/if}
+    {#if identity}
+      <div class="identity-bar">
+        <Avatar name={identity.name} src={identity.avatar_url} size={40} />
+        <p>
+          Posting as <strong>{identity.name}</strong>. Your comments publish right away.
+        </p>
+        <span class="identity-actions">
+          <a class="link-button" href={resolve('/account')}>Account settings</a>
+          <button type="button" class="link-button" onclick={signOut}>Sign out</button>
+        </span>
+      </div>
+    {:else if providers.length}
+      <div class="signin-card">
+        <p>
+          <strong>Sign in to post as yourself.</strong> Your comments publish right away under one name
+          and photo you control. Or comment as a guest below, and a moderator will review it first.
+        </p>
+        <div class="button-row">
+          {#each providers as provider (provider)}
+            <!-- eslint-disable svelte/no-navigation-without-resolve -->
+            <a class="button button-secondary" href={signInUrl(provider, returnTo)}
+              >Continue with {providerLabel(provider)}</a
+            >
+            <!-- eslint-enable svelte/no-navigation-without-resolve -->
+          {/each}
+        </div>
+      </div>
+    {/if}
   </header>
   <CommentComposer {slug} {identity} onposted={(status) => posted(status)} />
   {#if notice}<p class="notice" role="status">{notice}</p>{/if}
@@ -271,8 +284,38 @@
     margin: 0;
     color: var(--muted-foreground);
   }
-  .signed-in strong {
+  .identity-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1rem;
+    border: 1px solid var(--border);
+    background: var(--card);
+    padding: 0.75rem 1rem;
+  }
+  .identity-bar p {
+    flex: 1 1 14rem;
+    min-width: 0;
+  }
+  .identity-bar strong,
+  .signin-card strong {
     color: var(--foreground);
+    overflow-wrap: anywhere;
+  }
+  .identity-actions {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+  }
+  .signin-card {
+    display: grid;
+    gap: 0.75rem;
+    border: 1px solid var(--border);
+    background: var(--card);
+    padding: 1rem;
+  }
+  .problem {
+    color: var(--danger);
   }
   .quiet {
     margin: 0;

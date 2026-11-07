@@ -12,7 +12,7 @@ use crate::auth::{
     cookie_token, csrf_check, hash_token,
 };
 use crate::db::Db;
-use crate::domain::{CommenterIdentity, CommenterSessionResponse};
+use crate::domain::{CommenterIdentity, CommenterProfile};
 use crate::error::AppError;
 
 /// Extracts a live admin session cookie or fails the request with 401.
@@ -76,10 +76,44 @@ impl AdminSession {
     }
 }
 
+/// The commenter behind a live commenter session.
+pub struct CommenterContext {
+    pub token: String,
+    pub identity: CommenterIdentity,
+    pub profile: CommenterProfile,
+}
+
+async fn lookup_commenter(
+    db: Option<Data<Db>>,
+    token: Option<String>,
+) -> Result<Option<CommenterContext>, AppError> {
+    let (Some(db), Some(token)) = (db, token) else {
+        return Ok(None);
+    };
+    let Some(session) = db.get_live_session(&hash_token(&token)).await? else {
+        return Ok(None);
+    };
+    if session.kind != SESSION_KIND_COMMENTER {
+        return Ok(None);
+    }
+    let Some(identity_id) = session.identity_id else {
+        return Ok(None);
+    };
+    Ok(db
+        .commenter_by_identity(&identity_id)
+        .await?
+        .map(|(identity, profile)| CommenterContext {
+            token,
+            identity,
+            profile,
+        }))
+}
+
 /// Extracts the commenter identity behind a valid commenter session, or None
 /// for anonymous visitors. Never fails the request.
 pub struct OptionalCommenter {
     pub identity: Option<CommenterIdentity>,
+    pub profile: Option<CommenterProfile>,
 }
 
 impl FromRequest for OptionalCommenter {
@@ -87,38 +121,39 @@ impl FromRequest for OptionalCommenter {
     type Future = Pin<Box<dyn std::future::Future<Output = Result<Self, Self::Error>>>>;
 
     fn from_request(request: &HttpRequest, _payload: &mut Payload) -> Self::Future {
-        let db = request
-            .app_data::<Data<Db>>()
-            .map(|data| data.get_ref().clone());
+        let db = request.app_data::<Data<Db>>().cloned();
         let token = cookie_token(request, COMMENTER_SESSION_COOKIE);
         Box::pin(async move {
-            let Some(db) = db else {
-                return Ok(OptionalCommenter { identity: None });
-            };
-            let Some(token) = token else {
-                return Ok(OptionalCommenter { identity: None });
-            };
-            let Some(session) = db.get_live_session(&hash_token(&token)).await? else {
-                return Ok(OptionalCommenter { identity: None });
-            };
-            if session.kind != SESSION_KIND_COMMENTER {
-                return Ok(OptionalCommenter { identity: None });
-            }
-            let Some(identity_id) = session.identity_id else {
-                return Ok(OptionalCommenter { identity: None });
-            };
-            let identity = db.get_identity_by_id(&identity_id).await?;
-            Ok(OptionalCommenter { identity })
+            let context = lookup_commenter(db, token).await?;
+            Ok(match context {
+                Some(context) => OptionalCommenter {
+                    identity: Some(context.identity),
+                    profile: Some(context.profile),
+                },
+                None => OptionalCommenter {
+                    identity: None,
+                    profile: None,
+                },
+            })
         })
     }
 }
 
-/// Convenience conversion used by `GET /api/v1/auth/session`.
-impl From<Option<CommenterIdentity>> for CommenterSessionResponse {
-    fn from(identity: Option<CommenterIdentity>) -> Self {
-        Self {
-            authenticated: identity.is_some(),
-            identity,
-        }
+/// A signed-in commenter; anonymous requests fail with 401.
+pub struct RequiredCommenter(pub CommenterContext);
+
+impl FromRequest for RequiredCommenter {
+    type Error = AppError;
+    type Future = Pin<Box<dyn std::future::Future<Output = Result<Self, Self::Error>>>>;
+
+    fn from_request(request: &HttpRequest, _payload: &mut Payload) -> Self::Future {
+        let db = request.app_data::<Data<Db>>().cloned();
+        let token = cookie_token(request, COMMENTER_SESSION_COOKIE);
+        Box::pin(async move {
+            lookup_commenter(db, token)
+                .await?
+                .map(RequiredCommenter)
+                .ok_or_else(|| AppError::Unauthorized("sign in to manage your profile".to_owned()))
+        })
     }
 }

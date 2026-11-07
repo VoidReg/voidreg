@@ -30,6 +30,7 @@ pub fn build(
         // Each worker keeps its own limiter, so limits are approximate under
         // multiple workers; see auth::rate.
         .app_data(web::Data::new(RateLimiter::new()))
+        .app_data(web::Data::new(v1::avatars::AvatarCache::default()))
         .wrap(Logger::default())
         .wrap(build_cors(&cors_origins))
         .wrap(Compress::default())

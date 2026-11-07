@@ -5,6 +5,7 @@ User-agent: *
 Allow: /
 Disallow: /admin/
 Disallow: /preview/
+Disallow: /account
 Disallow: /api/
 Disallow: /mcp
 
@@ -21,6 +22,7 @@ User-agent: CCBot
 Allow: /
 Disallow: /admin/
 Disallow: /preview/
+Disallow: /account
 Disallow: /api/
 Disallow: /mcp
 

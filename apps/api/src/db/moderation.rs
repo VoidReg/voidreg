@@ -74,7 +74,7 @@ pub(super) async fn rows(
         })
         .collect()
 }
-fn uid(column: &str) -> String {
+pub(super) fn uid(column: &str) -> String {
     format!(
         "CASE WHEN typeof({column})='blob' THEN lower(substr(hex({column}),1,8)||'-'||substr(hex({column}),9,4)||'-'||substr(hex({column}),13,4)||'-'||substr(hex({column}),17,4)||'-'||substr(hex({column}),21,12)) ELSE {column} END"
     )
@@ -84,9 +84,25 @@ fn now() -> i64 {
 }
 fn allowed(alias: &str) -> String {
     format!(
-        "({alias}.status='approved' AND NOT EXISTS (SELECT 1 FROM comment_blocks b WHERE b.revoked_at IS NULL AND (b.expires_at IS NULL OR b.expires_at>unixepoch()) AND ((b.kind='source' AND b.target={alias}.ip_hash) OR (b.kind='user' AND b.target={alias}.identity_id))))"
+        "({alias}.status='approved' AND NOT EXISTS (SELECT 1 FROM comment_blocks b WHERE b.revoked_at IS NULL AND (b.expires_at IS NULL OR b.expires_at>unixepoch()) AND ((b.kind='source' AND b.target={alias}.ip_hash) OR (b.kind='user' AND (b.target={alias}.identity_id OR b.target IN (SELECT y.identity_id FROM identity_profiles x JOIN identity_profiles y ON y.profile_id=x.profile_id WHERE x.identity_id={alias}.identity_id))))))"
     )
 }
+/// Name shown for a comment: the live profile name, else the name stored with the comment.
+fn live_name(alias: &str) -> String {
+    format!(
+        "COALESCE((SELECT pr.display_name FROM identity_profiles ip JOIN profiles pr ON pr.id=ip.profile_id WHERE ip.identity_id={alias}.identity_id),{alias}.author_name)"
+    )
+}
+/// Proxied avatar path, present only while the author shows a photo that exists.
+fn live_avatar(alias: &str) -> String {
+    format!(
+        "(SELECT '{}'||pr.id||'?v='||pr.updated_at FROM identity_profiles ip JOIN profiles pr ON pr.id=ip.profile_id WHERE ip.identity_id={alias}.identity_id AND pr.show_avatar=1 AND EXISTS(SELECT 1 FROM identities ai WHERE ({})=pr.avatar_identity_id AND ai.avatar_url IS NOT NULL AND ai.avatar_url!=''))",
+        profile::AVATAR_PATH,
+        uid("ai.id")
+    )
+}
+/// Comments of a blocked account also cover every account on the same profile.
+const USER_SCOPE: &str = "identity_id IN (SELECT ? UNION SELECT y.identity_id FROM identity_profiles x JOIN identity_profiles y ON y.profile_id=x.profile_id WHERE x.identity_id=?)";
 async fn lock(db: &mut dyn toasty::Executor) -> Result<(), AppError> {
     sql(
         db,
@@ -100,7 +116,7 @@ async fn blocked(
     source: &str,
     identity: Option<&str>,
 ) -> Result<bool, AppError> {
-    let result=rows(db,"SELECT json_object('count',count(*)) FROM comment_blocks WHERE revoked_at IS NULL AND (expires_at IS NULL OR expires_at>unixepoch()) AND ((kind='source' AND target=?) OR (kind='user' AND target=?))".into(),vec![source.into(),identity.unwrap_or("").into()]).await?;
+    let result=rows(db,"SELECT json_object('count',count(*)) FROM comment_blocks WHERE revoked_at IS NULL AND (expires_at IS NULL OR expires_at>unixepoch()) AND ((kind='source' AND target=?) OR (kind='user' AND (target=? OR target IN (SELECT y.identity_id FROM identity_profiles x JOIN identity_profiles y ON y.profile_id=x.profile_id WHERE x.identity_id=?))))".into(),vec![source.into(),identity.unwrap_or("").into(),identity.unwrap_or("").into()]).await?;
     Ok(result[0]["count"].as_i64().unwrap_or(0) > 0)
 }
 async fn event(
@@ -441,13 +457,13 @@ impl Db {
     }
 
     pub async fn block_preview(&self, kind: &str, target: &str) -> Result<Value, AppError> {
-        let column = match kind {
-            "user" => "identity_id",
-            "source" => "ip_hash",
+        let (scope, args): (&str, Vec<SqlValue>) = match kind {
+            "user" => (USER_SCOPE, vec![target.into(), target.into()]),
+            "source" => ("ip_hash=?", vec![target.into()]),
             _ => return Err(AppError::Unprocessable("Invalid block kind".into())),
         };
         let mut db = self.inner.lock().await;
-        Ok(rows(&mut *db,format!("SELECT json_object('comments',count(*),'visible',sum(status='approved')) FROM comments WHERE {column}=? AND status!='removed'"),vec![target.into()]).await?.remove(0))
+        Ok(rows(&mut *db,format!("SELECT json_object('comments',count(*),'visible',sum(status='approved')) FROM comments WHERE {scope} AND status!='removed'"),args).await?.remove(0))
     }
 
     pub async fn block_comments(&self, input: &BlockInput, actor: &str) -> Result<Value, AppError> {
@@ -468,10 +484,17 @@ impl Db {
                 "Block duration must be 1-8760 hours or permanent".into(),
             ));
         }
-        let column = match input.kind.as_str() {
-            "user" => "identity_id",
-            "source" => "ip_hash",
+        let scope = match input.kind.as_str() {
+            "user" => USER_SCOPE,
+            "source" => "ip_hash=?",
             _ => return Err(AppError::Unprocessable("Invalid block kind".into())),
+        };
+        let scope_args = || -> Vec<SqlValue> {
+            if input.kind == "user" {
+                vec![input.target.clone().into(), input.target.clone().into()]
+            } else {
+                vec![input.target.clone().into()]
+            }
         };
         if input.kind == "source"
             && (input.target.len() != 64 || !input.target.bytes().all(|b| b.is_ascii_hexdigit()))
@@ -519,8 +542,8 @@ impl Db {
             )
             .await?;
         }
-        sql(&mut tx,format!("INSERT INTO comment_moderation SELECT {},?,? FROM comments c WHERE {column}=? AND status IN ('approved','pending') ON CONFLICT(comment_id) DO UPDATE SET reason=excluded.reason, updated_at=excluded.updated_at",uid("c.id")),vec![format!("Blocked {}: {}",input.kind,input.reason.trim()).into(),now().into(),input.target.clone().into()]).await?;
-        sql(&mut tx,format!("UPDATE comments SET status='hidden' WHERE {column}=? AND status IN ('approved','pending')"),vec![input.target.clone().into()]).await?;
+        sql(&mut tx,format!("INSERT INTO comment_moderation SELECT {},?,? FROM comments c WHERE {scope} AND status IN ('approved','pending') ON CONFLICT(comment_id) DO UPDATE SET reason=excluded.reason, updated_at=excluded.updated_at",uid("c.id")),{let mut args:Vec<SqlValue>=vec![format!("Blocked {}: {}",input.kind,input.reason.trim()).into(),now().into()];args.extend(scope_args());args}).await?;
+        sql(&mut tx,format!("UPDATE comments SET status='hidden' WHERE {scope} AND status IN ('approved','pending')"),scope_args()).await?;
         audit(
             &mut tx,
             "block",
@@ -625,6 +648,9 @@ impl Db {
         let cid = uid("c.id");
         let pid = uid("p.id");
         let permitted = allowed("c");
+        let name_c = live_name("c");
+        let name_p = live_name("p");
+        let avatar_c = live_avatar("c");
         // Ancestors are included as redacted placeholders, never with hidden text.
         let descendant_id = uid("d.id");
         let descendant_allowed = allowed("d");
@@ -655,7 +681,7 @@ impl Db {
         let direction = if root.is_some() { "ASC" } else { "DESC" };
         args.push(per.into());
         args.push(((page - 1) * per).into());
-        let items=rows(&mut *db,format!("{cte} SELECT json_object('id',{cid},'parent_id',c.parent_id,'thread_id',c.thread_id,'replying_to',(SELECT CASE WHEN {} THEN p.author_name ELSE 'Hidden comment' END FROM comments p WHERE ({pid})=c.parent_id),'reply_count',(SELECT count(*) FROM visible_comments r WHERE r.thread_id=({cid})),'removed',json(CASE WHEN {permitted} THEN 'false' ELSE 'true' END),'author_name',CASE WHEN {permitted} THEN c.author_name ELSE CASE WHEN c.status='removed' THEN 'Removed comment' ELSE 'Hidden comment' END END,'body',CASE WHEN {permitted} THEN c.body ELSE '' END,'created_at',c.created_at,'verified',json(CASE WHEN {permitted} AND c.identity_id IS NOT NULL THEN 'true' ELSE 'false' END)) FROM visible_comments c WHERE {condition} ORDER BY c.created_at {direction},c.id {direction} LIMIT ? OFFSET ?",allowed("p")),args).await?;
+        let items=rows(&mut *db,format!("{cte} SELECT json_object('id',{cid},'parent_id',c.parent_id,'thread_id',c.thread_id,'replying_to',(SELECT CASE WHEN {} THEN {name_p} ELSE 'Hidden comment' END FROM comments p WHERE ({pid})=c.parent_id),'reply_count',(SELECT count(*) FROM visible_comments r WHERE r.thread_id=({cid})),'removed',json(CASE WHEN {permitted} THEN 'false' ELSE 'true' END),'author_name',CASE WHEN {permitted} THEN {name_c} ELSE CASE WHEN c.status='removed' THEN 'Removed comment' ELSE 'Hidden comment' END END,'avatar_url',CASE WHEN {permitted} THEN {avatar_c} END,'body',CASE WHEN {permitted} THEN c.body ELSE '' END,'created_at',c.created_at,'verified',json(CASE WHEN {permitted} AND c.identity_id IS NOT NULL THEN 'true' ELSE 'false' END)) FROM visible_comments c WHERE {condition} ORDER BY c.created_at {direction},c.id {direction} LIMIT ? OFFSET ?",allowed("p")),args).await?;
         Ok(json!({"items":items,"page":page,"per_page":per,"total":total}))
     }
 }

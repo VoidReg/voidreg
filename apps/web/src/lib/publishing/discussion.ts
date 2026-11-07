@@ -6,6 +6,8 @@ export type DiscussionComment = {
   reply_count: number;
   removed: boolean;
   author_name: string;
+  /** Proxied photo path, present only when the author chose to show one. */
+  avatar_url: string | null;
   body: string;
   created_at: string;
   verified: boolean;

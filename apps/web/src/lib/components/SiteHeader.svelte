@@ -1,6 +1,8 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
+  import { session } from '$lib/session.svelte';
+  import AccountMenu from './AccountMenu.svelte';
   import BrandMark from './BrandMark.svelte';
   import Icon from './Icon.svelte';
   import ThemeToggle from './ThemeToggle.svelte';
@@ -40,10 +42,12 @@
         >
         <a class="button" href={resolve('/about#contact')}>Contact</a>
       </nav>
+      <AccountMenu signInLink />
       <ThemeToggle />
     </div>
 
     <div class="header-controls mobile-only">
+      <AccountMenu />
       <ThemeToggle />
       <button
         type="button"
@@ -92,6 +96,14 @@
         href={resolve('/blog')}
         onclick={() => (menuOpen = false)}>Blog</a
       >
+      {#if session.signedIn || session.data?.providers?.length}
+        <a
+          class="nav-link"
+          aria-current={current('/account') ? 'page' : undefined}
+          href={resolve('/account')}
+          onclick={() => (menuOpen = false)}>{session.signedIn ? 'Account' : 'Sign in'}</a
+        >
+      {/if}
     </nav>
   {/if}
 </header>

@@ -19,6 +19,8 @@ pub struct CommentPublic {
     pub removed: bool,
     pub id: String,
     pub author_name: String,
+    /// Proxied photo path, present only when the author chose to show one.
+    pub avatar_url: Option<String>,
     pub body: String,
     pub created_at: String,
     /// True when the comment is tied to a verified OAuth identity.

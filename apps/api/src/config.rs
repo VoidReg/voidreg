@@ -25,6 +25,10 @@ pub struct Config {
     pub admin_password: Option<String>,
     pub admin_password_hash: Option<String>,
     pub admin_session_ttl_hours: i64,
+    /// Lifetime of a commenter sign-in; longer than admin sessions on purpose.
+    pub commenter_session_ttl_hours: i64,
+    /// Extra hosts the avatar proxy may fetch from, beyond GitHub and Google.
+    pub avatar_hosts: Vec<String>,
     pub public_base_url: String,
     pub google_client_id: Option<String>,
     pub google_client_secret: Option<String>,
@@ -48,7 +52,7 @@ pub enum ConfigError {
     Missing(&'static str),
     #[error("invalid PORT value")]
     InvalidPort,
-    #[error("invalid ADMIN_SESSION_TTL_HOURS value")]
+    #[error("invalid ADMIN_SESSION_TTL_HOURS or COMMENTER_SESSION_TTL_HOURS value")]
     InvalidSessionTtl,
     #[error("comment limits must be integers between 1 and 10000")]
     InvalidCommentLimit,
@@ -111,6 +115,17 @@ impl Config {
         if admin_session_ttl_hours <= 0 {
             return Err(ConfigError::InvalidSessionTtl);
         }
+        let commenter_session_ttl_hours = optional_env("COMMENTER_SESSION_TTL_HOURS")
+            .map(|value| {
+                value
+                    .parse::<i64>()
+                    .map_err(|_| ConfigError::InvalidSessionTtl)
+            })
+            .transpose()?
+            .unwrap_or(720);
+        if !(1..=8760).contains(&commenter_session_ttl_hours) {
+            return Err(ConfigError::InvalidSessionTtl);
+        }
 
         let comment_ip_salt = optional_env("COMMENT_IP_SALT").ok_or(ConfigError::Missing(
             "COMMENT_IP_SALT must be a stable nonempty secret",
@@ -153,6 +168,8 @@ impl Config {
             admin_password: optional_env("ADMIN_PASSWORD"),
             admin_password_hash: optional_env("ADMIN_PASSWORD_HASH"),
             admin_session_ttl_hours,
+            commenter_session_ttl_hours,
+            avatar_hosts: env_list("AVATAR_HOSTS"),
             public_base_url: optional_env("PUBLIC_BASE_URL")
                 .unwrap_or_else(|| "http://127.0.0.1:8080".to_owned()),
             google_client_id: optional_env("GOOGLE_CLIENT_ID"),
@@ -193,6 +210,8 @@ impl Config {
             admin_password: Some("voidreg-test-admin".to_owned()),
             admin_password_hash: None,
             admin_session_ttl_hours: 72,
+            commenter_session_ttl_hours: 720,
+            avatar_hosts: vec![],
             public_base_url: "http://127.0.0.1:8080".to_owned(),
             google_client_id: None,
             google_client_secret: None,

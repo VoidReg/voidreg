@@ -118,6 +118,15 @@ pub async fn create_comment(
             "name must be between 1 and {MAX_NAME_LEN} characters"
         )));
     }
+    // Guests cannot borrow a member's name or a name that reads as the site itself.
+    if commenter.identity.is_none()
+        && (crate::db::profile::is_reserved_name(name) || db.display_name_in_use(name).await?)
+    {
+        return Err(AppError::Unprocessable(
+            "That name belongs to a signed-in member or is reserved. Choose another name, or sign in."
+                .to_owned(),
+        ));
+    }
     if body.is_empty() || body.chars().count() > MAX_BODY_LEN {
         return Err(AppError::Unprocessable(format!(
             "comment must be between 1 and {MAX_BODY_LEN} characters"
