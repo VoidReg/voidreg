@@ -33,7 +33,9 @@ snapshot() {
   chmod 600 "$dir/$file"
   [ -s "$dir/$file" ] || { echo "backup: $file is empty" >&2; exit 1; }
   tar -tzf "$dir/$file" >/dev/null || { echo "backup: $file is not readable" >&2; exit 1; }
-  if [ -n "$must_contain" ] && ! tar -tzf "$dir/$file" | grep -q "$must_contain"; then
+  # List first: grep -q would close the pipe early and trip pipefail on a good archive.
+  listing="$(tar -tzf "$dir/$file")"
+  if [ -n "$must_contain" ] && ! grep -q "$must_contain" <<<"$listing"; then
     echo "backup: $file does not contain $must_contain" >&2
     exit 1
   fi
