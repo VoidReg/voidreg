@@ -169,7 +169,8 @@
     </p>
     <p>
       This site does not use automated decision-making that produces legal or similarly significant
-      effects.
+      effects. The rules for using the site and commenting are in the
+      <a class="text-link" href={resolve('/terms')}>terms of service</a>.
     </p>
     <div class="button-row">
       <button type="button" class="button button-secondary" onclick={openCookieSettings}

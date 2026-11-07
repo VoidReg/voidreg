@@ -31,7 +31,8 @@ async function build(fetch: typeof globalThis.fetch) {
     { path: '/projects', date: latestProject },
     { path: '/blog', date: latestPost },
     { path: '/map', date: newest([latestProject, latestPost]) },
-    { path: '/privacy' }
+    { path: '/privacy' },
+    { path: '/terms' }
   ];
   for (const project of projects)
     urls.push({

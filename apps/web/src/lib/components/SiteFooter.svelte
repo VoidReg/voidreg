@@ -12,6 +12,7 @@
       <p>Copyright 2026 Voidreg.<br />All rights reserved (for now).</p>
       <nav class="footer-links" aria-label="Footer">
         <a href={resolve('/privacy')}>Privacy</a>
+        <a href={resolve('/terms')}>Terms</a>
         <a href={resolve('/agents')}>For agents</a>
         <a href={resolve('/rss.xml')}>RSS</a>
         <button type="button" onclick={openCookieSettings}>Cookie settings</button>

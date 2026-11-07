@@ -1,5 +1,6 @@
 // Renders static/og-default.png: the share image used when a page has none of its own.
 // Run `pnpm exec tsx scripts/make-og.ts` after changing the brand or tagline. Needs Google Chrome.
+// The logo is static/brand/voidreg-logo-dark.svg, built by scripts/make-logo.py.
 // Chrome rasterises vector text at 2x, so the 2400x1260 result stays sharp when a platform
 // scales it down for a card or up for a retina screen.
 import { execFileSync } from 'node:child_process';
@@ -26,15 +27,13 @@ html,body{width:1200px;height:630px;overflow:hidden;background:#0b0f14;color:#f5
  linear-gradient(#ffffff0d 1px,transparent 1px) 0 0/60px 60px,
  linear-gradient(90deg,#ffffff0d 1px,transparent 1px) 0 0/60px 60px;
  mask-image:radial-gradient(circle at 30% 50%,#000 0,transparent 70%)}
-.logo{position:relative;display:flex;align-items:center;gap:36px}
-.logo img{width:176px;height:176px}
-.logo span{font:600 168px/1 Sans;letter-spacing:-0.02em}
-.logo b{font-weight:600;color:#c2410c}
+.logo{position:relative;display:flex;align-items:center}
+.logo img{height:170px}
 .tag{position:relative;font:600 44px/1.2 Sans;color:#d4d4d4}
 .sub{position:relative;margin-top:-20px;font:400 26px/1.4 Mono;color:#8a8a8a}
 .url{position:absolute;right:88px;bottom:56px;font:400 24px/1 Mono;color:#737373}
 </style><div class="frame"><div class="grid"></div>
-<div class="logo"><img src="${url('src/lib/assets/brand-mark-dark.svg')}" alt=""><span>Void<b>reg</b></span></div>
+<div class="logo"><img src="${url('static/brand/voidreg-logo-dark.svg')}" alt="Voidreg"></div>
 <div class="tag">Deep dive into the Void</div>
 <div class="sub">Projects, notes and a knowledge map</div>
 <div class="url">www.voidreg.xyz</div></div>`;
