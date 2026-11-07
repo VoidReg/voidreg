@@ -99,6 +99,7 @@ test('RSS and llms.txt list published content and stay well formed', () => {
   assert(index.includes('[Proj](https://www.voidreg.xyz/projects/p.md): About p'));
   assert(index.includes('https://www.voidreg.xyz/blog/first-post.md'));
   assert(index.includes('https://www.voidreg.xyz/mcp'));
+  assert(index.includes('https://www.voidreg.xyz/agents'));
   assert(!index.includes('\u2014'));
   assert(llmsIndex([], []).includes('No posts are published yet.'));
 });

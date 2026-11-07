@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AgentNote from '$lib/components/AgentNote.svelte';
   import Breadcrumb from '$lib/components/Breadcrumb.svelte';
   import { resolve } from '$app/paths';
   import ReadingColumn from '$lib/components/ReadingColumn.svelte';
@@ -111,6 +112,12 @@
         />{#if article.hero_caption}<figcaption>{article.hero_caption}</figcaption>{/if}
       </figure>{/if}<ArticleBody {article} />
   </article>
+  {#if live}<ReadingColumn>
+      <AgentNote
+        markdown={resolve('/blog/[slug].md', { slug: article.slug })}
+        markdownLabel="This post as Markdown"
+      />
+    </ReadingColumn>{/if}
   {#if projects.length}<ReadingColumn>
       <aside class="follows section-stack" aria-labelledby="follows-heading">
         <h2 id="follows-heading" class="section-heading">Following</h2>

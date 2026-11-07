@@ -40,6 +40,10 @@
     <p class="eyebrow">{copy.blogEyebrow}</p>
     <h1 class="display-heading">{copy.blogTitle}</h1>
     <p class="lead">{copy.blogIntro}</p>
+    <p class="agent-hint">
+      Prefer an agent? <a class="text-link" href={resolve('/agents')}>Connect over MCP</a>
+      or follow the <a class="text-link" href={resolve('/rss.xml')}>RSS feed</a>.
+    </p>
   </header>
   <PostFilters
     filters={data.filters}
@@ -66,3 +70,10 @@
     />
   {/if}
 </main>
+
+<style>
+  .agent-hint {
+    margin: 0;
+    color: var(--muted-foreground);
+  }
+</style>

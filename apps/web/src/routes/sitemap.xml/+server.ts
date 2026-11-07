@@ -27,6 +27,7 @@ async function build(fetch: typeof globalThis.fetch) {
     { path: '/', date: newest([latestProject, latestPost]) },
     // Pages with no dated content carry no lastmod rather than an invented one.
     { path: '/about' },
+    { path: '/agents' },
     { path: '/projects', date: latestProject },
     { path: '/blog', date: latestPost },
     { path: '/map', date: newest([latestProject, latestPost]) },

@@ -67,6 +67,7 @@ export function llmsIndex(projects: Project[], articles: Article[]) {
       '- [Sitemap](' + SITE + '/sitemap.xml)',
       '- [RSS feed](' + SITE + '/rss.xml)',
       '- [Full text of every post](' + SITE + '/llms-full.txt)',
+      '- [How to connect an agent](' + SITE + '/agents)',
       '- [MCP server](' +
         SITE +
         '/mcp): Streamable HTTP. Connect without a token to search and read published posts and projects.',

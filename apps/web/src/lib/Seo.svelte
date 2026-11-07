@@ -60,6 +60,11 @@
     property="og:image:alt"
     content={pictureAlt}
   />
+  {#if !image}
+    <meta property="og:image:width" content="2400" />
+    <meta property="og:image:height" content="1260" />
+    <meta property="og:image:type" content="image/png" />
+  {/if}
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content={title} /><meta
     name="twitter:description"

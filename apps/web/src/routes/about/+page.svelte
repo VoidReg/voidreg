@@ -165,16 +165,14 @@
       posts.
     </p>
     <p>
-      To browse the knowledge base from an MCP client, add this server. No token is needed for
-      reading published posts and projects.
+      To browse the knowledge base from an MCP client, no token is needed for reading published
+      posts and projects.
     </p>
-    <pre class="code-sample"><code
-        >{`{
-  "mcpServers": {
-    "voidreg": { "url": "https://www.voidreg.xyz/mcp" }
-  }
-}`}</code
-      ></pre>
+    <div class="button-row">
+      <a class="button" href={resolve('/agents')}
+        >Connect over MCP <Icon name="arrow-right" size={16} /></a
+      >
+    </div>
   </section>
 
   <section id="contact" class="about-section contact-section" aria-labelledby="contact-heading">

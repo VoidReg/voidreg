@@ -1,6 +1,7 @@
 <script lang="ts">
   import copy from '$lib/content/portfolio-copy.json';
   import CircuitDivider from '$lib/components/CircuitDivider.svelte';
+  import AgentNote from '$lib/components/AgentNote.svelte';
   import ContactBand from '$lib/components/ContactBand.svelte';
   import EmptyContent from '$lib/components/EmptyContent.svelte';
   import FeatureProjectCard from '$lib/components/FeatureProjectCard.svelte';
@@ -110,6 +111,8 @@
       </div>
     </div>
   </section>
+
+  <AgentNote variant="band" id="home-agents" />
 
   <ContactBand
     eyebrow={contactEyebrow}

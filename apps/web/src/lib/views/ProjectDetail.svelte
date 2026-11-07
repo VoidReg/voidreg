@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AgentNote from '$lib/components/AgentNote.svelte';
   import Breadcrumb from '$lib/components/Breadcrumb.svelte';
   import { resolve } from '$app/paths';
   import ReadingColumn from '$lib/components/ReadingColumn.svelte';
@@ -177,6 +178,12 @@
       >
     </p>
   </ReadingColumn>
+  {#if live}<ReadingColumn>
+      <AgentNote
+        markdown={resolve('/projects/[slug].md', { slug: project.slug })}
+        markdownLabel="This project as Markdown"
+      />
+    </ReadingColumn>{/if}
 </main>
 
 <style>
