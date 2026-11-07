@@ -29,12 +29,13 @@
   cursor: not-allowed;
 }
 .ui-btn-primary {
-  border-color: var(--foreground);
-  background: var(--foreground);
-  color: var(--background);
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-foreground);
 }
 .ui-btn-primary:hover:not(:disabled) {
-  background: var(--muted-foreground);
+  border-color: var(--primary-hover);
+  background: var(--primary-hover);
 }
 .ui-btn-danger {
   border-color: var(--danger);

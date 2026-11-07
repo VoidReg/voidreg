@@ -22,7 +22,9 @@
       "svelte": "./src/ui/Combobox.svelte",
       "default": "./src/ui/Combobox.svelte"
     },
-    "./ui/listbox": "./src/ui/listbox.ts"
+    "./ui/listbox": "./src/ui/listbox.ts",
+    "./styles/base.css": "./src/styles/base.css",
+    "./theme": "./src/theme.ts"
   },
   "dependencies": {
     "@publisle/adapter-core": "catalog:",
