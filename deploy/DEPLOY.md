@@ -43,6 +43,22 @@ The API image is published by CI to `ghcr.io/voidreg/voidreg-site-api`. New GHCR
 start private: either make the package public in its settings, or run `docker login ghcr.io`
 once on the server with a token that has `read:packages`.
 
+## Server secrets (`deploy/.env`)
+
+`deploy/.env` holds the production secrets. It is ignored by git, and the deploy sync never
+touches it, so the server's copy is the source of truth. Keep a local copy in step with
+`deploy/sync-env.sh`:
+
+```sh
+deploy/sync-env.sh status    # compare key names and values, prints no values
+deploy/sync-env.sh pull      # server -> local
+deploy/sync-env.sh push      # local -> server, after a timestamped backup on the server
+```
+
+Push does not restart anything. New values reach the containers on the next `deploy/deploy.sh`.
+Server backups (`.env.bak-*`) are removed by the next deploy sync, so copy one aside first if
+you need it.
+
 ## Data safety on every deploy
 
 A redeploy never changes stored content:
