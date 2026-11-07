@@ -55,6 +55,12 @@ excludes=(
 # Remote steps, assembled from the requested services.
 remote=$'set -euo pipefail\ncd '"$(printf %q "$DEPLOY_PATH")"$'/deploy\n'
 remote+="export API_IMAGE_TAG=$(printf %q "$api_tag") MCP_IMAGE_TAG=$commit PUBLISHING_IMAGE_TAG=$commit WEB_IMAGE_TAG=$commit"$'\n'
+# A rollout that can migrate the database starts with a verified backup; a failed backup stops it.
+case " ${services[*]} " in
+  *" api "*)
+    remote+=$'./backup.sh\n'
+    remote+=$'previous_api_image="$(docker compose -f compose.yaml ps -q api | xargs -r docker inspect --format \'{{.Image}}\' 2>/dev/null || true)"\n' ;;
+esac
 for service in "${services[@]}"; do
   case "$service" in
     api)
@@ -72,6 +78,11 @@ remote+=$'docker compose -f compose.yaml up -d --no-deps nginx\n'
 remote+=$'docker compose -f compose.yaml exec -T nginx nginx -t\n'
 remote+=$'docker compose -f compose.yaml exec -T nginx nginx -s reload\n'
 remote+=$'docker compose -f compose.yaml ps\n'
+case " ${services[*]} " in
+  *" api "*)
+    remote+=$'docker compose -f compose.yaml exec -T api curl -fsS http://127.0.0.1:8080/healthz >/dev/null && echo "api healthy"\n'
+    remote+=$'echo "Rollback: previous API image was ${previous_api_image:-unknown}; data backups are in deploy/backups/"\n' ;;
+esac
 
 echo "Deploying $commit (${services[*]}) to $DEPLOY_HOST, API image tag: $api_tag"
 if [ "$dry_run" -eq 1 ]; then

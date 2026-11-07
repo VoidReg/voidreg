@@ -22,7 +22,7 @@
     "@voidreg/publishing-ui": "workspace:*"
   },
   "scripts": {
-    "test": "tsx --test src/*.test.ts",
+    "test": "tsx --test src/*.test.ts scripts/*.test.ts",
     "seed:test-blog": "tsx scripts/seed-test-blog.ts",
     "seed:scale": "tsx scripts/seed-scale.ts",
     "stress:publishing": "tsx scripts/stress-publishing.ts"

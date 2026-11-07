@@ -3,6 +3,23 @@ export const ORIGIN = (process.env.SEED_ORIGIN ?? 'http://127.0.0.1:5174').repla
 export const PASSWORD = process.env.ADMIN_PASSWORD ?? '';
 const ADMIN = `${ORIGIN}/api/v1/admin`;
 
+// These scripts create sample content, so they only run against a local development stack.
+// A remote host needs ALLOW_REMOTE_SEED=1, and the production site is always refused.
+const PRODUCTION = /(^|\.)voidreg\.xyz$/i;
+export function assertSafeOrigin(
+  origin = ORIGIN,
+  allowRemote = process.env.ALLOW_REMOTE_SEED === '1'
+) {
+  const host = new URL(origin).hostname.replace(/^\[|\]$/g, '');
+  if (PRODUCTION.test(host)) throw new Error(`Refusing to seed the production site (${host}).`);
+  const local = host === 'localhost' || host === '::1' || /^127\./.test(host);
+  if (!local && !allowRemote)
+    throw new Error(
+      `Refusing to write sample content to ${host}. Use a local stack, or set ALLOW_REMOTE_SEED=1 for a disposable remote one.`
+    );
+}
+assertSafeOrigin();
+
 export type Json = Record<string, unknown>;
 const jar = new Map<string, string>();
 let csrf = '';

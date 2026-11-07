@@ -14,6 +14,8 @@ mod history;
 mod media;
 mod models;
 pub mod moderation;
+// Sample content exists only in debug builds, so a release binary cannot write it to a real database.
+#[cfg(debug_assertions)]
 mod seed;
 mod tags;
 
@@ -116,6 +118,14 @@ impl Db {
         Ok(())
     }
 
+    #[cfg(not(debug_assertions))]
+    pub async fn seed_if_empty(&self) -> Result<(), AppError> {
+        Err(AppError::Internal(
+            "sample seeding is not available in release builds".to_owned(),
+        ))
+    }
+
+    #[cfg(debug_assertions)]
     pub async fn seed_if_empty(&self) -> Result<(), AppError> {
         let mut db = self.inner.lock().await;
         apply_schema(&mut db).await?;

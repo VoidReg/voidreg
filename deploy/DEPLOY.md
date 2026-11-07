@@ -43,6 +43,25 @@ The API image is published by CI to `ghcr.io/voidreg/voidreg-site-api`. New GHCR
 start private: either make the package public in its settings, or run `docker login ghcr.io`
 once on the server with a token that has `read:packages`.
 
+## Data safety on every deploy
+
+A redeploy never changes stored content:
+
+- The database and uploads live in external Docker volumes (`voidreg_api-data`,
+  `voidreg_media-data`), so `docker compose down` and image rebuilds cannot remove them. Never
+  run `docker compose down -v` or `docker volume rm` on them.
+- On start the API container runs `migrate`, which only creates missing tables and indexes and
+  adds missing columns. It never drops, rewrites or reseeds rows. `api/tests/redeploy.rs` checks
+  this by restarting and migrating a populated database repeatedly.
+- Sample content is compiled only into debug builds. A release binary (the one in the image)
+  refuses `migrate --seed`, so development data cannot reach production. The authoring scripts
+  `seed:test-blog`, `seed:scale` and `stress:publishing` also refuse any non-local origin, and
+  always refuse `voidreg.xyz`.
+- `deploy.sh` with the `api` service runs `deploy/backup.sh` first and stops if the backup
+  fails. It writes `backups/voidreg-<time>-data.tar.gz` and `-media.tar.gz` (newest 14 kept, set
+  `BACKUP_KEEP` to change), then checks `/healthz` after the rollout and prints the previous API
+  image id so a rollback is `API_IMAGE_TAG=<older sha> deploy/deploy.sh api`.
+
 Server-only files are never touched by the sync: `deploy/.env`, `deploy/certs/`,
 `deploy/certbot/`, `deploy/backups/`, `apps/api/.env` and `apps/admin/build/`.
 
