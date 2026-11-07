@@ -5,7 +5,7 @@
 //
 //   SEED_ORIGIN=http://127.0.0.1:5174 ADMIN_PASSWORD=... pnpm --filter @voidreg/authoring seed:test-blog
 import { deflateSync } from 'node:zlib';
-import { sampleSchematic } from '@voidreg/publishing-ui/schematic/sample';
+import { sampleSchematic } from '@voidreg/publishing-ui/blocks/schematic/sample';
 import { extensions } from '../src/blocks';
 
 import { ApiFailure, call, signIn, PASSWORD, type Json } from './admin-client';

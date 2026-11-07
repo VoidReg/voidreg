@@ -16,8 +16,8 @@
     type Part,
     type Prim,
     type Schematic
-  } from './schematic/model';
-  import './schematic/schematic.css';
+  } from './model';
+  import './style.css';
 
   let {
     payload,

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Schematic from '@voidreg/publishing-ui/Schematic.svelte';
+  import Schematic from './View.svelte';
   import {
     LIMITS,
     PART_KINDS,
@@ -9,7 +9,7 @@
     type Net,
     type Part,
     type PartKind
-  } from '@voidreg/publishing-ui/schematic';
+  } from './model';
 
   interface Draft {
     width: number;

@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "Reader components and sanitizer shared by the public site and the admin preview.",
+  "description": "Reader components, the interactive block kit and the sanitizer shared by the public site, the admin editor and the publishing compiler.",
   "exports": {
     "./api": "./src/api.ts",
     "./renderers": "./src/renderers.ts",
@@ -13,28 +13,24 @@
       "svelte": "./src/ArticleBody.svelte",
       "default": "./src/ArticleBody.svelte"
     },
-    "./Counter.svelte": {
-      "svelte": "./src/Counter.svelte",
-      "default": "./src/Counter.svelte"
-    },
-    "./schematic": "./src/schematic/model.ts",
-    "./schematic/sample": "./src/schematic/sample.ts",
-    "./schematic/static": "./src/schematic/static.ts",
-    "./Schematic.svelte": {
-      "svelte": "./src/Schematic.svelte",
-      "default": "./src/Schematic.svelte"
-    }
+    "./blocks/*": "./src/blocks/*.ts"
   },
   "dependencies": {
     "@publisle/adapter-core": "catalog:",
     "@publisle/adapter-svelte": "catalog:",
+    "@publisle/block-sdk": "catalog:",
+    "@publisle/blocks-core": "catalog:",
+    "@publisle/schema": "catalog:",
     "isomorphic-dompurify": "^4.6.0"
   },
   "peerDependencies": {
     "svelte": "^5.0.0"
   },
   "scripts": {
-    "test": "tsx --test src/**/*.test.ts"
+    "test": "tsx --test \"src/**/*.test.ts\"",
+    "blocks:generate": "node scripts/generate-blocks.mjs",
+    "blocks:check": "node scripts/generate-blocks.mjs --check",
+    "new:block": "node scripts/new-block.mjs"
   },
   "devDependencies": {
     "tsx": "^4.23.15"

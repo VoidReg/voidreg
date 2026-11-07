@@ -8,9 +8,8 @@
   import type { Document, Diagnostic, BlockId } from '@publisle/schema';
   import ArticleBody from '@voidreg/publishing-ui/ArticleBody.svelte';
   import type { Article } from '@voidreg/publishing-ui/api';
-  import SchemaPayload from '$lib/SchemaPayload.svelte';
-  import { counterDefinition, extensions, registry } from '@voidreg/authoring/blocks';
-  import SchematicEditor from './SchematicEditor.svelte';
+  import { blockDefinitions, extensions, registry } from '@voidreg/authoring/blocks';
+  import BlockPayloadEditor from './BlockPayloadEditor.svelte';
   import OutlinePanel from './OutlinePanel.svelte';
   import HistoryPanel from './HistoryPanel.svelte';
   import SaveStatus from './SaveStatus.svelte';
@@ -575,13 +574,8 @@
                       </p>
                     {/each}
                   </div>
-                  {#if block.type === 'voidreg:counter'}<SchemaPayload
-                      schema={counterDefinition.descriptor.payloadSchema}
-                      value={(block.data as { payload: Record<string, unknown> }).payload}
-                      onchange={(payload) =>
-                        editor.updateBlock(block.id, { ...(block.data as object), payload })}
-                    />{/if}
-                  {#if block.type === 'voidreg:schematic'}<SchematicEditor
+                  {#if blockDefinitions.some((item) => item.type === block.type)}<BlockPayloadEditor
+                      type={block.type}
                       value={(block.data as { payload: Record<string, unknown> }).payload}
                       onchange={(payload) =>
                         editor.updateBlock(block.id, { ...(block.data as object), payload })}
