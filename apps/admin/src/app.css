@@ -95,6 +95,7 @@
 
 @layer base {
   :root {
+    --ui-control-height: 3rem;
     --font-ui: 'IBM Plex Sans', system-ui, sans-serif;
     --font-code: 'IBM Plex Mono', monospace;
     --content-width: 72rem;
@@ -565,5 +566,37 @@
   .article-prose .diagram-dark,
   .dark .article-prose .diagram-dark {
     display: none;
+  }
+}
+
+/* Selects inside third-party editors cannot use the themed Select component. Where the browser
+   supports customizable selects, the native list follows the admin theme; elsewhere it stays
+   the system list. */
+@supports (appearance: base-select) {
+  .admin select,
+  .admin select::picker(select) {
+    appearance: base-select;
+  }
+  .admin select::picker(select) {
+    box-sizing: border-box;
+    margin-block: 0.25rem;
+    border: 1px solid var(--input);
+    border-radius: var(--radius);
+    background: var(--background);
+    color: var(--foreground);
+    padding: 0.25rem;
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+  }
+  .admin select option {
+    min-height: 2.5rem;
+    padding: 0.4rem 0.5rem;
+    border-radius: var(--radius);
+  }
+  .admin select option:is(:hover, :focus-visible) {
+    background: var(--secondary);
+    color: var(--secondary-foreground);
+  }
+  .admin select option:checked {
+    font-weight: 600;
   }
 }

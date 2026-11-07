@@ -1,5 +1,7 @@
 <script lang="ts">
   import Schematic from './View.svelte';
+  import Select from '../../ui/Select.svelte';
+  import Combobox from '../../ui/Combobox.svelte';
   import {
     LIMITS,
     PART_KINDS,
@@ -37,6 +39,10 @@
   const pinOptions = $derived(
     draft.parts.flatMap((part) => (PINS[part.kind] ?? []).map((pin) => `${part.id}.${pin}`))
   );
+  const rotationOptions = [0, 90, 180, 270].map((degrees) => ({
+    value: String(degrees),
+    label: `${degrees}\u00b0`
+  }));
   const PREFIX: Record<PartKind, string> = {
     battery: 'B',
     switch: 'S',
@@ -58,6 +64,7 @@
     junction: 'Junction',
     label: 'Label'
   };
+  const kindOptions = PART_KINDS.map((kind) => ({ value: kind, label: KIND_NAME[kind] }));
   let newKind = $state<PartKind>('resistor');
   let showJson = $state(false);
   let jsonError = $state('');
@@ -190,20 +197,19 @@
               /></td
             >
             <td
-              ><select
-                aria-label={`Type of ${part.id}`}
+              ><Select
+                label={`Type of ${part.id}`}
                 value={part.kind}
-                onchange={(event) => {
-                  const kind = event.currentTarget.value as PartKind;
+                options={kindOptions}
+                onchange={(value) => {
+                  const kind = value as PartKind;
                   setPart(part.id, {
                     kind,
                     value: DEFAULT_VALUE[kind] ?? (kind === 'capacitor' ? 10 : undefined),
                     closed: kind === 'switch' ? false : undefined
                   });
                 }}
-                >{#each PART_KINDS as kind (kind)}<option value={kind}>{KIND_NAME[kind]}</option
-                  >{/each}</select
-              ></td
+              /></td
             >
             <td
               ><input
@@ -232,17 +238,13 @@
               /></td
             >
             <td
-              ><select
-                aria-label={`Rotation of ${part.id}`}
+              ><Select
+                label={`Rotation of ${part.id}`}
                 value={String(part.rotation)}
-                onchange={(event) =>
-                  setPart(part.id, {
-                    rotation: Number(event.currentTarget.value) as Part['rotation']
-                  })}
-                >{#each [0, 90, 180, 270] as degrees (degrees)}<option value={String(degrees)}
-                    >{degrees}&deg;</option
-                  >{/each}</select
-              ></td
+                options={rotationOptions}
+                onchange={(value) =>
+                  setPart(part.id, { rotation: Number(value) as Part['rotation'] })}
+              /></td
             >
             <td>
               {#if part.kind === 'switch'}
@@ -279,10 +281,7 @@
   </div>
   <div class="schematic-editor-add">
     <label class="editor-field"
-      >New part<select bind:value={newKind}
-        >{#each PART_KINDS as kind (kind)}<option value={kind}>{KIND_NAME[kind]}</option
-          >{/each}</select
-      ></label
+      >New part<Select label="New part" bind:value={newKind} options={kindOptions} /></label
     >
     <button
       type="button"
@@ -293,9 +292,6 @@
   </div>
 
   <h3 class="schematic-editor-heading">Nets ({draft.nets.length})</h3>
-  <datalist id="schematic-pins">
-    {#each pinOptions as pin (pin)}<option value={pin}></option>{/each}
-  </datalist>
   <div class="schematic-editor-scroll">
     <table class="schematic-editor-table">
       <caption class="sr-only">Nets</caption>
@@ -327,11 +323,12 @@
               /></td
             >
             <td
-              ><input
-                aria-label={`Pins of net ${net.id}`}
-                list="schematic-pins"
+              ><Combobox
+                label={`Pins of net ${net.id}`}
                 value={net.pins.join(', ')}
-                onchange={(event) => setNet(index, { pins: parsePins(event.currentTarget.value) })}
+                options={pinOptions.map((pin) => ({ value: pin, label: pin }))}
+                separator=","
+                onchange={(value) => setNet(index, { pins: parsePins(value) })}
               /></td
             >
             <td
@@ -416,7 +413,13 @@
     padding: 0.25rem;
     vertical-align: middle;
   }
-  .schematic-editor-table :where(input:not([type='checkbox']), select) {
+  .schematic-editor-table td {
+    --ui-control-size: 0.875rem;
+  }
+  .schematic-editor-table td :global(:is(.ui-select, .ui-combobox)) {
+    min-width: 7rem;
+  }
+  .schematic-editor-table :where(input:not([type='checkbox'])) {
     border: 1px solid var(--input);
     border-radius: var(--radius);
     background: var(--background);

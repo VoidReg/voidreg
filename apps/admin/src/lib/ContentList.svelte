@@ -2,6 +2,8 @@
   import { untrack } from 'svelte';
   import Icon from './components/Icon.svelte';
   import Pager from './components/Pager.svelte';
+  import Select from '@voidreg/publishing-ui/ui/Select.svelte';
+  import Combobox from '@voidreg/publishing-ui/ui/Combobox.svelte';
   import { adminRequest } from './api';
   import { confirmDialog } from './ui/confirm.svelte';
   import { notify } from './ui/toast.svelte';
@@ -41,6 +43,12 @@
   let search = $state(untrack(() => route.query));
   let requestId = 0;
 
+  const statusOptions = [
+    { value: '', label: 'All' },
+    { value: 'draft', label: 'Draft' },
+    { value: 'published', label: 'Published' },
+    { value: 'archived', label: 'Archived' }
+  ];
   let knownTags = $state<string[]>([]);
   $effect(() => {
     void adminRequest<{ items: { name: string }[] }>('/tags?limit=100')
@@ -298,71 +306,62 @@
       /></label
     >
     <label class="ui-field"
-      >Status<select
+      >Status<Select
+        label="Status"
         value={route.status}
-        onchange={(event) => onnavigate({ status: event.currentTarget.value || null, page: null })}
-        ><option value="">All</option><option value="draft">Draft</option><option value="published"
-          >Published</option
-        ><option value="archived">Archived</option></select
-      ></label
+        options={statusOptions}
+        onchange={(value) => onnavigate({ status: value || null, page: null })}
+      /></label
     >
     <label class="ui-field"
-      >Tag<input
-        list="list-tags"
+      >Tag<Combobox
+        label="Tag"
         value={route.tag}
+        options={knownTags.map((name) => ({ value: name, label: name }))}
         placeholder="Any tag"
-        autocomplete="off"
-        onchange={(event) =>
-          onnavigate({ tag: event.currentTarget.value.trim() || null, page: null })}
-      /><datalist id="list-tags"
-        >{#each knownTags as name (name)}<option value={name}></option>{/each}</datalist
-      ></label
+        onchange={(value) => onnavigate({ tag: value.trim() || null, page: null })}
+      /></label
     >
     {#if kind === 'articles'}
       <label class="ui-field"
-        >Project<input
-          list="list-projects"
+        >Project<Combobox
+          label="Project"
           value={route.inProject}
+          options={projectChoices.map((choice) => ({
+            value: choice.slug,
+            label: choice.title,
+            hint: choice.slug
+          }))}
+          filter={false}
           placeholder="Any project (URL)"
-          autocomplete="off"
-          oninput={(event) => suggestProjects(event.currentTarget.value)}
-          onchange={(event) =>
-            onnavigate({
-              in_project: event.currentTarget.value.trim() || null,
-              in_topic: null,
-              page: null
-            })}
-        /><datalist id="list-projects"
-          >{#each projectChoices as choice (choice.slug)}<option value={choice.slug}
-              >{choice.title}</option
-            >{/each}</datalist
-        ></label
+          oninput={(value) => suggestProjects(value)}
+          onchange={(value) =>
+            onnavigate({ in_project: value.trim() || null, in_topic: null, page: null })}
+        /></label
       >
       {#if route.inProject}
         <label class="ui-field"
-          >Topic<select
+          >Topic<Select
+            label="Topic"
             value={route.inTopic}
-            onchange={(event) =>
-              onnavigate({ in_topic: event.currentTarget.value || null, page: null })}
-            ><option value="">Any topic</option><option value="none">No topic</option
-            >{#each topicChoices as topic (topic.id)}<option value={topic.slug}
-                >{topic.title}</option
-              >{/each}</select
-          ></label
+            options={[
+              { value: '', label: 'Any topic' },
+              { value: 'none', label: 'No topic' },
+              ...topicChoices.map((topic) => ({ value: topic.slug, label: topic.title }))
+            ]}
+            onchange={(value) => onnavigate({ in_topic: value || null, page: null })}
+          /></label
         >
       {/if}
     {/if}
     <label class="ui-field"
-      >Per page<select
+      >Per page<Select
+        label="Per page"
         value={String(route.perPage)}
-        onchange={(event) =>
-          onnavigate({
-            per_page: Number(event.currentTarget.value) === 20 ? null : event.currentTarget.value,
-            page: null
-          })}
-        >{#each [10, 20, 50, 100] as size (size)}<option value={String(size)}>{size}</option
-          >{/each}</select
-      ></label
+        options={[10, 20, 50, 100].map((size) => ({ value: String(size), label: String(size) }))}
+        onchange={(value) =>
+          onnavigate({ per_page: Number(value) === 20 ? null : value, page: null })}
+      /></label
     >
     {#if filtered}<button
         type="button"

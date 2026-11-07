@@ -6,6 +6,7 @@
   import { confirmDialog } from './ui/confirm.svelte';
   import { notify } from './ui/toast.svelte';
   import Pager from './components/Pager.svelte';
+  import Select from '@voidreg/publishing-ui/ui/Select.svelte';
   import Tabs from './ui/Tabs.svelte';
   import CommentsList from './moderation/CommentsList.svelte';
   import PeopleList from './moderation/PeopleList.svelte';
@@ -283,21 +284,32 @@
     >
       {#if collection === 'comments'}
         <label class="ui-field"
-          >Status<select bind:value={status} onchange={() => void browse()}
-            ><option value="">All</option
-            >{#each ['pending', 'approved', 'spam', 'hidden', 'removed'] as value (value)}<option
-                {value}>{value[0].toUpperCase() + value.slice(1)}</option
-              >{/each}</select
-          ></label
+          >Status<Select
+            label="Status"
+            bind:value={status}
+            options={[
+              { value: '', label: 'All' },
+              ...['pending', 'approved', 'spam', 'hidden', 'removed'].map((value) => ({
+                value,
+                label: value[0].toUpperCase() + value.slice(1)
+              }))
+            ]}
+            onchange={() => void browse()}
+          /></label
         >
         <label class="ui-field"
-          >Article<select bind:value={article} onchange={() => void browse()}
-            ><option value="">All articles</option>{#each articles as option (option.slug)}<option
-                value={option.slug}>{option.title}</option
-              >{/each}{#if article && !articles.some((a) => a.slug === article)}<option
-                value={article}>{article}</option
-              >{/if}</select
-          ></label
+          >Article<Select
+            label="Article"
+            bind:value={article}
+            options={[
+              { value: '', label: 'All articles' },
+              ...articles.map((option) => ({ value: option.slug, label: option.title })),
+              ...(article && !articles.some((a) => a.slug === article)
+                ? [{ value: article, label: article }]
+                : [])
+            ]}
+            onchange={() => void browse()}
+          /></label
         >
       {/if}
       <label class="ui-field grow"
@@ -413,11 +425,15 @@
             ></textarea></label
           >
           <label class="ui-field"
-            >Duration<select bind:value={blockHours}
-              ><option value="24">24 hours</option><option value="168">7 days</option><option
-                value="">Permanent</option
-              ></select
-            ></label
+            >Duration<Select
+              label="Duration"
+              bind:value={blockHours}
+              options={[
+                { value: '24', label: '24 hours' },
+                { value: '168', label: '7 days' },
+                { value: '', label: 'Permanent' }
+              ]}
+            /></label
           >
           <div class="row">
             <button class="ui-btn ui-btn-danger" disabled={busy || affected === null}

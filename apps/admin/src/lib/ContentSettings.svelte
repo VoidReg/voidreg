@@ -4,6 +4,7 @@
   import type { Article, ContentMeta, Page, Topic } from '@voidreg/publishing-ui/api';
   import TopicManager from './TopicManager.svelte';
   import ChipPicker from './components/ChipPicker.svelte';
+  import Select from '@voidreg/publishing-ui/ui/Select.svelte';
   import { normalizeTag, type Option } from './pickers';
   let {
     meta = $bindable(),
@@ -152,15 +153,20 @@
     />
     {#if topicGroups.length}
       <label class="editor-field"
-        >Topic<select
+        >Topic<Select
+          label="Topic"
           bind:value={() => meta.topic_id ?? '', (value) => (meta.topic_id = value || null)}
-          ><option value="">No topic (Other posts)</option
-          >{#each topicGroups as group (group.id)}<optgroup label={group.title}
-              >{#each group.topics as topic (topic.id)}<option value={topic.id}
-                  >{topic.title}</option
-                >{/each}</optgroup
-            >{/each}</select
-        ></label
+          options={[
+            { value: '', label: 'No topic (Other posts)' },
+            ...topicGroups.flatMap((group) =>
+              group.topics.map((topic) => ({
+                value: topic.id,
+                label: topic.title,
+                group: group.title
+              }))
+            )
+          ]}
+        /></label
       >
       <p class="editor-help">
         Groups this post inside a linked project. Manage topics in the project editor.
@@ -170,11 +176,14 @@
     {/if}
   {/if}
   <label class="editor-field"
-    >Cover image<select bind:value={meta.hero_image}
-      ><option value="">No cover image</option>{#each media as image (image.id)}<option
-          value={image.url}>{image.name}</option
-        >{/each}</select
-    ></label
+    >Cover image<Select
+      label="Cover image"
+      bind:value={() => meta.hero_image ?? '', (value) => (meta.hero_image = value)}
+      options={[
+        { value: '', label: 'No cover image' },
+        ...media.map((image) => ({ value: image.url, label: image.name }))
+      ]}
+    /></label
   >
   {#if error}<p role="status">{error}</p>{/if}
   <details class="inspector-details">
@@ -185,11 +194,14 @@
       >SEO description<textarea rows="3" bind:value={meta.seo_description}></textarea></label
     >
     <label class="editor-field"
-      >Social image<select bind:value={meta.social_image}
-        ><option value="">Use cover image</option>{#each media as image (image.id)}<option
-            value={image.url}>{image.name}</option
-          >{/each}</select
-      ></label
+      >Social image<Select
+        label="Social image"
+        bind:value={() => meta.social_image ?? '', (value) => (meta.social_image = value)}
+        options={[
+          { value: '', label: 'Use cover image' },
+          ...media.map((image) => ({ value: image.url, label: image.name }))
+        ]}
+      /></label
     >
   </details>
 </section>

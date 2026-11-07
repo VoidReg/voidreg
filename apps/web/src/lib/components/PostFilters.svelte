@@ -4,6 +4,8 @@
   // the page never renders a catalogue-sized list of options.
   import { resolve } from '$app/paths';
   import { filterChips, type PostFilters } from '$lib/filters';
+  import Select from '@voidreg/publishing-ui/ui/Select.svelte';
+  import Combobox from '@voidreg/publishing-ui/ui/Combobox.svelte';
 
   type Seed = { value: string; hint: string };
   let {
@@ -20,7 +22,8 @@
     total: number;
   } = $props();
 
-  const uid = $props.id();
+  const choices = (seeds: Seed[]) =>
+    seeds.map((seed) => ({ value: seed.value, label: seed.value, hint: seed.hint }));
   // Typed results replace the server rendered seeds; until then the seeds are the options.
   let typed = $state<{ projects?: Seed[]; tags?: Seed[] }>({});
   const projectOptions = $derived(typed.projects ?? seeds.projects);
@@ -75,47 +78,46 @@
     /></label
   >
   <label class="post-field"
-    >Project<input
+    >Project<Combobox
       name="project"
+      label="Project"
       value={projectTitle || filters.project}
-      list={`${uid}-projects`}
+      options={choices(projectOptions)}
+      filter={!typed.projects}
       placeholder="Any project"
-      maxlength="120"
-      autocomplete="off"
-      oninput={(event) => suggest('projects', event.currentTarget.value)}
-    /><datalist id={`${uid}-projects`}
-      >{#each projectOptions as option (option.value)}<option
-          value={option.value}
-          label={option.hint}
-        ></option>{/each}</datalist
-    ></label
+      maxlength={120}
+      oninput={(value) => suggest('projects', value)}
+    /></label
   >
   {#if topics.length}
     <label class="post-field"
-      >Topic<select name="topic" onchange={() => form?.requestSubmit()}
-        ><option value="">All topics</option><option
-          value="none"
-          selected={filters.topic === 'none'}>Other posts</option
-        >{#each topics as topic (topic.slug)}<option
-            value={topic.slug}
-            selected={filters.topic === topic.slug}>{topic.title} ({topic.count})</option
-          >{/each}</select
-      ></label
+      >Topic<Select
+        name="topic"
+        label="Topic"
+        value={filters.topic}
+        options={[
+          { value: '', label: 'All topics' },
+          { value: 'none', label: 'Other posts' },
+          ...topics.map((topic) => ({
+            value: topic.slug,
+            label: `${topic.title} (${topic.count})`
+          }))
+        ]}
+        onchange={() => form?.requestSubmit()}
+      /></label
     >
   {/if}
   <label class="post-field"
-    >Tag<input
+    >Tag<Combobox
       name="tag"
+      label="Tag"
       value={filters.tag}
-      list={`${uid}-tags`}
+      options={choices(tagOptions)}
+      filter={!typed.tags}
       placeholder="Any tag"
-      maxlength="40"
-      autocomplete="off"
-      oninput={(event) => suggest('tags', event.currentTarget.value)}
-    /><datalist id={`${uid}-tags`}
-      >{#each tagOptions as option (option.value)}<option value={option.value} label={option.hint}
-        ></option>{/each}</datalist
-    ></label
+      maxlength={40}
+      oninput={(value) => suggest('tags', value)}
+    /></label
   >
   <button type="submit" class="button button-secondary post-apply">Apply</button>
 </form>
@@ -156,7 +158,10 @@
   .post-field.wide {
     grid-column: 1 / -1;
   }
-  .post-field :where(input, select) {
+  .post-field {
+    --ui-control-size: 0.9375rem;
+  }
+  .post-field :where(input) {
     min-height: 2.75rem;
     min-width: 0;
     border: 1px solid var(--input);

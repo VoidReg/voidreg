@@ -1,0 +1,68 @@
+/* The popover list shared by Select and Combobox. Tokens come from the host app's theme. */
+.ui-listbox {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  box-sizing: border-box;
+  overflow: auto;
+  border: 1px solid var(--input, currentColor);
+  border-radius: var(--radius, 0);
+  background: var(--background, canvas);
+  color: var(--foreground, canvastext);
+  padding: 0.25rem;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+  font-size: var(--ui-control-size, 1rem);
+  overscroll-behavior: contain;
+}
+.ui-listbox-group {
+  padding: 0.5rem 0.5rem 0.25rem;
+  color: var(--muted-foreground, graytext);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.ui-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 2.5rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: var(--radius, 0);
+  cursor: pointer;
+  line-height: 1.35;
+}
+.ui-option.grouped {
+  padding-left: 1rem;
+}
+.ui-option.active {
+  background: var(--secondary, rgb(0 0 0 / 0.08));
+  color: var(--secondary-foreground, inherit);
+}
+.ui-option[aria-selected='true'] {
+  font-weight: 600;
+}
+.ui-option[aria-disabled='true'] {
+  color: var(--disabled-foreground, graytext);
+  cursor: not-allowed;
+}
+.ui-option-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ui-option small {
+  color: var(--muted-foreground, graytext);
+  font-size: 0.8125rem;
+}
+.ui-option-check {
+  flex: none;
+  width: 0.75rem;
+  height: 0.625rem;
+}
+@media (forced-colors: active) {
+  .ui-option.active {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+}

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Select from '@voidreg/publishing-ui/ui/Select.svelte';
   let {
     open = $bindable(false),
     onimport
@@ -35,10 +36,14 @@
     <h2 id="import-title">Import document</h2>
     <p>Replaces the current blocks with the imported content.</p>
     <label class="ui-field"
-      >Format<select bind:value={format}
-        ><option value="markdown">Markdown</option><option value="json">Publisle JSON</option
-        ></select
-      ></label
+      >Format<Select
+        label="Format"
+        bind:value={format}
+        options={[
+          { value: 'markdown', label: 'Markdown' },
+          { value: 'json', label: 'Publisle JSON' }
+        ]}
+      /></label
     >
     <label class="ui-field">Document<textarea rows="10" bind:value={text}></textarea></label>
     <div class="ui-dialog-actions">

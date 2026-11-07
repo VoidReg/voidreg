@@ -2,6 +2,8 @@
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import Board from './Board.svelte';
+  import Select from '@voidreg/publishing-ui/ui/Select.svelte';
+  import Combobox from '@voidreg/publishing-ui/ui/Combobox.svelte';
   import MapPanel from './MapPanel.svelte';
   import { categoriesOf, lanesOf, technologiesOf, type MapFilter, type MapModel } from './layout';
 
@@ -46,27 +48,25 @@
     /></label
   >
   <label class="map-field"
-    >Technology<input
+    >Technology<Combobox
       name="tag"
+      label="Technology"
       value={filter.tag}
-      list="map-technologies"
+      options={technologies.map((tag) => ({ value: tag, label: tag }))}
       placeholder="Any technology"
-      maxlength="40"
-      autocomplete="off"
-    />
-    <datalist id="map-technologies">
-      {#each technologies as tag (tag)}<option value={tag}></option>{/each}
-    </datalist>
-  </label>
+      maxlength={40}
+    /></label
+  >
   <label class="map-field"
-    >Category<select name="category" value={filter.category}>
-      <option value="">All categories</option>
-      {#each categories as category (category.name)}
-        <option value={category.name} selected={filter.category === category.name}
-          >{category.name} ({category.count})</option
-        >
-      {/each}
-    </select></label
+    >Category<Select
+      name="category"
+      label="Category"
+      value={filter.category}
+      options={[
+        { value: '', label: 'All categories' },
+        ...categories.map((c) => ({ value: c.name, label: `${c.name} (${c.count})` }))
+      ]}
+    /></label
   >
   <div class="map-filter-actions">
     <button type="submit" class="map-button">Apply</button>
@@ -155,7 +155,11 @@
     color: var(--muted-foreground);
   }
 
-  .map-field :where(input, select) {
+  .map-field {
+    --ui-control-size: 0.9375rem;
+  }
+
+  .map-field :where(input) {
     min-height: 2.75rem;
     border: 1px solid var(--input);
     border-radius: var(--radius);

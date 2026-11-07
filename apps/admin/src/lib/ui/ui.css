@@ -403,10 +403,12 @@
   display: grid;
   max-height: 16rem;
   overflow-y: auto;
-  margin: 0.125rem 0 0;
-  padding: 0;
-  border: 1px solid var(--foreground);
+  margin: 0.25rem 0 0;
+  padding: 0.25rem;
+  border: 1px solid var(--input);
+  border-radius: var(--radius);
   background: var(--background);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
   list-style: none;
 }
 .ui-picker-list button {
@@ -416,10 +418,11 @@
   width: 100%;
   border: 0;
   background: transparent;
-  padding: 0.5rem 0.75rem;
+  padding: 0.4rem 0.5rem;
   min-height: 2.5rem;
+  border-radius: var(--radius);
   color: var(--foreground);
-  font-size: 0.875rem;
+  font-size: 1rem;
   text-align: start;
   cursor: pointer;
 }

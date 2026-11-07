@@ -13,7 +13,16 @@
       "svelte": "./src/ArticleBody.svelte",
       "default": "./src/ArticleBody.svelte"
     },
-    "./blocks/*": "./src/blocks/*.ts"
+    "./blocks/*": "./src/blocks/*.ts",
+    "./ui/Select.svelte": {
+      "svelte": "./src/ui/Select.svelte",
+      "default": "./src/ui/Select.svelte"
+    },
+    "./ui/Combobox.svelte": {
+      "svelte": "./src/ui/Combobox.svelte",
+      "default": "./src/ui/Combobox.svelte"
+    },
+    "./ui/listbox": "./src/ui/listbox.ts"
   },
   "dependencies": {
     "@publisle/adapter-core": "catalog:",

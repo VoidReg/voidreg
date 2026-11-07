@@ -478,6 +478,9 @@
   font-weight: 500;
   line-height: 1.2;
 }
+.editor-field {
+  --ui-control-height: 3.125rem;
+}
 .editor-field :where(input, textarea, select) {
   width: 100%;
   min-width: 0;
