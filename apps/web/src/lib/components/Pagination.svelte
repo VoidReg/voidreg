@@ -1,7 +1,9 @@
 <script lang="ts">
   // One row: previous, a window of five numbered pages, next. Jumps to the first and last page
   // appear beside the window when there is room. Plain links, so it works without JavaScript.
+  import { afterNavigate } from '$app/navigation';
   import { resolve } from '$app/paths';
+  import { navigating } from '$app/state';
   import { pageCount, pageWindow } from '@voidreg/publishing-ui/pagination';
   import Icon from './Icon.svelte';
 
@@ -23,10 +25,32 @@
   const count = $derived(pageCount(total, perPage));
   const win = $derived(pageWindow(page, count, 5));
   const link = (n: number) => resolve(href(n) as '/');
+
+  // The list being paged is marked data-paged-list. While the next page loads only that list
+  // dims, and afterwards the view returns to the top of the list instead of the top of the page.
+  const list = () => document.querySelector<HTMLElement>('[data-paged-list]');
+  $effect(() => {
+    const element = list();
+    if (!element) return;
+    const busy =
+      navigating.to !== null && navigating.to.url.pathname === navigating.from?.url.pathname;
+    if (busy) element.setAttribute('aria-busy', 'true');
+    else element.removeAttribute('aria-busy');
+  });
+  afterNavigate((nav) => {
+    if (nav.type === 'enter' || nav.type === 'popstate' || !nav.from || !nav.to) return;
+    if (nav.from.url.pathname !== nav.to.url.pathname) return;
+    if (nav.from.url.searchParams.get('page') === nav.to.url.searchParams.get('page')) return;
+    const element = list();
+    if (!element) return;
+    const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    element.scrollIntoView({ block: 'start', behavior: calm ? 'auto' : 'smooth' });
+    element.focus({ preventScroll: true });
+  });
 </script>
 
 {#if count > 1}
-  <nav class="pager" aria-label={label}>
+  <nav class="pager" aria-label={label} data-sveltekit-noscroll data-sveltekit-preload-data="hover">
     {#if win.current > 1}
       <a class="pg pg-step" rel="prev" href={link(win.current - 1)} aria-label="Previous page"
         ><Icon name="arrow-left" size={16} /></a

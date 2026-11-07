@@ -1,4 +1,9 @@
-import { publicContent, pageNumber, normalizePagination } from '$lib/server/content';
+import {
+  publicContent,
+  referenceContent,
+  pageNumber,
+  normalizePagination
+} from '$lib/server/content';
 import type { Page } from '@voidreg/publishing-ui/api';
 import type { Project } from '$lib/data/projects';
 export async function load({ fetch, url }) {
@@ -13,8 +18,11 @@ export async function load({ fetch, url }) {
     (q ? '&q=' + encodeURIComponent(q) : '');
   const [result, everything, vocabulary] = await Promise.all([
     publicContent<Page<Project>>(query, fetch),
-    publicContent<Page<Project>>('/projects?per_page=100', fetch),
-    publicContent<{ items: { name: string; count_projects: number }[] }>('/tags?limit=100', fetch)
+    referenceContent<Page<Project>>('/projects?per_page=100', fetch),
+    referenceContent<{ items: { name: string; count_projects: number }[] }>(
+      '/tags?limit=100',
+      fetch
+    )
   ]);
   normalizePagination(url, result);
   // Filter options come from the whole catalogue so they stay stable while filtering.

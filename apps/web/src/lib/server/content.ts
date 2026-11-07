@@ -1,4 +1,5 @@
 import { error, redirect } from '@sveltejs/kit';
+import { TtlCache } from '../ttl-cache';
 export const site = 'https://www.voidreg.xyz';
 export async function publicContent<T>(path: string, fetcher: typeof fetch): Promise<T> {
   let response: Response;
@@ -18,6 +19,12 @@ export async function publicContent<T>(path: string, fetcher: typeof fetch): Pro
       response.status === 404 ? 'This page is unavailable.' : 'Content is temporarily unavailable.'
     );
   return response.json();
+}
+// Lookups that change rarely (vocabularies, type-ahead seeds, category lists) are reused for a
+// minute, so moving between pages of a list only fetches that page.
+const reference = new TtlCache<unknown>(60_000);
+export function referenceContent<T>(path: string, fetcher: typeof fetch): Promise<T> {
+  return reference.get(path, () => publicContent<T>(path, fetcher)) as Promise<T>;
 }
 export function pageNumber(url: URL) {
   const n = Number(url.searchParams.get('page') ?? 1);

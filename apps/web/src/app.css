@@ -878,3 +878,13 @@
     display: none;
   }
 }
+
+/* A paged list dims while its next page loads, so the page around it stays still. */
+[data-paged-list] {
+  transition: opacity var(--duration-fast) var(--ease-standard);
+  outline: none;
+}
+[data-paged-list][aria-busy='true'] {
+  opacity: 0.55;
+  pointer-events: none;
+}

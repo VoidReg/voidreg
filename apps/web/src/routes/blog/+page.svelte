@@ -35,7 +35,7 @@
     </p>{/if}
   {#if result.items.length === 0}<EmptyContent kind="articles" heading="h2" />
   {:else}
-    <section class="note-list" aria-label="Articles">
+    <section class="note-list" aria-label="Articles" data-paged-list tabindex="-1">
       {#each result.items as article (article.slug)}<ArticleCard {article} />{/each}
     </section>
     <Pagination

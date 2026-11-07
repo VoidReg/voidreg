@@ -115,7 +115,7 @@
       {data.result.total === 1 ? 'project matches' : 'projects match'} these filters.
       <a class="text-link" href={resolve('/projects')}>Clear filters</a>
     </p>{/if}
-  <section class="card-grid" aria-label="Projects">
+  <section class="card-grid" aria-label="Projects" data-paged-list tabindex="-1">
     {#each data.result.items as project (project.slug)}<ProjectCard
         {project}
         heading="h2"

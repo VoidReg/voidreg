@@ -1,5 +1,5 @@
 import { redirect } from '@sveltejs/kit';
-import { publicContent, normalizePagination } from '$lib/server/content';
+import { publicContent, referenceContent, normalizePagination } from '$lib/server/content';
 import { apiQuery, filterHref, isCanonical, parseFilters, resolveSlug } from '$lib/filters';
 import type { Article, Page, Topic } from '@voidreg/publishing-ui/api';
 import type { Project } from '$lib/data/projects';
@@ -10,6 +10,8 @@ const SEEDS = 20;
 export async function load({ fetch, url }) {
   const filters = parseFilters(url.searchParams);
   const soft = <T>(path: string) => publicContent<T>(path, fetch).catch(() => null);
+  // Lists that rarely change are reused for a minute, so paging only fetches the page itself.
+  const cached = <T>(path: string) => referenceContent<T>(path, fetch).catch(() => null);
 
   // The project field accepts a slug or a title, so the no-JS form works with typed text.
   let project: Project | null = null;
@@ -25,8 +27,11 @@ export async function load({ fetch, url }) {
   }
   // The topic belongs to the chosen project; a leftover topic from another project is dropped.
   const topics = project
-    ? ((await soft<Page<Topic>>('/topics?per_page=100&project=' + encodeURIComponent(project.slug)))
-        ?.items ?? [])
+    ? ((
+        await cached<Page<Topic>>(
+          '/topics?per_page=100&project=' + encodeURIComponent(project.slug)
+        )
+      )?.items ?? [])
     : [];
   const topic =
     filters.topic === 'none' ? null : (topics.find((t) => t.slug === filters.topic) ?? null);
@@ -41,8 +46,8 @@ export async function load({ fetch, url }) {
 
   const [result, projects, vocabulary] = await Promise.all([
     publicContent<Page<Article>>('/blogs?' + apiQuery(cleaned), fetch),
-    soft<Page<Project>>(`/projects?per_page=${SEEDS}`),
-    soft<Vocabulary>(`/tags?limit=${SEEDS}`)
+    cached<Page<Project>>(`/projects?per_page=${SEEDS}`),
+    cached<Vocabulary>(`/tags?limit=${SEEDS}`)
   ]);
   normalizePagination(url, result);
   return {
