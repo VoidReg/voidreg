@@ -13,6 +13,10 @@ pub struct Config {
     pub resend_domain: String,
     pub resend_from_user: String,
     pub contact_to_email: String,
+    /// Signs contact form tokens. The form is unavailable until this is set.
+    pub contact_form_secret: Option<String>,
+    /// Shared with the web app, which alone may submit the form. Unset disables the form.
+    pub contact_forward_token: Option<String>,
     pub admin_password_enabled: bool,
     pub admin_github_ids: Vec<String>,
     pub admin_google_subjects: Vec<String>,
@@ -137,6 +141,8 @@ impl Config {
             resend_domain,
             resend_from_user,
             contact_to_email,
+            contact_form_secret: optional_env("CONTACT_FORM_SECRET"),
+            contact_forward_token: optional_env("CONTACT_FORWARD_TOKEN"),
             admin_password_enabled: env::var("ADMIN_PASSWORD_ENABLED").is_ok_and(|v| v == "true"),
             admin_github_ids: env_list("ADMIN_GITHUB_IDS"),
             admin_google_subjects: env_list("ADMIN_GOOGLE_SUBJECTS"),
@@ -174,6 +180,8 @@ impl Config {
             resend_domain: "mail.example.com".to_owned(),
             resend_from_user: "form".to_owned(),
             contact_to_email: "admin@example.com".to_owned(),
+            contact_form_secret: Some("test-contact-secret".to_owned()),
+            contact_forward_token: Some("test-forward-token".to_owned()),
             admin_password_enabled: true,
             admin_github_ids: vec![],
             admin_google_subjects: vec![],

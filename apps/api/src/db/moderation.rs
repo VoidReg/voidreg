@@ -46,7 +46,7 @@ pub(super) async fn sql(
     q.exec(db).await?;
     Ok(())
 }
-async fn rows(
+pub(super) async fn rows(
     db: &mut dyn toasty::Executor,
     statement: String,
     args: Vec<SqlValue>,

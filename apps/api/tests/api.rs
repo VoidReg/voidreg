@@ -86,29 +86,6 @@ async fn lists_and_gets_blogs() {
 }
 
 #[actix_web::test]
-async fn contact_validates_and_accepts() {
-    let app = test::init_service(build(setup_db().await, Config::for_test())).await;
-
-    let req = test::TestRequest::post()
-        .uri("/api/v1/contact")
-        .set_json(json!({ "name": "", "email": "bad", "message": "" }))
-        .to_request();
-    let resp = test::call_service(&app, req).await;
-    assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
-
-    let req = test::TestRequest::post()
-        .uri("/api/v1/contact")
-        .set_json(json!({
-            "name": "Ada",
-            "email": "ada@example.com",
-            "message": "Hello from the scaffold tests."
-        }))
-        .to_request();
-    let body: serde_json::Value = test::call_and_read_body_json(&app, req).await;
-    assert_eq!(body["status"], "received");
-}
-
-#[actix_web::test]
 async fn newsletter_is_idempotent() {
     let app = test::init_service(build(setup_db().await, Config::for_test())).await;
 

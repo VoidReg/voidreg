@@ -65,6 +65,27 @@ A redeploy never changes stored content:
 Server-only files are never touched by the sync: `deploy/.env`, `deploy/certs/`,
 `deploy/certbot/`, `deploy/backups/`, `apps/api/.env` and `apps/admin/build/`.
 
+## Contact form
+
+Visitors write to you through the form on the About page. The destination address
+(`CONTACT_TO_EMAIL`) exists only in the API environment, and nothing public can call the API's
+contact routes: nginx answers 404 for `/api/v1/contact`, and the API itself returns 404 unless the
+request carries `CONTACT_FORWARD_TOKEN`, which only the web container holds.
+
+To enable it, set in `deploy/.env`:
+
+- `RESEND_API_KEY`, `RESEND_DOMAIN` (a domain verified in Resend), `RESEND_FROM_USER`, and
+  `CONTACT_TO_EMAIL`.
+- `CONTACT_FORM_SECRET` and `CONTACT_FORWARD_TOKEN`, each from `openssl rand -hex 32`. With either
+  empty the form shows as closed.
+
+Spam protection is self-hosted: a signed form token that must be 3 seconds to 2 hours old, a
+hidden honeypot field, validation (no header injection, at most two links), a limit of 3 messages
+per hour and 8 per day per visitor and 100 per day site-wide, and silent dedupe of repeated
+messages. Visitor addresses are stored only as salted hashes. Every accepted message is stored
+before the email is sent, so a Resend outage loses nothing; `contact_attempts.outcome` records
+`delivered`, `skipped` or `failed` for each. Replying to the email goes to the visitor.
+
 ## One-time migration from the four-repository layout
 
 Compose lives in `deploy/` of the monorepo checkout now, so the server directory must be

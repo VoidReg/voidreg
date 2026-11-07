@@ -36,6 +36,7 @@ pub fn configure(cfg: &mut ServiceConfig) {
             .route(actix_web::web::post().to(comments::create_comment)),
     )
     .service(comments::list_replies)
+    .service(contact::issue_contact_form)
     .service(contact::create_contact)
     .service(newsletter::subscribe)
     .service(auth::providers)

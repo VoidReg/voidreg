@@ -5,14 +5,49 @@ use crate::error::AppError;
 
 const RESEND_URL: &str = "https://api.resend.com/emails";
 
-pub async fn send_contact(
+/// Removes control characters (so no header or line can be injected) and caps the length.
+fn single_line(value: &str, max: usize) -> String {
+    value
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .chars()
+        .take(max)
+        .collect()
+}
+
+/// The notification mail for a contact message. Plain text only, and the sender's address is a
+/// reply-to, never the From address.
+pub fn contact_mail(
     config: &Config,
     name: &str,
     reply_to: &str,
     message: &str,
-) -> Result<(), AppError> {
+) -> serde_json::Value {
+    let name = single_line(name, 80);
+    let reply_to = single_line(reply_to, 254);
+    json!({
+        "from": config.resend_from(),
+        "to": [config.contact_to_email.as_str()],
+        "reply_to": reply_to,
+        "subject": format!("Contact form: {name}"),
+        "text": format!("From: {name} <{reply_to}>\n\n{message}"),
+    })
+}
+
+/// Sends the notification. `key` makes a retried request idempotent at Resend.
+pub async fn send_contact(
+    config: &Config,
+    key: &str,
+    name: &str,
+    reply_to: &str,
+    message: &str,
+) -> Result<bool, AppError> {
     if config.skips_outbound_mail() {
-        return Ok(());
+        return Ok(false);
     }
 
     let client = reqwest::Client::builder()
@@ -24,13 +59,8 @@ pub async fn send_contact(
     let response = client
         .post(RESEND_URL)
         .bearer_auth(&config.resend_api_key)
-        .json(&json!({
-            "from": config.resend_from(),
-            "to": [config.contact_to_email.as_str()],
-            "reply_to": reply_to,
-            "subject": format!("Contact form: {name}"),
-            "text": format!("From: {name} <{reply_to}>\n\n{message}"),
-        }))
+        .header("Idempotency-Key", format!("voidreg-contact-{key}"))
+        .json(&contact_mail(config, name, reply_to, message))
         .send()
         .await
         .map_err(|err| AppError::Internal(err.to_string()))?;
@@ -44,5 +74,29 @@ pub async fn send_contact(
         ));
     }
 
-    Ok(())
+    Ok(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mail_never_carries_line_breaks_in_headers_and_replies_to_the_sender() {
+        let config = Config::for_test();
+        let mail = contact_mail(
+            &config,
+            "Ada\r\nBcc: spam@example.com",
+            "ada@example.com\nBcc: x@example.com",
+            "Hello\nthere",
+        );
+        let subject = mail["subject"].as_str().unwrap();
+        assert!(!subject.contains('\n') && !subject.contains('\r'));
+        assert_eq!(subject, "Contact form: Ada Bcc: spam@example.com");
+        let reply = mail["reply_to"].as_str().unwrap();
+        assert!(!reply.contains('\n'));
+        assert_eq!(mail["to"][0], "admin@example.com");
+        assert!(mail["from"].as_str().unwrap().starts_with("Voidreg <form@"));
+        assert!(mail.get("html").is_none());
+    }
 }

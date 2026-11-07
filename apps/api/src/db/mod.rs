@@ -8,6 +8,7 @@ use crate::domain::{Article, ArticleStatus, MediaPlaceholder, Project};
 use crate::error::AppError;
 use crate::util::{now_rfc3339, sha256_hex};
 
+pub mod contact;
 pub mod content;
 pub mod graph;
 mod history;
@@ -108,7 +109,7 @@ impl Db {
     pub async fn migrate(&self) -> Result<(), AppError> {
         let mut db = self.inner.lock().await;
         apply_schema(&mut db).await?;
-        for statement in moderation::SCHEMA {
+        for statement in moderation::SCHEMA.iter().chain(contact::SCHEMA) {
             moderation::sql(&mut *db, (*statement).into(), vec![]).await?;
         }
         moderation::backfill_ancestors(&mut *db).await?;
@@ -129,7 +130,7 @@ impl Db {
     pub async fn seed_if_empty(&self) -> Result<(), AppError> {
         let mut db = self.inner.lock().await;
         apply_schema(&mut db).await?;
-        for statement in moderation::SCHEMA {
+        for statement in moderation::SCHEMA.iter().chain(contact::SCHEMA) {
             moderation::sql(&mut *db, (*statement).into(), vec![]).await?;
         }
         seed::seed_if_empty(&mut db).await?;

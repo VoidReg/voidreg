@@ -5,9 +5,9 @@ use crate::domain::{
     AdminLoginRequest, AdminSessionResponse, Article, ArticleListResponse, ArticleMutationResponse,
     ArticleStatus, ArticleWriteRequest, CommentAdminListResponse, CommentAdminView,
     CommentCreateRequest, CommentCreateResponse, CommentListResponse, CommentPublic,
-    CommenterIdentity, CommenterSessionResponse, ContactRequest, ContactResponse, ContentSection,
-    HealthResponse, MediaPlaceholder, NewsletterRequest, NewsletterResponse, Project,
-    ProjectListResponse,
+    CommenterIdentity, CommenterSessionResponse, ContactFormResponse, ContactRequest,
+    ContactResponse, ContentSection, HealthResponse, MediaPlaceholder, NewsletterRequest,
+    NewsletterResponse, Project, ProjectListResponse,
 };
 use crate::error::{ErrorBody, ErrorDetail};
 
@@ -31,6 +31,7 @@ use crate::error::{ErrorBody, ErrorDetail};
         v1::comments::list_comments,
         v1::comments::list_replies,
         v1::comments::create_comment,
+        v1::contact::issue_contact_form,
         v1::contact::create_contact,
         v1::newsletter::subscribe,
         v1::auth::providers,
@@ -71,6 +72,7 @@ use crate::error::{ErrorBody, ErrorDetail};
         ArticleStatus,
         ContentSection,
         MediaPlaceholder,
+        ContactFormResponse,
         ContactRequest,
         ContactResponse,
         NewsletterRequest,

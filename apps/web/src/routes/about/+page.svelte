@@ -2,6 +2,13 @@
   import copy from '$lib/content/portfolio-copy.json';
   import Icon from '$lib/components/Icon.svelte';
   import { resolve } from '$app/paths';
+  import { enhance } from '$app/forms';
+  import type { ActionData, PageData } from './$types';
+
+  let { data, form }: { data: PageData; form: ActionData } = $props();
+  let sending = $state(false);
+  let sent = $derived(form !== null && 'sent' in form && form.sent === true);
+  let failure = $derived(form !== null && 'error' in form ? form : null);
 </script>
 
 <svelte:head>
@@ -142,29 +149,69 @@
         {copy.contact}
       </p>
     </div>
-    <form aria-describedby="contact-status">
-      <fieldset disabled>
-        <label
-          >Name<input type="text" name="name" placeholder="Your name" autocomplete="name" /></label
-        >
-        <label
-          >Email<input
-            type="email"
-            name="email"
-            placeholder="you@example.com"
-            autocomplete="email"
-          /></label
-        >
-        <label
-          >Message<textarea name="message" rows="4" placeholder="Write your message..."
-          ></textarea></label
-        >
-        <button class="button" type="submit">Send Message</button>
-      </fieldset>
-      <p id="contact-status" class="placeholder-note">
-        {copy.contactStatus}
-      </p>
-    </form>
+    {#if sent}
+      <p class="contact-note" role="status" tabindex="-1">{copy.contactSent}</p>
+    {:else if !data.contactToken}
+      <p class="contact-note">{copy.contactStatus}</p>
+    {:else}
+      <form
+        method="POST"
+        action="?/contact"
+        aria-busy={sending}
+        use:enhance={() => {
+          sending = true;
+          return async ({ update }) => {
+            await update({ reset: false });
+            sending = false;
+          };
+        }}
+      >
+        <input type="hidden" name="form_token" value={data.contactToken} />
+        <fieldset disabled={sending}>
+          <label
+            >Name<input
+              type="text"
+              name="name"
+              placeholder="Your name"
+              autocomplete="name"
+              maxlength="120"
+              required
+              value={failure?.name ?? ''}
+            /></label
+          >
+          <label
+            >Email<input
+              type="email"
+              name="email"
+              placeholder="you@example.com"
+              autocomplete="email"
+              maxlength="254"
+              required
+              value={failure?.email ?? ''}
+            /></label
+          >
+          <label
+            >Message<textarea
+              name="message"
+              rows="4"
+              placeholder="Write your message..."
+              minlength="5"
+              maxlength="5000"
+              required
+              value={failure?.message ?? ''}></textarea></label
+          >
+          <div class="hp" aria-hidden="true">
+            <label
+              >Website<input type="text" name="website" tabindex="-1" autocomplete="off" /></label
+            >
+          </div>
+          <button class="button" type="submit">{sending ? 'Sending...' : 'Send Message'}</button>
+        </fieldset>
+        {#if failure}
+          <p class="contact-error" role="alert">{failure.error}</p>
+        {/if}
+      </form>
+    {/if}
   </section>
 </main>
 
@@ -257,10 +304,36 @@
     min-height: 2.75rem;
     border: 1px solid var(--input);
     border-radius: var(--radius);
+    background: var(--background);
+    color: var(--foreground);
+    padding: 0.65rem 0.8rem;
+    font: inherit;
+  }
+  input:disabled,
+  textarea:disabled {
     background: var(--muted);
     color: var(--disabled-foreground);
-    padding: 0.65rem 0.8rem;
-    opacity: 1;
+  }
+  /* Bots fill every field. People never see this one. */
+  .hp {
+    position: absolute;
+    left: -10000px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+  }
+  .contact-note,
+  .contact-error {
+    margin: 0.75rem 0 0;
+    font-size: 0.875rem;
+  }
+  .contact-note {
+    color: var(--muted-foreground);
+  }
+  .contact-error {
+    color: var(--foreground);
+    border-left: 2px solid var(--foreground);
+    padding-left: 0.75rem;
   }
   textarea {
     min-height: 7rem;
@@ -268,9 +341,6 @@
   }
   form .button {
     justify-self: start;
-  }
-  form .placeholder-note {
-    margin-top: 0.75rem;
   }
   @media (max-width: 47.999rem) {
     .practice-grid,

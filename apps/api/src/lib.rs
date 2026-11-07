@@ -85,6 +85,7 @@ pub mod api;
 pub mod app;
 pub mod auth;
 pub mod config;
+pub mod contact_form;
 pub mod db;
 pub mod domain;
 pub mod error;

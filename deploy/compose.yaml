@@ -71,6 +71,10 @@ services:
       PORT: "3000"
       ORIGIN: https://www.voidreg.xyz
       VOIDREG_API_URL: http://api:8080
+      # nginx overwrites X-Forwarded-For with the real peer address, so one hop is trusted.
+      ADDRESS_HEADER: X-Forwarded-For
+      XFF_DEPTH: "1"
+      CONTACT_FORWARD_TOKEN: ${CONTACT_FORWARD_TOKEN:-}
     expose:
       - "3000"
     networks:
