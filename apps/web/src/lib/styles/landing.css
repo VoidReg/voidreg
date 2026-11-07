@@ -65,10 +65,10 @@
 
   @keyframes marquee {
     from {
-      translate: 0;
+      transform: translate3d(0, 0, 0);
     }
     to {
-      translate: -50% 0;
+      transform: translate3d(-50%, 0, 0);
     }
   }
 
@@ -411,6 +411,11 @@
     width: max-content;
   }
 
+  .strip-group {
+    display: flex;
+    flex: none;
+  }
+
   .strip-list {
     display: flex;
     flex: none;
@@ -450,7 +455,8 @@
     }
 
     .strip-track {
-      animation: marquee 48s linear infinite;
+      animation: marquee var(--strip-duration, 48s) linear infinite;
+      will-change: transform;
     }
 
     .strip:hover .strip-track,
@@ -465,13 +471,21 @@
       margin-inline: auto;
     }
 
+    .strip-group {
+      flex: 1 1 auto;
+    }
+
     .strip-list {
       flex: 1 1 auto;
       flex-wrap: wrap;
       row-gap: 0.5rem;
     }
 
-    .strip-list:not(.strip-dup) .strip-item:last-child::after {
+    .strip-repeat {
+      display: none;
+    }
+
+    .strip-group:not(.strip-dup) .strip-item:last-child::after {
       display: none;
     }
   }
