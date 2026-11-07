@@ -9,6 +9,7 @@ use crate::{
 };
 use actix_web::{HttpRequest, HttpResponse, get, post, put, web};
 use serde::Deserialize;
+use serde_json::Value;
 
 pub async fn authorize(
     request: &HttpRequest,
@@ -117,16 +118,29 @@ async fn get(
     Ok(HttpResponse::Ok().json(db.admin_get_article(&slug).await?))
 }
 fn restrict(input: &ArticleWriteRequest) -> Result<(), AppError> {
-    if input.meta.is_some()
-        || input.featured.is_some()
+    if input.featured.is_some()
         || input.sort_order.is_some()
         || input.reading_time_minutes.is_some()
     {
         return Err(AppError::Forbidden(
-            "MCP may edit title, category, summary, and draft content only".into(),
+            "MCP may edit title, category, summary, tags, filing, and draft content only".into(),
         ));
     }
     Ok(())
+}
+/// Clients may change where a post is filed (its projects and topic) and nothing else in `meta`.
+/// Everything else stays as saved, including the discussion link and the media attachments.
+fn filing_only(
+    mut input: ArticleWriteRequest,
+    current: crate::domain::ContentMeta,
+) -> ArticleWriteRequest {
+    if let Some(requested) = input.meta.take() {
+        let mut meta = current;
+        meta.project_ids = requested.project_ids;
+        meta.topic_id = requested.topic_id;
+        input.meta = Some(meta);
+    }
+    input
 }
 #[post("/articles")]
 async fn create(
@@ -138,7 +152,8 @@ async fn create(
 ) -> Result<HttpResponse, AppError> {
     authorize(&request, &db, &config, &limiter).await?;
     restrict(&input)?;
-    super::admin::articles::create(&db, input.into_inner()).await
+    let input = filing_only(input.into_inner(), Default::default());
+    super::admin::articles::create(&db, input).await
 }
 #[put("/articles/{slug}")]
 async fn update(
@@ -151,7 +166,10 @@ async fn update(
 ) -> Result<HttpResponse, AppError> {
     authorize(&request, &db, &config, &limiter).await?;
     restrict(&input)?;
-    super::admin::articles::update(&db, slug.into_inner(), input.into_inner(), true).await
+    let slug = slug.into_inner();
+    let current = db.admin_get_article(&slug).await?.meta;
+    let input = filing_only(input.into_inner(), current);
+    super::admin::articles::update(&db, slug, input, true).await
 }
 #[post("/compilations")]
 async fn compile(
@@ -184,6 +202,70 @@ async fn compilation(
     }
     Ok(HttpResponse::Ok().json(job))
 }
+/// The project a post or topic is filed under, as the owner's working copy.
+#[get("/projects/{slug}")]
+async fn project(
+    request: HttpRequest,
+    db: web::Data<Db>,
+    config: web::Data<Config>,
+    limiter: web::Data<RateLimiter>,
+    slug: web::Path<String>,
+) -> Result<HttpResponse, AppError> {
+    authorize(&request, &db, &config, &limiter).await?;
+    Ok(HttpResponse::Ok().json(db.content_get("project", &slug, false).await?))
+}
+#[get("/topics")]
+async fn topics(
+    request: HttpRequest,
+    db: web::Data<Db>,
+    config: web::Data<Config>,
+    limiter: web::Data<RateLimiter>,
+    query: web::Query<crate::db::content::ContentQuery>,
+) -> Result<HttpResponse, AppError> {
+    authorize(&request, &db, &config, &limiter).await?;
+    Ok(HttpResponse::Ok().json(db.content_page("topic", false, &query).await?))
+}
+#[get("/topics/{project_id}/{slug}")]
+async fn topic(
+    request: HttpRequest,
+    db: web::Data<Db>,
+    config: web::Data<Config>,
+    limiter: web::Data<RateLimiter>,
+    path: web::Path<(String, String)>,
+) -> Result<HttpResponse, AppError> {
+    authorize(&request, &db, &config, &limiter).await?;
+    let (project_id, slug) = path.into_inner();
+    Ok(HttpResponse::Ok().json(
+        db.content_get_enriched("topic", &format!("{project_id}:{slug}"), false)
+            .await?,
+    ))
+}
+#[post("/topics")]
+async fn create_topic(
+    request: HttpRequest,
+    db: web::Data<Db>,
+    config: web::Data<Config>,
+    limiter: web::Data<RateLimiter>,
+    input: web::Json<Value>,
+) -> Result<HttpResponse, AppError> {
+    authorize(&request, &db, &config, &limiter).await?;
+    Ok(HttpResponse::Created()
+        .json(crate::api::v1::admin::topics::create_topic(&db, &input).await?))
+}
+#[put("/topics/{project_id}/{slug}")]
+async fn update_topic(
+    request: HttpRequest,
+    db: web::Data<Db>,
+    config: web::Data<Config>,
+    limiter: web::Data<RateLimiter>,
+    path: web::Path<(String, String)>,
+    input: web::Json<Value>,
+) -> Result<HttpResponse, AppError> {
+    authorize(&request, &db, &config, &limiter).await?;
+    let (project_id, slug) = path.into_inner();
+    Ok(HttpResponse::Ok()
+        .json(crate::api::v1::admin::topics::update_topic(&db, &project_id, &slug, &input).await?))
+}
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(compile)
         .service(compilation)
@@ -191,5 +273,10 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(list)
         .service(get)
         .service(create)
-        .service(update);
+        .service(update)
+        .service(project)
+        .service(topics)
+        .service(topic)
+        .service(create_topic)
+        .service(update_topic);
 }

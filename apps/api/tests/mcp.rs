@@ -293,3 +293,140 @@ async fn conditional_write_prevents_publish_races_and_requires_draft_status() {
         assert_eq!(current.title, "MCP edit");
     }
 }
+
+#[actix_web::test]
+async fn the_bridge_files_drafts_under_projects_and_topics_without_touching_other_meta() {
+    let db = Db::memory().await.unwrap();
+    db.migrate().await.unwrap();
+    let mut config = Config::for_test();
+    config.admin_github_ids = vec!["owner".into()];
+    let owner = db
+        .upsert_identity("github", "owner", "", "Owner", None)
+        .await
+        .unwrap();
+    let (random, _) = new_session_token();
+    let token = format!("vr_mcp_{random}");
+    db.create_mcp_token(&owner.id, "CLI", &hash_token(&token), 24)
+        .await
+        .unwrap();
+    let auth = format!("Bearer {token}");
+    let project = db
+        .content_create(
+            "project",
+            json!({"slug":"alpha","status":"published","title":"Alpha","category":"Systems","summary":"A project","tags":[],"sections":[],"hero":null,"related_slugs":[],"related_project_ids":[],"repo_url":null,"has_detail_page":true,"featured":false,"sort_order":0,"document":{"schemaVersion":1,"blocks":[]}}),
+        )
+        .await
+        .unwrap();
+    let pid = project["id"].as_str().unwrap().to_owned();
+    let app = test::init_service(build(db.clone(), config)).await;
+
+    let call = |method: test::TestRequest, uri: &str, body: Option<Value>| {
+        let mut request = method
+            .uri(uri)
+            .insert_header(("Authorization", auth.clone()));
+        if let Some(body) = body {
+            request = request.set_json(body);
+        }
+        test::call_service(&app, request.to_request())
+    };
+
+    // The bridge answers only to a valid token.
+    let anonymous = test::call_service(
+        &app,
+        test::TestRequest::get()
+            .uri("/api/v1/mcp/topics")
+            .to_request(),
+    )
+    .await;
+    assert_eq!(anonymous.status(), StatusCode::UNAUTHORIZED);
+
+    let found: Value = test::read_body_json(
+        call(test::TestRequest::get(), "/api/v1/mcp/projects/alpha", None).await,
+    )
+    .await;
+    assert_eq!(found["id"], pid);
+
+    let created = call(
+        test::TestRequest::post(),
+        "/api/v1/mcp/topics",
+        Some(json!({"project_id": pid, "title": "Intro", "summary": "Start here"})),
+    )
+    .await;
+    assert_eq!(created.status(), StatusCode::CREATED);
+    let topic: Value = test::read_body_json(created).await;
+    assert_eq!(topic["slug"], "intro");
+    assert_eq!(topic["status"], "published");
+    let topic_id = topic["id"].as_str().unwrap().to_owned();
+
+    let listed: Value = test::read_body_json(
+        call(
+            test::TestRequest::get(),
+            "/api/v1/mcp/topics?project=alpha",
+            None,
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(listed["items"].as_array().unwrap().len(), 1);
+
+    let renamed = call(
+        test::TestRequest::put(),
+        &format!("/api/v1/mcp/topics/{pid}/intro"),
+        Some(json!({"expected_revision": topic["revision"], "title": "Introduction"})),
+    )
+    .await;
+    assert_eq!(renamed.status(), StatusCode::OK);
+    let stale = call(
+        test::TestRequest::put(),
+        &format!("/api/v1/mcp/topics/{pid}/intro"),
+        Some(json!({"expected_revision": topic["revision"], "title": "Again"})),
+    )
+    .await;
+    assert_eq!(stale.status(), StatusCode::CONFLICT);
+
+    let compiled = json!({"format":"publisle:publication","formatVersion":1,"identity":"test","rendererBuild":"1","html":"","styles":[],"modules":[],"islands":[],"diagnostics":[]});
+    let document = json!({"schemaVersion":1,"blocks":[]});
+    // Only the project and topic of a post can change through meta. The rest is ignored.
+    let post: Value = test::read_body_json(
+        call(
+            test::TestRequest::post(),
+            "/api/v1/mcp/articles",
+            Some(json!({
+                "slug":"filed","title":"Filed","category":"Notes","summary":"A post",
+                "document":document,"compiled":compiled,
+                "meta":{"project_ids":[pid],"topic_id":topic_id,"seo_title":"hijacked","media_ids":["x"]}
+            })),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(post["project_ids"], json!([pid]));
+    assert_eq!(post["topic_id"], topic_id);
+    assert_eq!(post["seo_title"], "");
+    assert_eq!(post["media_ids"], json!([]));
+
+    let cleared: Value = test::read_body_json(
+        call(
+            test::TestRequest::put(),
+            "/api/v1/mcp/articles/filed",
+            Some(json!({
+                "expected_revision": post["revision"],
+                "meta":{"project_ids":[pid],"topic_id":null,"seo_title":"hijacked"}
+            })),
+        )
+        .await,
+    )
+    .await;
+    assert!(cleared.get("topic_id").is_none_or(Value::is_null));
+    assert_eq!(cleared["project_ids"], json!([pid]));
+    assert_eq!(cleared["discussion_slug"], post["discussion_slug"]);
+    assert_eq!(cleared["seo_title"], "");
+
+    let forbidden = call(
+        test::TestRequest::put(),
+        "/api/v1/mcp/articles/filed",
+        Some(json!({"expected_revision": cleared["revision"], "featured": true})),
+    )
+    .await;
+    assert_eq!(forbidden.status(), StatusCode::FORBIDDEN);
+}

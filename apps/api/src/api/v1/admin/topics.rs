@@ -95,14 +95,19 @@ pub async fn create(
     input: web::Json<Value>,
 ) -> Result<HttpResponse, AppError> {
     session.validate(&db).await?;
+    Ok(HttpResponse::Created().json(create_topic(&db, &input).await?))
+}
+
+/// Creates a topic and publishes it. Shared by the admin API and the MCP bridge.
+pub async fn create_topic(db: &Db, input: &Value) -> Result<Value, AppError> {
     let project_id = input["project_id"]
         .as_str()
         .ok_or_else(|| AppError::Unprocessable("project_id is required".into()))?
         .to_owned();
-    let title = text(&input, "title", MAX_TITLE)?
+    let title = text(input, "title", MAX_TITLE)?
         .filter(|t| !t.is_empty())
         .ok_or_else(|| AppError::Unprocessable("a topic needs a title".into()))?;
-    let summary = text(&input, "summary", MAX_SUMMARY)?.unwrap_or_default();
+    let summary = text(input, "summary", MAX_SUMMARY)?.unwrap_or_default();
     let slug = match input["slug"]
         .as_str()
         .map(str::trim)
@@ -120,10 +125,7 @@ pub async fn create(
     let created = db.content_create("topic", value).await?;
     let revision = created["revision"].as_i64().unwrap_or(1);
     let key = composite(&project_id, &slug_of(&created));
-    Ok(HttpResponse::Created().json(
-        db.content_action("topic", &key, revision, "publish")
-            .await?,
-    ))
+    db.content_action("topic", &key, revision, "publish").await
 }
 
 #[cfg_attr(feature = "swagger", utoipa::path(put, path = "/api/v1/admin/topics/{project_id}/{slug}", tag = "admin", params(("project_id" = String, Path), ("slug" = String, Path)), request_body = Object, responses((status = 200, description = "Topic draft saved"))))]
@@ -136,18 +138,28 @@ pub async fn update(
 ) -> Result<HttpResponse, AppError> {
     session.validate(&db).await?;
     let (project_id, slug) = path.into_inner();
-    let key = composite(&project_id, &slug);
+    Ok(HttpResponse::Ok().json(update_topic(&db, &project_id, &slug, &input).await?))
+}
+
+/// Saves a topic's edits, publishing them when the topic is live. Shared with the MCP bridge.
+pub async fn update_topic(
+    db: &Db,
+    project_id: &str,
+    slug: &str,
+    input: &Value,
+) -> Result<Value, AppError> {
+    let key = composite(project_id, slug);
     let revision = input["expected_revision"]
         .as_i64()
         .ok_or_else(|| AppError::Conflict("expected_revision required".into()))?;
     let mut current = db.content_get("topic", &key, false).await?;
-    if let Some(title) = text(&input, "title", MAX_TITLE)? {
+    if let Some(title) = text(input, "title", MAX_TITLE)? {
         if title.is_empty() {
             return Err(AppError::Unprocessable("a topic needs a title".into()));
         }
         current["title"] = json!(title);
     }
-    if let Some(summary) = text(&input, "summary", MAX_SUMMARY)? {
+    if let Some(summary) = text(input, "summary", MAX_SUMMARY)? {
         current["summary"] = json!(summary);
     }
     if let Some(order) = input["sort_order"].as_i64() {
@@ -160,12 +172,9 @@ pub async fn update(
     // Edits to a live topic go live with the save, like creating one.
     if was_published {
         let revision = saved["revision"].as_i64().unwrap_or(revision + 1);
-        return Ok(HttpResponse::Ok().json(
-            db.content_action("topic", &key, revision, "publish")
-                .await?,
-        ));
+        return db.content_action("topic", &key, revision, "publish").await;
     }
-    Ok(HttpResponse::Ok().json(saved))
+    Ok(saved)
 }
 
 #[cfg_attr(feature = "swagger", utoipa::path(post, path = "/api/v1/admin/topics/{project_id}/{slug}/{action}", tag = "admin", params(("project_id" = String, Path), ("slug" = String, Path), ("action" = String, Path)), request_body = Object, responses((status = 200, description = "Publish, unpublish, archive or restore a topic"))))]

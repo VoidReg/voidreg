@@ -36,9 +36,12 @@ connectors are not supported in this version.
 - `update_draft`: provide slug and `expected_revision` from the last read. Send
   optional metadata and either content format. Metadata-only edits preserve all
   blocks. Rich/interactive documents require structured editing.
-- `create_draft` and `update_draft` also accept `project` (a project slug to link)
-  and `topic` (a topic slug inside that project, or `null` to clear it). A topic
-  needs its project slug.
+- `create_draft` and `update_draft` also accept `tags`, `project` (a project slug to
+  link) and `topic` (a topic slug inside that project, or `null` to clear it). A topic
+  needs its project slug. Filing is the only post metadata a token can change. SEO
+  fields, images, media links and the discussion link stay as saved.
+- `get_compilation`: progress and diagnostics of a server compilation started by
+  `validate_document` for documents with diagrams. Never publishes.
 - `list_topics`: topics, optionally for one project slug, with post counts.
 - `create_topic`: add a topic to a project. Topics go live immediately and only
   appear on the site once they hold published posts.
