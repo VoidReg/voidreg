@@ -31,9 +31,14 @@ The manual workflow builds a Node artifact instead of deploying static Pages.
 - `/blog/<slug>.md` and `/projects/<slug>.md` serve clean Markdown with front matter. They send
   `Link: <html page>; rel="canonical"` so search engines index the HTML page only. Sending
   `Accept: text/markdown` to the normal URL returns the same Markdown (`src/hooks.server.ts`).
-- `/llms.txt` indexes the site with Markdown links, `/llms-full.txt` holds the text of every post
-  (capped at about 1 MB), and `/rss.xml` lists the latest 50 posts. These and `/sitemap.xml`
-  are built from the public API and shared for five minutes.
+- `/llms.txt` is a map of the site: every project, then posts shared out between projects by a
+  fair-share rule (`src/lib/server/llm-map.ts`), so one busy project cannot crowd out the rest.
+  `/llms/<project>.txt` lists every post in a project and `/llms/<project>-full.txt` holds their
+  text. `/llms-full.txt` is the text of the site in one document, the newest post of every
+  project before the second newest of any, capped at about 1 MB. `/rss.xml` lists the latest 50
+  posts. These and `/sitemap.xml` read only the API pages they need, are shared for five minutes
+  (an expired copy is served while one refresh runs), and answer `If-None-Match` with 304. The
+  text of a post is kept until its content hash changes, so a rebuild reads only edited posts.
 - `/admin/`, `/preview/`, `/api/` and `/mcp` stay out of `robots.txt` crawling and carry
   `noindex` headers at nginx. The `.md` download at `/blog/<slug>/source.md` is unchanged.
 - The apex and `api.` hosts redirect page requests to `www` in `deploy/nginx/default.conf`.

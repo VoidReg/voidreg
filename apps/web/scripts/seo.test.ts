@@ -10,7 +10,7 @@ import {
   wordCount
 } from '../src/lib/seo.ts';
 import { newest, sitemapXml } from '../src/lib/server/sitemap.ts';
-import { llmsIndex, rssFeed } from '../src/lib/server/feeds.ts';
+import { rssFeed } from '../src/lib/server/feeds.ts';
 import {
   articleMarkdown,
   frontMatter,
@@ -91,26 +91,6 @@ test('RSS and llms.txt list published content and stay well formed', () => {
   assert(rss.includes('<pubDate>Fri, 02 Jan 2026 03:04:05 GMT</pubDate>'));
   assert(rss.includes('<category>rust</category>'));
   assert(rssFeed([]).includes('<channel>'));
-  const index = llmsIndex(
-    [{ slug: 'p', title: 'Proj', summary: 'About p' } as never],
-    [article as never]
-  );
-  assert(index.startsWith('# Voidreg'));
-  assert(index.includes('[Proj](https://www.voidreg.xyz/projects/p.md): About p'));
-  assert(index.includes('https://www.voidreg.xyz/blog/first-post.md'));
-  assert(index.includes('https://www.voidreg.xyz/mcp'));
-  assert(index.includes('https://www.voidreg.xyz/agents'));
-  assert(!index.includes('\u2014'));
-  assert(llmsIndex([], []).includes('No posts are published yet.'));
-  // A truncated list still reports the real size of the catalogue.
-  const partial = llmsIndex(
-    [],
-    Array.from({ length: 500 }, (_, i) => ({ ...article, slug: 'p' + i })) as never[],
-    {
-      articles: 9000
-    }
-  );
-  assert(partial.includes('Showing the newest 500 of 9000 posts'));
 });
 
 test('markdown twins carry front matter, one heading and related links', () => {

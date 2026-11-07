@@ -50,6 +50,7 @@
   }
 
   .brand-link {
+    --logo-height: 1.875rem;
     display: inline-flex;
     align-items: center;
     gap: 0.625rem;
@@ -453,6 +454,7 @@
   }
 
   .brand-link {
+    --logo-height: 1.625rem;
     font-size: 1.25rem;
   }
 

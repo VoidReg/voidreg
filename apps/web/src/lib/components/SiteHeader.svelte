@@ -3,7 +3,7 @@
   import { page } from '$app/state';
   import { session } from '$lib/session.svelte';
   import AccountMenu from './AccountMenu.svelte';
-  import BrandMark from './BrandMark.svelte';
+  import BrandLogo from './BrandLogo.svelte';
   import Icon from './Icon.svelte';
   import ThemeToggle from './ThemeToggle.svelte';
 
@@ -13,9 +13,7 @@
 
 <header class="site-header">
   <div class="site-container header-inner">
-    <a class="brand-link" href={resolve('/')} aria-label="Voidreg home"
-      ><BrandMark /><span>Voidreg</span></a
-    >
+    <a class="brand-link" href={resolve('/')} aria-label="Voidreg home"><BrandLogo /></a>
 
     <div class="desktop-actions desktop-only">
       <nav class="nav-links" aria-label="Primary navigation">

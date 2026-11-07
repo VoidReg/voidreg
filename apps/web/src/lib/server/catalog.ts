@@ -12,22 +12,36 @@ export const cachedText = (key: string, build: () => Promise<string>) => built.g
 const PAGE = 100;
 const PARALLEL = 4;
 
-const pageOf = <T>(endpoint: string, page: number, fetcher: typeof fetch, perPage = PAGE) =>
-  publicContent<Page<T>>('/' + endpoint + '?per_page=' + perPage + '&page=' + page, fetcher);
+const pageOf = <T>(
+  endpoint: string,
+  page: number,
+  fetcher: typeof fetch,
+  perPage = PAGE,
+  query = ''
+) =>
+  publicContent<Page<T>>(
+    '/' + endpoint + '?' + (query ? query + '&' : '') + 'per_page=' + perPage + '&page=' + page,
+    fetcher
+  );
 
 /**
  * The newest published items of an endpoint, at most `limit`, in the order the API lists them
  * (newest first for posts). Only the pages that are needed are read, so the cost follows
  * `limit` and never the size of the catalogue. `total` is the full count.
  */
-export async function newest<T>(endpoint: string, limit: number, fetcher: typeof fetch) {
+export async function newest<T>(
+  endpoint: string,
+  limit: number,
+  fetcher: typeof fetch,
+  query = ''
+) {
   const perPage = Math.min(PAGE, Math.max(1, limit));
-  const first = await pageOf<T>(endpoint, 1, fetcher, perPage);
+  const first = await pageOf<T>(endpoint, 1, fetcher, perPage, query);
   const wanted = Math.min(limit, first.total);
   const pages = Math.ceil(wanted / perPage);
   const rest = await Promise.all(
     Array.from({ length: Math.max(0, pages - 1) }, (_, index) =>
-      pageOf<T>(endpoint, index + 2, fetcher, perPage)
+      pageOf<T>(endpoint, index + 2, fetcher, perPage, query)
     )
   );
   const items = [...first.items, ...rest.flatMap((result) => result.items)];
