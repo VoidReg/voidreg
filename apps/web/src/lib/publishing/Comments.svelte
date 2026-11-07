@@ -4,6 +4,7 @@
   import type { DiscussionComment } from './discussion';
   import CommentEntry from './CommentEntry.svelte';
   import CommentComposer from './CommentComposer.svelte';
+  import Icon from '$lib/components/Icon.svelte';
   let { slug }: { slug: string } = $props();
   type Replies = Page<DiscussionComment> & { loading: boolean; error: string; open: boolean };
   let comments = $state<Page<DiscussionComment>>({ items: [], page: 1, per_page: 20, total: 0 });
@@ -131,104 +132,119 @@
 </script>
 
 <section id="discussion" class="section-stack comments" aria-labelledby="comments-heading">
-  <header class="section-stack">
-    <h2 id="comments-heading">Discussion</h2>
+  <header class="comments-head">
+    <h2 id="comments-heading">
+      Discussion{#if comments.total}
+        <span class="section-count">{comments.total}</span>{/if}
+    </h2>
     <p>
       Ask a question, share an idea, or reply to another reader. Anonymous contributions are
       reviewed before appearing.
     </p>
+    {#if identity}<p class="signed-in">
+        Signed in as <strong>{identity.name}</strong>.
+        <button type="button" class="link-button" onclick={signOut}>Sign out</button>
+      </p>
+    {:else if providers.length}<div class="button-row">
+        {#each providers as provider (provider)}
+          <!-- eslint-disable svelte/no-navigation-without-resolve -->
+          <a
+            class="button button-secondary"
+            href={`${apiBase}/auth/${provider}/start?return_to=${encodeURIComponent(returnTo)}`}
+            >Continue with {provider === 'github' ? 'GitHub' : 'Google'}</a
+          >
+          <!-- eslint-enable svelte/no-navigation-without-resolve -->
+        {/each}
+      </div>{/if}
   </header>
-  {#if identity}<div class="button-row">
-      <p>Signed in as {identity.name}.</p>
-      <button class="button button-secondary" onclick={signOut}>Sign out</button>
-    </div>
-  {:else if providers.length}<div class="button-row">
-      {#each providers as provider (provider)}
-        <!-- eslint-disable svelte/no-navigation-without-resolve -->
-        <a
-          class="button button-secondary"
-          href={`${apiBase}/auth/${provider}/start?return_to=${encodeURIComponent(returnTo)}`}
-          >Continue with {provider === 'github' ? 'GitHub' : 'Google'}</a
-        >
-        <!-- eslint-enable svelte/no-navigation-without-resolve -->
-      {/each}
-    </div>{/if}
   <CommentComposer {slug} {identity} onposted={(status) => posted(status)} />
-  {#if notice}<p role="status">{notice}</p>{/if}
+  {#if notice}<p class="notice" role="status">{notice}</p>{/if}
   {#if error}<p role="alert">{error}</p>
     <button class="button button-secondary" onclick={() => load(comments.page)}
       >Retry loading discussion</button
     >{/if}
-  {#if loading}<p role="status">Loading discussion...</p>
-  {:else if !error && comments.items.length === 0}<p>No discussions yet. Start the conversation.</p>
+  {#if loading}<p role="status" class="quiet">Loading discussion...</p>
+  {:else if !error && comments.items.length === 0}<p class="quiet">
+      No discussion yet. Start the conversation.
+    </p>
   {:else if comments.items.length}
     <ol class="comment-list">
       {#each comments.items as comment (comment.id)}
+        {@const open = replies[comment.id]?.open && !!replies[comment.id].items.length}
         <li class="discussion-thread">
-          <CommentEntry {comment} onreply={reply} />
-          {#if target?.id === comment.id}{#key target.id}<CommentComposer
-                {slug}
-                {identity}
-                {target}
-                onposted={(status) => posted(status, comment.id)}
-                oncancel={closeReply}
-              />{/key}{/if}
-          {#if comment.reply_count > 0 || replies[comment.id]?.items.length}
-            <button
-              class="button button-secondary"
-              aria-expanded={replies[comment.id]?.open ?? false}
-              onclick={() => {
-                if (replies[comment.id]?.open) {
-                  if (target?.thread_id === comment.id && !discardReply()) return;
-                  replies[comment.id].open = false;
-                } else void loadReplies(comment.id);
-              }}
-            >
-              {replies[comment.id]?.open
-                ? 'Hide replies'
-                : `View ${comment.reply_count} ${comment.reply_count === 1 ? 'reply' : 'replies'}`}
-            </button>
-          {/if}
-          {#if replies[comment.id]?.open}
-            <div class="thread-replies">
-              {#if replies[comment.id].error}<p role="alert">{replies[comment.id].error}</p>
-                <button class="button button-secondary" onclick={() => loadReplies(comment.id)}
-                  >Retry replies</button
-                >{/if}
-              <ol class="comment-list">
-                {#each replies[comment.id].items as child (child.id)}<li>
-                    <CommentEntry comment={child} onreply={reply} />
-                    {#if target?.id === child.id}{#key target.id}<CommentComposer
-                          {slug}
-                          {identity}
-                          {target}
-                          onposted={(status) => posted(status, comment.id)}
-                          oncancel={closeReply}
-                        />{/key}{/if}
-                  </li>{/each}
-              </ol>
-              {#if replies[comment.id].loading}<p role="status">Loading replies...</p>
-              {:else if replies[comment.id].total > replies[comment.id].per_page}
-                <nav class="button-row" aria-label={'Reply pages for ' + comment.author_name}>
-                  <button
-                    class="button button-secondary"
-                    disabled={replies[comment.id].loading || replies[comment.id].page <= 1}
-                    onclick={() => changeReplyPage(comment.id, replies[comment.id].page - 1)}
-                    >Previous replies</button
-                  >
-                  <span>Page {replies[comment.id].page}</span>
-                  <button
-                    class="button button-secondary"
-                    disabled={replies[comment.id].loading ||
-                      replies[comment.id].page * replies[comment.id].per_page >=
-                        replies[comment.id].total}
-                    onclick={() => changeReplyPage(comment.id, replies[comment.id].page + 1)}
-                    >Next replies</button
-                  >
-                </nav>
-              {/if}
-            </div>
-          {/if}
+          <CommentEntry {comment} onreply={reply} threaded={open}>
+            {#if target?.id === comment.id}{#key target.id}<CommentComposer
+                  {slug}
+                  {identity}
+                  {target}
+                  onposted={(status) => posted(status, comment.id)}
+                  oncancel={closeReply}
+                />{/key}{/if}
+            {#if comment.reply_count > 0 || replies[comment.id]?.items.length}
+              <button
+                type="button"
+                class="thread-toggle"
+                class:open={replies[comment.id]?.open}
+                aria-expanded={replies[comment.id]?.open ?? false}
+                onclick={() => {
+                  if (replies[comment.id]?.open) {
+                    if (target?.thread_id === comment.id && !discardReply()) return;
+                    replies[comment.id].open = false;
+                  } else void loadReplies(comment.id);
+                }}
+              >
+                <Icon name="chevron-down" size={16} />
+                {replies[comment.id]?.open
+                  ? 'Hide replies'
+                  : `View ${comment.reply_count} ${comment.reply_count === 1 ? 'reply' : 'replies'}`}
+              </button>
+            {/if}
+            {#if replies[comment.id]?.open}
+              <div class="thread-replies">
+                {#if replies[comment.id].error}<p role="alert">{replies[comment.id].error}</p>
+                  <button type="button" class="link-button" onclick={() => loadReplies(comment.id)}
+                    >Retry replies</button
+                  >{/if}
+                <ol class="comment-list reply-list">
+                  {#each replies[comment.id].items as child (child.id)}<li>
+                      <CommentEntry comment={child} reply onreply={reply}>
+                        {#if target?.id === child.id}{#key target.id}<CommentComposer
+                              {slug}
+                              {identity}
+                              {target}
+                              onposted={(status) => posted(status, comment.id)}
+                              oncancel={closeReply}
+                            />{/key}{/if}
+                      </CommentEntry>
+                    </li>{/each}
+                </ol>
+                {#if replies[comment.id].loading}<p role="status" class="quiet">
+                    Loading replies...
+                  </p>
+                {:else if replies[comment.id].total > replies[comment.id].per_page}
+                  <nav class="reply-pager" aria-label={'Reply pages for ' + comment.author_name}>
+                    <button
+                      type="button"
+                      class="link-button"
+                      disabled={replies[comment.id].loading || replies[comment.id].page <= 1}
+                      onclick={() => changeReplyPage(comment.id, replies[comment.id].page - 1)}
+                      >Earlier replies</button
+                    >
+                    <span class="quiet">Page {replies[comment.id].page}</span>
+                    <button
+                      type="button"
+                      class="link-button"
+                      disabled={replies[comment.id].loading ||
+                        replies[comment.id].page * replies[comment.id].per_page >=
+                          replies[comment.id].total}
+                      onclick={() => changeReplyPage(comment.id, replies[comment.id].page + 1)}
+                      >More replies</button
+                    >
+                  </nav>
+                {/if}
+              </div>
+            {/if}
+          </CommentEntry>
         </li>
       {/each}
     </ol>
@@ -247,31 +263,91 @@
 </section>
 
 <style>
-  .discussion-thread {
+  .comments-head {
     display: grid;
-    gap: 1.5rem;
+    gap: 0.75rem;
+  }
+  .comments-head p {
+    margin: 0;
+    color: var(--muted-foreground);
+  }
+  .signed-in strong {
+    color: var(--foreground);
+  }
+  .quiet {
+    margin: 0;
+    color: var(--muted-foreground);
+    font-size: 0.875rem;
+  }
+  .notice {
+    margin: 0;
+    border-inline-start: 3px solid var(--primary);
+    background: var(--card);
+    padding: 0.75rem 1rem;
+  }
+  .link-button {
+    border: 0;
+    background: none;
+    padding: 0;
+    color: var(--link);
+    font: inherit;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+    cursor: pointer;
+  }
+  .link-button:disabled {
+    color: var(--disabled-foreground);
+    cursor: not-allowed;
+    text-decoration: none;
+  }
+  .discussion-thread {
     min-width: 0;
     border-block-start: 1px solid var(--border);
     padding-block-start: 1.5rem;
   }
-  .discussion-thread > button {
+  .thread-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
     justify-self: start;
+    min-height: 2.25rem;
+    margin-block-start: 0.25rem;
+    margin-inline-start: -0.5rem;
+    border: 0;
+    border-radius: var(--radius);
+    background: transparent;
+    padding: 0 0.5rem;
+    color: var(--primary);
+    font: 600 0.8125rem/1 var(--font-ui);
+    cursor: pointer;
+  }
+  .thread-toggle:hover {
+    background: var(--secondary);
+  }
+  .thread-toggle :global(.icon) {
+    transition: transform var(--duration-fast, 150ms) ease;
+  }
+  .thread-toggle.open :global(.icon) {
+    transform: rotate(180deg);
   }
   .thread-replies {
-    border-inline-start: 2px solid var(--border);
-    padding-inline-start: 1.5rem;
     display: grid;
-    gap: 1.5rem;
+    gap: 1.25rem;
     min-width: 0;
+    margin-block-start: 0.75rem;
   }
-  .thread-replies li {
-    display: grid;
-    gap: 1.5rem;
-    min-width: 0;
+  .thread-replies :global(.comment-list) {
+    gap: 1.25rem;
   }
-  @media (max-width: 47.999rem) {
-    .thread-replies {
-      padding-inline-start: 0.75rem;
+  .reply-pager {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .thread-toggle :global(.icon) {
+      transition: none;
     }
   }
 </style>

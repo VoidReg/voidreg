@@ -581,12 +581,11 @@
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 2rem;
+  gap: 1.5rem;
 }
 .comment-body {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  margin-top: 1rem;
 }
 .blog-skeleton {
   min-height: 20rem;

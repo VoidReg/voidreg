@@ -54,7 +54,7 @@
 </script>
 
 <form class="publishing-form discussion-composer" onsubmit={submit} aria-busy={busy}>
-  {#if target}<p>Reply to <strong>{target.author_name}</strong></p>{/if}
+  {#if target}<p class="composing">Replying to <strong>{target.author_name}</strong></p>{/if}
   {#if !identity}<label
       >Name<input bind:value={name} required maxlength="80" autocomplete="name" /></label
     >{/if}
@@ -93,6 +93,27 @@
   .discussion-composer {
     min-width: 0;
     width: 100%;
+    max-width: none;
+    gap: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--card);
+    padding: 1rem;
+  }
+  .discussion-composer:focus-within {
+    border-color: var(--input);
+  }
+  .composing {
+    margin: 0;
+    color: var(--muted-foreground);
+    font-size: 0.875rem;
+  }
+  .composing strong {
+    color: var(--foreground);
+  }
+  .placeholder-note {
+    margin: 0;
+    font-size: 0.8125rem;
   }
   textarea {
     resize: vertical;

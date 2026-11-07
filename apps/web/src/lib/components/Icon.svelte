@@ -3,7 +3,16 @@
     name,
     size = 24
   }: {
-    name: 'close' | 'menu' | 'moon' | 'sun' | 'arrow-right' | 'arrow-left' | 'plus';
+    name:
+      | 'close'
+      | 'menu'
+      | 'moon'
+      | 'sun'
+      | 'arrow-right'
+      | 'arrow-left'
+      | 'plus'
+      | 'chevron-down'
+      | 'reply';
     size?: number;
   } = $props();
 </script>
@@ -33,6 +42,10 @@
       <path d="M20 12H4m6-6-6 6 6 6" />
     {:else if name === 'plus'}
       <path d="M12 5v14M5 12h14" />
+    {:else if name === 'chevron-down'}
+      <path d="m6 9 6 6 6-6" />
+    {:else if name === 'reply'}
+      <path d="M9 14 4 9l5-5M4 9h9a7 7 0 0 1 7 7v3" />
     {:else if name === 'menu'}
       <path d="M4 8h16M4 16h16" />
     {:else}
