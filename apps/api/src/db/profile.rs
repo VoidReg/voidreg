@@ -19,7 +19,8 @@ pub const AVATAR_PATH: &str = "/api/v1/avatars/";
 pub const DISPLAY_NAME_MIN: usize = 2;
 pub const DISPLAY_NAME_MAX: usize = 40;
 
-/// Names nobody may take: they would read as the site, its owner, or a system label.
+/// Names members may not take: they would read as the site, its owner, or a system label.
+/// Accounts on the admin allowlist are exempt (see `Db::update_profile`).
 const RESERVED_NAMES: &[&str] = &[
     "voidreg",
     "admin",
@@ -70,6 +71,11 @@ fn collapse(raw: &str) -> String {
 
 /// Validates a display name chosen by the person. Uniqueness is checked separately.
 pub fn validate_display_name(raw: &str) -> Result<String, AppError> {
+    validate_name(raw, false)
+}
+
+/// `allow_reserved` is for site owners, who may take names such as "Voidreg".
+fn validate_name(raw: &str, allow_reserved: bool) -> Result<String, AppError> {
     if raw.chars().any(is_invisible) {
         return Err(AppError::Unprocessable(
             "Display names cannot contain control or invisible characters".into(),
@@ -93,7 +99,7 @@ pub fn validate_display_name(raw: &str) -> Result<String, AppError> {
             "Display names cannot contain links".into(),
         ));
     }
-    if is_reserved_name(&name) {
+    if !allow_reserved && is_reserved_name(&name) {
         return Err(AppError::Unprocessable(
             "That display name is reserved".into(),
         ));
@@ -464,14 +470,30 @@ impl Db {
         profile_id: &str,
         current_identity: &str,
         update: &ProfileUpdate,
+        owner: impl Fn(&str, &str) -> bool,
     ) -> Result<CommenterProfile, AppError> {
+        let mut db = self.inner.lock().await;
+        let mut tx = db.transaction().await?;
+        // Site owners (any connected account on the admin allowlist) may take
+        // reserved names. Everyone else is held to the reserved list.
+        let mut is_owner = false;
+        if update.display_name.is_some() {
+            for id in identity_ids(&mut tx, profile_id).await? {
+                let row = models::Identity::filter_by_id(parse_uuid(&id)?)
+                    .first()
+                    .exec(&mut tx)
+                    .await?;
+                if row.is_some_and(|row| owner(&row.provider, &row.subject)) {
+                    is_owner = true;
+                    break;
+                }
+            }
+        }
         let name = update
             .display_name
             .as_deref()
-            .map(validate_display_name)
+            .map(|raw| validate_name(raw, is_owner))
             .transpose()?;
-        let mut db = self.inner.lock().await;
-        let mut tx = db.transaction().await?;
         if let Some(name) = &name {
             if name_taken(&mut tx, name, profile_id).await? {
                 return Err(AppError::Conflict("That display name is taken.".into()));

@@ -702,3 +702,39 @@ async fn a_block_covers_every_connected_account_and_blocks_deletion() {
         Some(profile)
     );
 }
+
+#[actix_web::test]
+async fn site_owner_may_take_a_reserved_display_name() {
+    let db = database().await;
+    let owner = identity(&db, "github", "owner", "owner@example.com", "Owner", None).await;
+    let ada = identity(&db, "github", "1", "ada@example.com", "Ada", None).await;
+    let mut config = config();
+    config.admin_github_ids = vec!["owner".into()];
+    let (owner_cookie, ada_cookie) = (sign_in(&db, &owner).await, sign_in(&db, &ada).await);
+    let app = test::init_service(build(db.clone(), config)).await;
+
+    let (code, _) = call!(app, patch(&ada_cookie, json!({"display_name": "Voidreg"})));
+    assert_eq!(code, StatusCode::UNPROCESSABLE_ENTITY);
+
+    let (code, renamed) = call!(
+        app,
+        patch(&owner_cookie, json!({"display_name": "Voidreg"}))
+    );
+    assert_eq!(code, StatusCode::OK);
+    assert_eq!(renamed["profile"]["display_name"], "Voidreg");
+    // Other rules still apply to owners.
+    let (code, _) = call!(
+        app,
+        patch(&owner_cookie, json!({"display_name": "https://x.io"}))
+    );
+    assert_eq!(code, StatusCode::UNPROCESSABLE_ENTITY);
+
+    // Nobody else can take it afterwards, and guests still cannot use it.
+    let (code, _) = call!(app, patch(&ada_cookie, json!({"display_name": "voidreg"})));
+    assert_eq!(code, StatusCode::UNPROCESSABLE_ENTITY);
+    let (code, _) = call!(app, comment(None, "Voidreg", "guest comment"));
+    assert_eq!(code, StatusCode::UNPROCESSABLE_ENTITY);
+    let (code, posted) = call!(app, comment(Some(&owner_cookie), "x", "official reply"));
+    assert_eq!(code, StatusCode::ACCEPTED);
+    assert_eq!(posted["status"], "approved");
+}

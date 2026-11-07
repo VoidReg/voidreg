@@ -506,7 +506,12 @@ pub async fn update_profile(
     let context = commenter.0;
     check_profile_rate(&limiter, &context.profile.id)?;
     let profile = db
-        .update_profile(&context.profile.id, &context.identity.id, &payload)
+        .update_profile(
+            &context.profile.id,
+            &context.identity.id,
+            &payload,
+            |provider, subject| config.admin_identity_allowed(provider, subject),
+        )
         .await?;
     Ok(HttpResponse::Ok()
         .insert_header((header::CACHE_CONTROL, "no-store"))
