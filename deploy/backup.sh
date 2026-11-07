@@ -26,8 +26,9 @@ snapshot() {
     exit 1
   }
   # Read-only mount: the backup cannot change live data.
-  docker run --rm -v "$volume":/src:ro -v "$dir":/out alpine:3 \
-    tar -czf "/out/$file.partial" -C /src .
+  # The container runs as root, so hand the archive back to the invoking user afterwards.
+  docker run --rm -e OWNER="$(id -u):$(id -g)" -v "$volume":/src:ro -v "$dir":/out alpine:3 \
+    sh -c 'tar -czf "/out/$0.partial" -C /src . && chown "$OWNER" "/out/$0.partial"' "$file"
   mv "$dir/$file.partial" "$dir/$file"
   chmod 600 "$dir/$file"
   [ -s "$dir/$file" ] || { echo "backup: $file is empty" >&2; exit 1; }
