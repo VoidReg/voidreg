@@ -2,8 +2,9 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { createMcpHandler } from '@modelcontextprotocol/server';
 import { hostHeaderValidation, originValidation, toNodeHandler } from '@modelcontextprotocol/node';
 import { BridgeError, createTools, type Bridge } from './tools';
+import { createPublicTools, type PublicApi, type PublicMarkdown } from './public';
 
-export function createHttpServer(apiUrl: string, publicOrigin: string) {
+export function createHttpServer(apiUrl: string, publicOrigin: string, webUrl = 'http://web:3000') {
   const hostname = new URL(publicOrigin).hostname;
   const checkHost = hostHeaderValidation([hostname]);
   const checkOrigin = originValidation([hostname]);
@@ -14,6 +15,69 @@ export function createHttpServer(apiUrl: string, publicOrigin: string) {
       ...(status === 401 ? { 'WWW-Authenticate': 'Bearer realm="voidreg-mcp"' } : {})
     });
     res.end(JSON.stringify({ error: message }));
+  }
+  async function readBody(req: IncomingMessage, res: ServerResponse, limit: number) {
+    let bytes = 0;
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) {
+      bytes += chunk.length;
+      if (bytes > limit) {
+        respond(res, 413, 'Request is too large');
+        return undefined;
+      }
+      chunks.push(Buffer.from(chunk));
+    }
+    try {
+      return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown;
+    } catch {
+      respond(res, 400, 'Invalid JSON');
+      return undefined;
+    }
+  }
+  const publicApi: PublicApi = async (path) => {
+    const response = await fetch(apiUrl + '/api/v1' + path, {
+      redirect: 'error',
+      signal: AbortSignal.timeout(15_000)
+    }).catch(() => {
+      throw new BridgeError('The knowledge base is unavailable.', 503);
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok)
+      throw new BridgeError(
+        response.status === 404 ? 'Not found.' : 'The knowledge base is unavailable.',
+        response.status === 404 ? 404 : 503
+      );
+    return data as Record<string, unknown>;
+  };
+  const publicMarkdown: PublicMarkdown = async (kind, slug) => {
+    const response = await fetch(webUrl + '/' + kind + '/' + encodeURIComponent(slug) + '.md', {
+      redirect: 'follow',
+      signal: AbortSignal.timeout(15_000)
+    }).catch(() => {
+      throw new BridgeError('The knowledge base is unavailable.', 503);
+    });
+    if (response.status === 404) throw new BridgeError('Not found.', 404);
+    if (!response.ok) throw new BridgeError('The knowledge base is unavailable.', 503);
+    return response.text();
+  };
+  async function serveReadOnly(req: IncomingMessage, res: ServerResponse) {
+    if (req.method !== 'POST') {
+      respond(res, 405, 'Only POST is supported by this stateless MCP server');
+      return;
+    }
+    // Anonymous calls are small JSON-RPC requests; a tight cap keeps them cheap.
+    const parsed = await readBody(req, res, 1024 * 1024);
+    if (parsed === undefined) return;
+    try {
+      const handler = createMcpHandler(
+        () => createPublicTools(publicApi, publicMarkdown, publicOrigin),
+        { legacy: 'stateless', responseMode: 'auto' }
+      );
+      await toNodeHandler(handler)(req, res, parsed);
+    } catch {
+      if (!res.headersSent) respond(res, 503, 'The knowledge base is unavailable.');
+      else res.end();
+    }
   }
   const http = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -27,8 +91,13 @@ export function createHttpServer(apiUrl: string, publicOrigin: string) {
     }
     if (!checkHost(req, res) || !checkOrigin(req, res)) return;
     const authorization = req.headers.authorization;
-    if (!authorization || !/^Bearer vr_mcp_[A-Za-z0-9_-]{32,100}$/.test(authorization)) {
-      respond(res, 401, 'MCP bearer token required');
+    // No credentials: the read-only knowledge base. A header that is present must be valid.
+    if (authorization === undefined) {
+      await serveReadOnly(req, res);
+      return;
+    }
+    if (!/^Bearer vr_mcp_[A-Za-z0-9_-]{32,100}$/.test(authorization)) {
+      respond(res, 401, 'Invalid MCP bearer token');
       return;
     }
     const bridge: Bridge = async (path, method = 'GET', body) => {

@@ -1,6 +1,10 @@
 import { createHttpServer } from './http';
 const origin = new URL(process.env.PUBLIC_BASE_URL ?? 'https://www.voidreg.xyz').origin;
-const server = createHttpServer(process.env.MCP_API_URL ?? 'http://api:8080', origin);
+const server = createHttpServer(
+  process.env.MCP_API_URL ?? 'http://api:8080',
+  origin,
+  process.env.MCP_WEB_URL ?? 'http://web:3000'
+);
 server.listen(Number(process.env.PORT ?? 8090), process.env.HOST ?? '127.0.0.1', () =>
   console.log('Voidreg MCP listening')
 );

@@ -85,6 +85,7 @@ for (const mode of ['legacy', 'auto'] as const) {
     try {
       const missing = await fetch(origin + '/mcp', {
         method: 'POST',
+        headers: { Authorization: 'Bearer not-a-token' },
         body: '{}'
       });
       assert.equal(missing.status, 401);
@@ -341,3 +342,116 @@ test('archival Markdown preserves custom payloads, IDs, and document metadata', 
   const imported = importMarkdown(exported.markdown);
   assert.deepEqual(imported.document, prepared.document);
 });
+
+for (const mode of ['legacy', 'auto'] as const) {
+  test(`anonymous clients browse published content read only (${mode})`, async () => {
+    const seen: string[] = [];
+    const backend = createServer((req, res) => {
+      seen.push(String(req.headers.authorization ?? '') + ' ' + req.url);
+      const url = new URL(req.url!, 'http://api');
+      res.setHeader('Content-Type', 'application/json');
+      if (url.pathname === '/api/v1/blogs')
+        return void res.end(
+          JSON.stringify({
+            items: [
+              {
+                slug: 'first-post',
+                title: 'First post',
+                summary: 'About rendering',
+                tags: ['graphics'],
+                published_at: '2026-01-01T00:00:00Z'
+              }
+            ],
+            page: 1,
+            per_page: 20,
+            total: 1
+          })
+        );
+      if (url.pathname === '/api/v1/blogs/first-post')
+        return void res.end(
+          JSON.stringify({ slug: 'first-post', title: 'First post', summary: 's' })
+        );
+      if (url.pathname === '/api/v1/projects')
+        return void res.end(JSON.stringify({ items: [], page: 1, per_page: 20, total: 0 }));
+      res.writeHead(404).end('{}');
+    });
+    const web = createServer((req, res) => {
+      if (req.url === '/blog/first-post.md') {
+        res.setHeader('Content-Type', 'text/markdown');
+        return void res.end('---\ntitle: "First post"\n---\n\n# First post\n\nBody text.');
+      }
+      res.writeHead(404).end('missing');
+    });
+    const api = await listen(backend);
+    const webUrl = await listen(web);
+    const http = createHttpServer(api, 'http://127.0.0.1', webUrl);
+    const origin = await listen(http);
+    const client = new Client(
+      { name: 'anonymous-client', version: '1' },
+      { versionNegotiation: { mode } }
+    );
+    try {
+      assert.equal((await fetch(origin + '/mcp')).status, 405);
+      assert.equal(
+        (
+          await fetch(origin + '/mcp', {
+            method: 'POST',
+            headers: { Origin: 'https://untrusted.example' },
+            body: '{}'
+          })
+        ).status,
+        403
+      );
+      await client.connect(new StreamableHTTPClientTransport(new URL(origin + '/mcp')));
+      const tools = (await client.listTools()).tools.map((t) => t.name).sort();
+      assert.deepEqual(tools, [
+        'get_article',
+        'get_project',
+        'list_articles',
+        'list_projects',
+        'list_topics',
+        'search_content'
+      ]);
+      for (const t of (await client.listTools()).tools)
+        assert.equal(t.annotations?.readOnlyHint, true, t.name);
+      const found = await client.callTool({
+        name: 'search_content',
+        arguments: { query: 'render' }
+      });
+      assert(!found.isError, JSON.stringify(found));
+      const hits = found.structuredContent as {
+        articles: { slug: string; markdown_url: string }[];
+      };
+      assert.equal(hits.articles[0].slug, 'first-post');
+      assert.equal(hits.articles[0].markdown_url, 'http://127.0.0.1/blog/first-post.md');
+      const read = await client.callTool({
+        name: 'get_article',
+        arguments: { slug: 'first-post' }
+      });
+      assert.match(String((read.structuredContent as { markdown: string }).markdown), /Body text/);
+      const missing = await client.callTool({ name: 'get_article', arguments: { slug: 'nope' } });
+      assert.equal(missing.isError, true);
+      const resources = await client.listResources();
+      assert(resources.resources.some((r) => r.uri === 'voidreg://blog/first-post'));
+      const body = await client.readResource({ uri: 'voidreg://blog/first-post' });
+      assert.match(String((body.contents[0] as { text: string }).text), /Body text/);
+      // Authoring needs a token, and nothing anonymous ever reaches the private bridge.
+      await assert.rejects(
+        client.callTool({
+          name: 'create_draft',
+          arguments: { title: 'x', category: 'x', summary: 'x', markdown: 'x' }
+        }),
+        /not found/
+      );
+      assert(
+        seen.every((entry) => entry.startsWith(' ') && !entry.includes('/api/v1/mcp')),
+        seen.join('\n')
+      );
+    } finally {
+      await client.close().catch(() => undefined);
+      await close(http);
+      await close(web);
+      await close(backend);
+    }
+  });
+}

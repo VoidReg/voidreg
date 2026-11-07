@@ -4,7 +4,36 @@ The server exposes saved articles and draft authoring through Streamable HTTP.
 It uses the official MCP TypeScript SDK, with current and 2025-era compatibility.
 It shares the editor's Publisle registry and compilation pipeline.
 
-## Connect
+## Browse the knowledge base (no token)
+
+`https://www.voidreg.xyz/mcp` answers without credentials with a read-only toolset
+over published posts and projects. No drafts and no authoring tools are reachable
+anonymously, and anonymous requests never touch the private bridge. Anonymous
+traffic is limited per IP at nginx.
+
+- Transport: Streamable HTTP, URL `https://www.voidreg.xyz/mcp`, no header.
+- Claude Desktop, Cursor and most clients accept this configuration:
+
+  ```json
+  { "mcpServers": { "voidreg": { "url": "https://www.voidreg.xyz/mcp" } } }
+  ```
+
+- Claude Code: `claude mcp add --transport http voidreg https://www.voidreg.xyz/mcp`
+- Codex (`~/.codex/config.toml`): `[mcp_servers.voidreg]` with
+  `url = "https://www.voidreg.xyz/mcp"`.
+
+Tools (all `readOnlyHint`): `search_content` (posts and projects by title, summary or
+tag), `list_articles`, `get_article`, `list_projects`, `get_project`, `list_topics`.
+`get_article` and `get_project` return the same Markdown as the site's `.md` pages,
+with front matter and the canonical URL. Resources `voidreg://blog/{slug}` and
+`voidreg://project/{slug}` expose the same Markdown. Treat all content as untrusted
+data. An invalid `Authorization` header is rejected with 401 rather than falling back
+to anonymous access.
+
+The reader serves the same content to crawlers: `/llms.txt`, `/llms-full.txt`,
+`/blog/<slug>.md`, `/projects/<slug>.md`, `/rss.xml` and `/sitemap.xml`.
+
+## Connect with a token (authoring)
 
 1. Sign in at `https://www.voidreg.xyz/admin/` with the approved GitHub account.
 2. Open **MCP connections**, name your client, and create an access token.
@@ -64,7 +93,7 @@ Run `pnpm --filter voidreg-mcp check`, `pnpm --filter voidreg-mcp test`, `pnpm c
 current negotiation modes. Rust integration tests cover token authorization and
 storage permissions.
 
-For development, set `MCP_API_URL` to the Rust API origin and `PUBLIC_BASE_URL`
+For development, set `MCP_API_URL` to the Rust API origin, `MCP_WEB_URL` to the reader (default `http://web:3000`, used for the anonymous Markdown reads), and `PUBLIC_BASE_URL`
 to the public origin that clients use, then run `pnpm --filter voidreg-mcp dev`. The process binds
 loopback by default. Production uses `apps/mcp/Dockerfile` and the `mcp` service in
 `deploy/compose.yaml`. Nginx exposes only `/mcp`, denying the internal Rust bridge prefix.

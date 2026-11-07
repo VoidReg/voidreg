@@ -98,6 +98,8 @@ services:
       HOST: 0.0.0.0
       PORT: "8090"
       MCP_API_URL: http://api:8080
+      # Anonymous read-only tools fetch the Markdown pages from the reader.
+      MCP_WEB_URL: http://web:3000
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://www.voidreg.xyz}
     expose:
       - "8090"
@@ -105,6 +107,8 @@ services:
       - backend
     depends_on:
       api:
+        condition: service_healthy
+      web:
         condition: service_healthy
     cpus: 0.75
     mem_limit: 768m
