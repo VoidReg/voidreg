@@ -121,12 +121,42 @@
     query.addEventListener('change', update);
     return () => query.removeEventListener('change', update);
   });
+  // Panels such as Settings hide the document, which clamps the page scroll. Remember the position
+  // of each view when leaving it and put it back on return, so editing resumes where it stopped.
+  const positions = new Map<string, number>();
+  const viewKey = () => `${mode}:${panel}`;
+  let shownKey = viewKey();
+  let skipRestore = false;
+  let restoring = false;
+  function go(changes: Partial<EditorView>) {
+    positions.set(viewKey(), window.scrollY);
+    return onnavigate(changes);
+  }
+  $effect(() => {
+    const key = `${mode}:${panel}`;
+    if (key === shownKey) return;
+    shownKey = key;
+    if (skipRestore) {
+      skipRestore = false;
+      return;
+    }
+    const top = positions.get(key);
+    if (top === undefined) return;
+    restoring = true;
+    void tick().then(() =>
+      requestAnimationFrame(() => {
+        window.scrollTo({ top, behavior: 'instant' });
+        // The scroll event fires after this frame; keep the preview sync quiet for it.
+        setTimeout(() => (restoring = false), 120);
+      })
+    );
+  });
   const blockIds = $derived(doc.blocks.map((block) => block.id));
   let scrolledTo = $state<string | null>(null);
   const syncTarget = $derived(selectedId ?? scrolledTo);
   let frame = 0;
   function trackScroll() {
-    if (panel !== 'preview' || !wide || frame) return;
+    if (panel !== 'preview' || !wide || frame || restoring) return;
     frame = requestAnimationFrame(() => {
       frame = 0;
       const limit =
@@ -159,7 +189,10 @@
   }
 
   async function select(id: BlockId) {
-    await onnavigate({
+    // The block scrolls itself into view below, so a remembered position must not override it.
+    const target = panel === 'preview' && wide ? 'preview' : 'document';
+    if (`write:${target}` !== viewKey()) skipRestore = true;
+    await go({
       mode: 'write',
       panel: panel === 'preview' && wide ? 'preview' : 'document',
       inspector: 'block',
@@ -186,7 +219,7 @@
     void select(block.id);
   }
   async function finish(id: BlockId) {
-    await onnavigate({ block: null });
+    await go({ block: null });
     await tick();
     document
       .getElementById(`editing-${id}`)
@@ -200,7 +233,7 @@
     const next = editor.document.blocks[Math.min(index, editor.document.blocks.length - 1)];
     if (next) await select(next.id);
     else {
-      await onnavigate({ panel: 'document', block: null });
+      await go({ panel: 'document', block: null });
       await tick();
       document.querySelector<HTMLElement>('.document-empty button')?.focus();
     }
@@ -240,7 +273,7 @@
     }
   }
   function showSettings(tab: 'block' | 'article' | 'history') {
-    void onnavigate({
+    void go({
       panel: panel === 'settings' && inspector === tab ? 'document' : 'settings',
       inspector: tab
     });
@@ -333,7 +366,7 @@
         { id: 'preview', label: 'Preview' }
       ]}
       onselect={(id) =>
-        onnavigate(
+        go(
           id === 'write'
             ? { mode: 'write', panel: 'document' }
             : { mode: 'preview', panel: 'document', inspector: 'article' }
@@ -343,8 +376,7 @@
       <button
         class="outline-toggle"
         aria-pressed={panel === 'outline'}
-        onclick={() => onnavigate({ panel: panel === 'outline' ? 'document' : 'outline' })}
-        >Outline</button
+        onclick={() => go({ panel: panel === 'outline' ? 'document' : 'outline' })}>Outline</button
       ><button
         aria-pressed={panel === 'settings' && inspector === 'article'}
         onclick={() => showSettings('article')}>Settings</button
@@ -356,7 +388,7 @@
         class="preview-toggle"
         aria-pressed={panel === 'preview'}
         disabled={mode === 'preview'}
-        onclick={() => onnavigate({ panel: panel === 'preview' ? 'document' : 'preview' })}
+        onclick={() => go({ panel: panel === 'preview' ? 'document' : 'preview' })}
         >Live preview</button
       >
     </div>
@@ -413,7 +445,7 @@
       <button
         class="block-settings-link"
         onclick={() => {
-          void onnavigate({ inspector: 'article', panel: 'settings' });
+          void go({ inspector: 'article', panel: 'settings' });
         }}>Review checks</button
       >
     </div>{/if}
@@ -428,7 +460,7 @@
       onmove={(id, direction) => editor.moveBlock(id, direction)}
       onreorder={reorder}
       ontitle={async () => {
-        await onnavigate({ inspector: 'article', panel: 'document', mode: 'write', block: null });
+        await go({ inspector: 'article', panel: 'document', mode: 'write', block: null });
         await tick();
         document.getElementById('article-title')?.focus();
       }}
@@ -559,7 +591,7 @@
                     ><button
                       class="block-settings-link"
                       onclick={() => {
-                        void onnavigate({ inspector: 'block', panel: 'settings' });
+                        void go({ inspector: 'block', panel: 'settings' });
                       }}>Block settings</button
                     >
                   </div>
@@ -622,7 +654,7 @@
           { id: 'history', label: 'History', disabled: !storedSlug }
         ]}
         onselect={(id) =>
-          onnavigate({ inspector: id as 'article' | 'block' | 'history', panel: 'settings' })}
+          go({ inspector: id as 'article' | 'block' | 'history', panel: 'settings' })}
       />
       <div id="inspector-panel" role="tabpanel" aria-labelledby={`inspector-tab-${inspector}`}>
         {#if inspector === 'history' && storedSlug}
@@ -738,7 +770,7 @@
       </div>
       <button
         class="return-to-document editor-button secondary"
-        onclick={() => onnavigate({ panel: 'document' })}>Back to document</button
+        onclick={() => go({ panel: 'document' })}>Back to document</button
       >
     </aside>
   </div>

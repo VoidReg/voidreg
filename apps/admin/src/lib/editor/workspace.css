@@ -1247,3 +1247,7 @@
   cursor: pointer;
   color: var(--muted-foreground);
 }
+/* Programmatic jumps in the editor (block select, panel return) must be instant, not animated. */
+html:has(.publishing-workspace) {
+  scroll-behavior: auto;
+}
