@@ -13,6 +13,7 @@
     log,
     live = true
   }: { project: Project; log: ProjectLog; live?: boolean } = $props();
+  const topics = $derived([...log.sections.map((s) => s.topic), ...log.more]);
   const allPosts = $derived(`/blog?project=${encodeURIComponent(project.slug)}`);
 </script>
 
@@ -35,6 +36,22 @@
         {#if project.tags.length}<div class="tags">
             {#each project.tags as tag (tag)}<span class="tag">{tag}</span>{/each}
           </div>{/if}
+        {#if topics.length}<nav aria-label="Topics in this project">
+            <ul class="chip-row labelled-chips">
+              <li><span class="chip-label">Topics</span></li>
+              {#each topics as topic (topic.id)}<li>
+                  {#if live}<a
+                      class="chip chip-topic"
+                      href={resolve('/projects/[slug]/topics/[topic]', {
+                        slug: project.slug,
+                        topic: topic.slug
+                      })}>{topic.title} <span class="chip-count">{topic.post_count}</span></a
+                    >{:else}<span class="chip chip-topic"
+                      >{topic.title} <span class="chip-count">{topic.post_count}</span></span
+                    >{/if}
+                </li>{/each}
+            </ul>
+          </nav>{/if}
         <!-- eslint-disable svelte/no-navigation-without-resolve -- repository and demo links are external -->
         {#if project.repo_url || project.demo_url}<div class="button-row">
             {#if project.repo_url}<a class="button button-secondary" href={project.repo_url}

@@ -884,6 +884,27 @@
     margin-top: 0.75rem;
   }
 
+  /* A chip with a small label in front: where a post or project sits (project, topic). */
+  .labelled-chips li {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .chip-label {
+    color: var(--muted-foreground);
+    font-family: var(--font-code);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    line-height: 1.5;
+    text-transform: uppercase;
+  }
+
+  .chip-topic {
+    border-color: var(--primary);
+  }
+
   .filter-groups {
     display: grid;
     gap: 1.25rem;

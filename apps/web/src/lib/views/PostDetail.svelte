@@ -59,6 +59,27 @@
         <p class="eyebrow">{article.category}</p>
         <h1 class="display-heading">{article.title}</h1>
         <p class="lead">{article.summary}</p>
+        {#if topic || projects.length}<ul
+            class="chip-row labelled-chips"
+            aria-label="Project and topic this post belongs to"
+          >
+            {#each projects as project (project.id)}<li>
+                <span class="chip-label">Project</span>
+                <a class="chip" href={resolve('/projects/[slug]', { slug: project.slug })}
+                  >{project.title}</a
+                >
+              </li>{/each}
+            {#if topic}<li>
+                <span class="chip-label">Topic</span>
+                {#if live}<a
+                    class="chip chip-topic"
+                    href={resolve('/projects/[slug]/topics/[topic]', {
+                      slug: topic.project.slug,
+                      topic: topic.slug
+                    })}>{topic.title}</a
+                  >{:else}<span class="chip chip-topic">{topic.title}</span>{/if}
+              </li>{/if}
+          </ul>{/if}
         {#if article.tags?.length}<ul class="chip-row" aria-label="Tags">
             {#each article.tags as tag (tag)}<li>
                 <a class="chip" href={resolve(`/blog?tag=${encodeURIComponent(tag)}` as '/blog')}
