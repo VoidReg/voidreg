@@ -13,7 +13,20 @@
   $effect(() => {
     if (!container || !article.compiled) return;
     const element = container;
+    // An interactive block swaps its static fallback for the live component when it activates.
+    // Until then the section keeps the fallback's height, so the swap never collapses the page.
+    const reserveIslands = () => {
+      for (const section of element.querySelectorAll<HTMLElement>('[data-publisle-island]')) {
+        const mount = section.querySelector<HTMLElement>('[data-publisle-mount]');
+        if (!mount) continue;
+        if (mount.hidden) {
+          section.style.minHeight = '';
+          section.style.minHeight = `${section.offsetHeight}px`;
+        }
+      }
+    };
     const update = () => {
+      reserveIslands();
       for (const block of element.querySelectorAll<HTMLElement>(
         'pre, table, div.publisle-math, p > .katex'
       )) {

@@ -447,3 +447,16 @@
   color: var(--muted-foreground);
   font-size: 0.875rem;
 }
+
+/* A list that is reloading keeps its rows and dims them, so only that region reads as busy. */
+.ui-table-wrap[aria-busy='true'],
+.ui-busy[aria-busy='true'] {
+  opacity: 0.55;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-table-wrap[aria-busy='true'],
+  .ui-busy[aria-busy='true'] {
+    transition: none;
+  }
+}

@@ -472,7 +472,7 @@
           >{/if}
       </div>
     {:else}
-      <div aria-busy={loading}>
+      <div class="ui-busy" aria-busy={loading}>
         {#if collection === 'comments'}
           <CommentsList
             items={result.items}
