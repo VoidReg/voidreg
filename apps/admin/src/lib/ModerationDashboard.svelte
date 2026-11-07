@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { afterNavigate, goto } from '$app/navigation';
   import { page } from '$app/state';
   import { adminUrl } from '$lib/navigation';
@@ -248,9 +249,13 @@
       busy = false;
     }
   }
-  afterNavigate(() => {
+  // The dashboard mounts after the tab switch has already navigated, and afterNavigate does not
+  // fire on mount, so load once here and again on every later navigation.
+  const syncRoute = () => {
     if (page.url.searchParams.get('tab') === 'comments') restoreRoute();
-  });
+  };
+  onMount(syncRoute);
+  afterNavigate(syncRoute);
 </script>
 
 <section class="mod" aria-labelledby="moderation-heading">
