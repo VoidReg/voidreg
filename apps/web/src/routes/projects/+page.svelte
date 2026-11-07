@@ -7,6 +7,7 @@
   import Pagination from '$lib/components/Pagination.svelte';
   import Seo from '$lib/Seo.svelte';
   import { capChips } from '$lib/filters';
+  import { breadcrumbs, collection, describe, graph } from '$lib/seo';
   let { data } = $props();
   const CAP = 8;
   const href = (next: { tag?: string; category?: string; q?: string; page?: number }) => {
@@ -25,7 +26,24 @@
   const tags = $derived(capChips(data.tags, CAP, (t) => same(t, data.tag)));
 </script>
 
-<Seo title="Projects | Voidreg" description={copy.projectsIntro} />
+<Seo
+  title="Projects | Voidreg"
+  description={describe(copy.projectsIntro)}
+  noindex={Boolean(data.q || data.tag || data.category)}
+  structured={graph([
+    collection(
+      'Projects',
+      '/projects',
+      copy.projectsIntro,
+      data.result.items,
+      (item) => '/projects/' + item.slug
+    ),
+    breadcrumbs([
+      { name: 'Home', path: '/' },
+      { name: 'Projects', path: '/projects' }
+    ])
+  ])}
+/>
 <main id="main-content" class="site-container page-shell">
   <Breadcrumb items={[{ label: 'Home', href: resolve('/') }, { label: 'Projects' }]} />
   <header class="section-stack">

@@ -8,6 +8,7 @@
 
 <svelte:head>
   <title>{page.status} | Voidreg</title>
+  <meta name="robots" content="noindex" />
 </svelte:head>
 
 <main id="main-content" class="error-page">

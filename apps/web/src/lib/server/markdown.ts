@@ -3,8 +3,17 @@ import { parseDocument } from '@publisle/schema';
 import { error } from '@sveltejs/kit';
 import type { Article } from '@voidreg/publishing-ui/api';
 const cache = new Map<string, { source: string; notes: string[] }>();
-export function markdownSource(article: Article, archival = false) {
-  const key = (article.id ?? article.slug) + article.content_hash + String(archival);
+/** The parts of an article or project that the Markdown export reads. */
+export type Exportable = Pick<Article, 'slug' | 'title' | 'sections'> & {
+  id?: string;
+  document?: unknown;
+  content_hash?: string;
+  revision?: number;
+};
+
+export function markdownSource(article: Exportable, archival = false) {
+  const version = article.content_hash ?? String(article.revision ?? '');
+  const key = (article.id ?? article.slug) + version + String(archival);
   const cached = cache.get(key);
   if (cached) return cached;
   const document = article.document

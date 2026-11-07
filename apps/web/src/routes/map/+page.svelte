@@ -3,6 +3,7 @@
   import { resolve } from '$app/paths';
   import MapSection from '$lib/map/MapSection.svelte';
   import Seo from '$lib/Seo.svelte';
+  import { breadcrumbs, graph } from '$lib/seo';
   let { data } = $props();
   const projects = $derived(data.graph.totals?.projects ?? 0);
   const posts = $derived(data.graph.totals?.posts ?? 0);
@@ -11,6 +12,17 @@
 <Seo
   title="Knowledge map | Voidreg"
   description="How Voidreg projects, the posts that follow them, and the technologies they share connect."
+  structured={graph([
+    {
+      '@type': 'WebPage',
+      name: 'Knowledge map',
+      url: 'https://www.voidreg.xyz/map'
+    },
+    breadcrumbs([
+      { name: 'Home', path: '/' },
+      { name: 'Map', path: '/map' }
+    ])
+  ])}
 />
 <main id="main-content" class="site-container page-shell">
   <Breadcrumb items={[{ label: 'Home', href: resolve('/') }, { label: 'Map' }]} />

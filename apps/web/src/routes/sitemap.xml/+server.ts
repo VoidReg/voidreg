@@ -1,58 +1,55 @@
-import { publicContent, site } from '$lib/server/content';
-import type { Article, Page, Topic } from '@voidreg/publishing-ui/api';
+import { cachedText, everything } from '$lib/server/catalog';
+import { newest, sitemapXml, type SitemapUrl } from '$lib/server/sitemap';
+import type { Article, Topic } from '@voidreg/publishing-ui/api';
 import type { Project } from '$lib/data/projects';
-const escape = (s: string) =>
-  s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;');
+
 export async function GET({ fetch }) {
-  const urls = ['/', '/about', '/projects', '/blog', '/map', '/privacy'].map((path) => ({
-    path,
-    date: ''
-  }));
-  for (const [endpoint, prefix] of [
-    ['projects', 'projects'],
-    ['blogs', 'blog']
-  ]) {
-    let page = 1;
-    while (true) {
-      const result = await publicContent<Page<Article | Project>>(
-        '/' + endpoint + '?per_page=100&page=' + page,
-        fetch
-      );
-      for (const item of result.items)
-        urls.push({ path: '/' + prefix + '/' + item.slug, date: item.updated_at ?? '' });
-      if (page * result.per_page >= result.total) break;
-      page++;
+  const xml = await cachedText('sitemap', () => build(fetch));
+  return new Response(xml, {
+    headers: {
+      'Content-Type': 'application/xml; charset=utf-8',
+      'Cache-Control': 'public, max-age=3600'
     }
-  }
+  });
+}
+
+async function build(fetch: typeof globalThis.fetch) {
+  const [projects, articles, topics] = await Promise.all([
+    everything<Project>('projects', fetch),
+    everything<Article>('blogs', fetch),
+    everything<Topic>('topics', fetch)
+  ]);
+  const stamp = (item: { updated_at?: string; published_at?: string | null }) =>
+    item.updated_at ?? item.published_at ?? '';
+  const latestProject = newest(projects.map(stamp));
+  const latestPost = newest(articles.map(stamp));
+  const urls: SitemapUrl[] = [
+    { path: '/', date: newest([latestProject, latestPost]) },
+    // Pages with no dated content carry no lastmod rather than an invented one.
+    { path: '/about' },
+    { path: '/projects', date: latestProject },
+    { path: '/blog', date: latestPost },
+    { path: '/map', date: newest([latestProject, latestPost]) },
+    { path: '/privacy' }
+  ];
+  for (const project of projects)
+    urls.push({
+      path: '/projects/' + project.slug,
+      date: stamp(project),
+      image: project.social_image || project.hero_image
+    });
+  for (const article of articles)
+    urls.push({
+      path: '/blog/' + article.slug,
+      date: stamp(article),
+      image: article.social_image || article.hero_image
+    });
   // Topic pages, only for topics that hold published posts.
-  let topicPage = 1;
-  while (true) {
-    const result = await publicContent<Page<Topic>>(
-      '/topics?per_page=100&page=' + topicPage,
-      fetch
-    );
-    for (const topic of result.items)
-      if (topic.project && topic.post_count > 0)
-        urls.push({
-          path: '/projects/' + topic.project.slug + '/topics/' + topic.slug,
-          date: topic.latest_post_at ?? ''
-        });
-    if (topicPage * result.per_page >= result.total) break;
-    topicPage++;
-  }
-  return new Response(
-    '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' +
-      urls
-        .map(
-          (u) =>
-            '<url><loc>' +
-            escape(site + u.path) +
-            '</loc>' +
-            (u.date ? '<lastmod>' + escape(u.date) + '</lastmod>' : '') +
-            '</url>'
-        )
-        .join('') +
-      '</urlset>',
-    { headers: { 'Content-Type': 'application/xml', 'Cache-Control': 'no-cache' } }
-  );
+  for (const topic of topics)
+    if (topic.project && topic.post_count > 0)
+      urls.push({
+        path: '/projects/' + topic.project.slug + '/topics/' + topic.slug,
+        date: topic.latest_post_at ?? ''
+      });
+  return sitemapXml(urls);
 }

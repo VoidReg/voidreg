@@ -5,6 +5,7 @@
   import ArticleCard from '$lib/publishing/ArticleCard.svelte';
   import Pagination from '$lib/components/Pagination.svelte';
   import Seo from '$lib/Seo.svelte';
+  import { breadcrumbs, collection, describe, graph, pageTitle } from '$lib/seo';
   import { filterHref } from '$lib/filters';
   let { data } = $props();
   const topic = $derived(data.topic);
@@ -14,15 +15,24 @@
 </script>
 
 <Seo
-  title={`${topic.title} | ${project?.title} | Voidreg`}
-  description={topic.summary || `Posts about ${topic.title} in ${project?.title}.`}
-  structured={{
-    '@context': 'https://schema.org',
-    '@type': 'CollectionPage',
-    name: topic.title,
-    description: topic.summary,
-    url: 'https://www.voidreg.xyz' + data.base
-  }}
+  title={pageTitle(`${topic.title} in ${project?.title}`)}
+  description={describe(topic.summary, `Posts about ${topic.title} in ${project?.title}.`)}
+  noindex={Boolean(data.q)}
+  structured={graph([
+    collection(
+      topic.title,
+      data.base,
+      topic.summary || `Posts about ${topic.title} in ${project?.title}.`,
+      result.items,
+      (item) => '/blog/' + item.slug
+    ),
+    breadcrumbs([
+      { name: 'Home', path: '/' },
+      { name: 'Projects', path: '/projects' },
+      { name: project?.title ?? '', path: '/projects/' + (project?.slug ?? '') },
+      { name: topic.title, path: data.base }
+    ])
+  ])}
 />
 <main id="main-content" class="site-container page-shell">
   <Breadcrumb

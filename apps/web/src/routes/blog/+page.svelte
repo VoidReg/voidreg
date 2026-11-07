@@ -8,12 +8,32 @@
   import Pagination from '$lib/components/Pagination.svelte';
   import PostFilters from '$lib/components/PostFilters.svelte';
   import { filterHref } from '$lib/filters';
+  import { breadcrumbs, collection, describe, graph } from '$lib/seo';
   let { data } = $props();
   const result = $derived(data.result);
   const href = (page: number) => filterHref('/blog', { ...data.filters, page });
 </script>
 
-<Seo title="Blog | Voidreg" description={copy.blogDescription} />
+<Seo
+  title="Blog | Voidreg"
+  description={describe(copy.blogDescription)}
+  noindex={Boolean(
+    data.filters.q || data.filters.project || data.filters.topic || data.filters.tag
+  )}
+  structured={graph([
+    collection(
+      'Blog',
+      '/blog',
+      copy.blogDescription,
+      data.result.items,
+      (item) => '/blog/' + item.slug
+    ),
+    breadcrumbs([
+      { name: 'Home', path: '/' },
+      { name: 'Blog', path: '/blog' }
+    ])
+  ])}
+/>
 <main id="main-content" class="site-container page-shell">
   <Breadcrumb items={[{ label: 'Home', href: resolve('/') }, { label: 'Blog' }]} />
   <header class="section-stack">

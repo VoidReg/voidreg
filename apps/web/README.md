@@ -23,6 +23,22 @@ and never expose working drafts. Old slugs redirect permanently.
 and static public routes. Submit its canonical www URL to Search Console.
 The manual workflow builds a Node artifact instead of deploying static Pages.
 
+## Search and LLM access
+
+- Every page renders through `src/lib/Seo.svelte`, which owns the canonical URL (always the
+  `www` host), Open Graph and Twitter tags, `robots`, and one JSON-LD graph built with
+  `src/lib/seo.ts`. Filtered and search variants of list pages are `noindex,follow`.
+- `/blog/<slug>.md` and `/projects/<slug>.md` serve clean Markdown with front matter. They send
+  `Link: <html page>; rel="canonical"` so search engines index the HTML page only. Sending
+  `Accept: text/markdown` to the normal URL returns the same Markdown (`src/hooks.server.ts`).
+- `/llms.txt` indexes the site with Markdown links, `/llms-full.txt` holds the text of every post
+  (capped at about 1 MB), and `/rss.xml` lists the latest 50 posts. These and `/sitemap.xml`
+  are built from the public API and shared for five minutes.
+- `/admin/`, `/preview/`, `/api/` and `/mcp` stay out of `robots.txt` crawling and carry
+  `noindex` headers at nginx. The `.md` download at `/blog/<slug>/source.md` is unchanged.
+- The apex and `api.` hosts redirect page requests to `www` in `deploy/nginx/default.conf`.
+- Anonymous MCP access is documented in `apps/mcp/README.md`.
+
 Development proxies `/api` to localhost:8080. `VOIDREG_API_PROXY` overrides that
 target. Public reads use bounded memory caching and ETag revalidation; errors can
 be retried. Comments render plain text and remain hidden until approved.

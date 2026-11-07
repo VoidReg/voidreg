@@ -242,6 +242,19 @@
     white-space: nowrap;
   }
 
+  .code-sample {
+    margin: 0;
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--card);
+    color: var(--foreground);
+    font-family: var(--font-code);
+    font-size: 0.875rem;
+    line-height: 1.6;
+  }
+
   .text-link {
     color: var(--link);
     font-weight: 500;

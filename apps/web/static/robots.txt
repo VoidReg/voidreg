@@ -1,5 +1,27 @@
+# Voidreg welcomes search engines and LLM crawlers on every public page.
+# Clean Markdown for each post and project is listed in /llms.txt.
+
 User-agent: *
+Allow: /
 Disallow: /admin/
 Disallow: /preview/
+Disallow: /api/
+Disallow: /mcp
+
+User-agent: GPTBot
+User-agent: OAI-SearchBot
+User-agent: ChatGPT-User
+User-agent: ClaudeBot
+User-agent: Claude-SearchBot
+User-agent: Claude-User
+User-agent: PerplexityBot
+User-agent: Google-Extended
+User-agent: Applebot-Extended
+User-agent: CCBot
+Allow: /
+Disallow: /admin/
+Disallow: /preview/
+Disallow: /api/
+Disallow: /mcp
 
 Sitemap: https://www.voidreg.xyz/sitemap.xml

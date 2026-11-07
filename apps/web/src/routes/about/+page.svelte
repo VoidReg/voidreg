@@ -3,6 +3,8 @@
   import Breadcrumb from '$lib/components/Breadcrumb.svelte';
   import copy from '$lib/content/portfolio-copy.json';
   import Icon from '$lib/components/Icon.svelte';
+  import Seo from '$lib/Seo.svelte';
+  import { author, breadcrumbs, describe, graph } from '$lib/seo';
   import { resolve } from '$app/paths';
   import { enhance } from '$app/forms';
   import type { ActionData, PageData } from './$types';
@@ -13,10 +15,22 @@
   let failure = $derived(form !== null && 'error' in form ? form : null);
 </script>
 
-<svelte:head>
-  <title>About | Voidreg</title>
-  <meta name="description" content={copy.aboutDescription} />
-</svelte:head>
+<Seo
+  title="About | Voidreg"
+  description={describe(copy.aboutDescription)}
+  structured={graph([
+    {
+      '@type': 'ProfilePage',
+      name: 'About Voidreg',
+      url: 'https://www.voidreg.xyz/about',
+      mainEntity: { ...author, description: copy.aboutDescription }
+    },
+    breadcrumbs([
+      { name: 'Home', path: '/' },
+      { name: 'About', path: '/about' }
+    ])
+  ])}
+/>
 
 <main id="main-content" class="site-container page-shell about-page">
   <Breadcrumb items={[{ label: 'Home', href: resolve('/') }, { label: 'About' }]} />
@@ -140,9 +154,32 @@
     </div>
   </section>
 
+  <section id="agents" class="about-section" aria-labelledby="agents-heading">
+    <SectionLabel label="07 / Machine Readable" />
+    <h2 id="agents-heading">Read it with an agent.</h2>
+    <p>
+      Every post and project has a clean Markdown version: add <code>.md</code> to its address, or
+      ask for <code>text/markdown</code>.
+      <a class="text-link" href={resolve('/llms.txt')}>llms.txt</a>
+      lists them all, and the <a class="text-link" href={resolve('/rss.xml')}>RSS feed</a> follows new
+      posts.
+    </p>
+    <p>
+      To browse the knowledge base from an MCP client, add this server. No token is needed for
+      reading published posts and projects.
+    </p>
+    <pre class="code-sample"><code
+        >{`{
+  "mcpServers": {
+    "voidreg": { "url": "https://www.voidreg.xyz/mcp" }
+  }
+}`}</code
+      ></pre>
+  </section>
+
   <section id="contact" class="about-section contact-section" aria-labelledby="contact-heading">
     <div class="contact-copy">
-      <SectionLabel label="07 / Contact" />
+      <SectionLabel label="08 / Contact" />
       <h2 id="contact-heading">Want to compare notes?</h2>
       <p class="lead">
         {copy.contact}

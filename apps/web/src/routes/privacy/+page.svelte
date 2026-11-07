@@ -3,15 +3,13 @@
   import Breadcrumb from '$lib/components/Breadcrumb.svelte';
   import { resolve } from '$app/paths';
   import { openCookieSettings } from '$lib/consent';
+  import Seo from '$lib/Seo.svelte';
 </script>
 
-<svelte:head>
-  <title>Privacy and cookies | Voidreg</title>
-  <meta
-    name="description"
-    content="How Voidreg uses strictly necessary cookies, what is stored, and how to change your preferences."
-  />
-</svelte:head>
+<Seo
+  title="Privacy and cookies | Voidreg"
+  description="How Voidreg uses strictly necessary cookies, what is stored, and how to change your preferences."
+/>
 
 <main id="main-content" class="site-container page-shell privacy-page">
   <Breadcrumb items={[{ label: 'Home', href: resolve('/') }, { label: 'Privacy' }]} />

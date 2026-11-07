@@ -1,6 +1,7 @@
 import { error, redirect } from '@sveltejs/kit';
 import { TtlCache } from '../ttl-cache';
-export const site = 'https://www.voidreg.xyz';
+import { SITE } from '../seo';
+export const site = SITE;
 export async function publicContent<T>(path: string, fetcher: typeof fetch): Promise<T> {
   let response: Response;
   try {

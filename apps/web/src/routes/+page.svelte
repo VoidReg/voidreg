@@ -12,6 +12,7 @@
   import SectionHeader from '$lib/components/SectionHeader.svelte';
   import ArticleCard from '$lib/publishing/ArticleCard.svelte';
   import Seo from '$lib/Seo.svelte';
+  import { graph, website } from '$lib/seo';
   import { resolve } from '$app/paths';
 
   let { data } = $props();
@@ -25,7 +26,11 @@
   const interestItems = copy.interests.split(/\s*\|\s*|\n/).filter(Boolean);
 </script>
 
-<Seo title="Voidreg | Deep dive into the Void" description={copy.homeDescription} />
+<Seo
+  title="Voidreg | Deep dive into the Void"
+  description={copy.homeDescription}
+  structured={graph(website(copy.homeDescription))}
+/>
 
 <main id="main-content" class="home-page">
   <section class="band hero-band" aria-labelledby="hero-title">

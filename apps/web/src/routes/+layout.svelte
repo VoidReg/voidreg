@@ -11,6 +11,10 @@
 </script>
 
 <svelte:head>
+  <meta property="og:site_name" content="Voidreg" />
+  <meta property="og:locale" content="en_US" />
+  <link rel="alternate" type="application/rss+xml" title="Voidreg posts" href="/rss.xml" />
+  <link rel="alternate" type="text/plain" title="Voidreg for LLMs" href="/llms.txt" />
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#0b0f14" media="(prefers-color-scheme: dark)" />
 </svelte:head>
