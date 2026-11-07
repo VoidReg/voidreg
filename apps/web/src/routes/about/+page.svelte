@@ -1,4 +1,6 @@
 <script lang="ts">
+  import SectionLabel from '$lib/components/SectionLabel.svelte';
+  import Breadcrumb from '$lib/components/Breadcrumb.svelte';
   import copy from '$lib/content/portfolio-copy.json';
   import Icon from '$lib/components/Icon.svelte';
   import { resolve } from '$app/paths';
@@ -17,13 +19,10 @@
 </svelte:head>
 
 <main id="main-content" class="site-container page-shell about-page">
-  <nav class="breadcrumb" aria-label="Breadcrumb">
-    <a href={resolve('/')}>Home</a><span>/</span><span aria-current="page">About</span>
-  </nav>
+  <Breadcrumb items={[{ label: 'Home', href: resolve('/') }, { label: 'About' }]} />
 
   <section class="about-section overview">
-    <p class="eyebrow">01 / Overview</p>
-    <p class="eyebrow">About</p>
+    <SectionLabel label="01 / Overview" />
     <h1 class="display-heading">{copy.aboutTitle}</h1>
     <p class="lead">
       {copy.aboutIntro}
@@ -39,7 +38,7 @@
   </section>
 
   <section class="about-section prose-section">
-    <p class="eyebrow">02 / Background</p>
+    <SectionLabel label="02 / Background" />
     <h2>I learn by building.</h2>
     <p>
       Most of what I know comes from implementing systems and then digging into why they behave the
@@ -55,7 +54,7 @@
   </section>
 
   <section class="about-section">
-    <p class="eyebrow">{copy.interestLabel}</p>
+    <SectionLabel label={copy.interestLabel} />
     <div class="practice-grid">
       <article>
         <h2>Systems</h2>
@@ -81,7 +80,7 @@
   </section>
 
   <section class="about-section">
-    <p class="eyebrow">04 / Building and Writing</p>
+    <SectionLabel label="04 / Building and Writing" />
     <div class="two-column">
       <article>
         <p class="eyebrow">Building</p>
@@ -107,7 +106,7 @@
   </section>
 
   <section class="about-section principles">
-    <p class="eyebrow">05 / Engineering Principles</p>
+    <SectionLabel label="05 / Engineering Principles" />
     <h2>Explicit constraints</h2>
     <h2>Understandable architecture</h2>
     <h2>Usable tools</h2>
@@ -118,7 +117,7 @@
   </section>
 
   <section class="about-section">
-    <p class="eyebrow">{copy.focusLabel}</p>
+    <SectionLabel label={copy.focusLabel} />
     <div class="two-column focus-columns">
       <div>
         <p class="eyebrow">{copy.buildingLabel}</p>
@@ -143,7 +142,7 @@
 
   <section id="contact" class="about-section contact-section" aria-labelledby="contact-heading">
     <div class="contact-copy">
-      <p class="eyebrow">07 / Contact</p>
+      <SectionLabel label="07 / Contact" />
       <h2 id="contact-heading">Want to compare notes?</h2>
       <p class="lead">
         {copy.contact}

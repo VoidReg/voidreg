@@ -34,14 +34,14 @@
       <ul class="strip-list" bind:this={first}>
         {#each items as item (item)}<li class="strip-item">{item}</li>{/each}
       </ul>
-      {#each Array(repeat - 1) as _, copy (copy)}
+      {#each { length: repeat - 1 }, copy (copy)}
         <ul class="strip-list strip-repeat" aria-hidden="true">
           {#each items as item (item)}<li class="strip-item">{item}</li>{/each}
         </ul>
       {/each}
     </div>
     <div class="strip-group strip-dup" aria-hidden="true">
-      {#each Array(repeat) as _, copy (copy)}
+      {#each { length: repeat }, copy (copy)}
         <ul class="strip-list">
           {#each items as item (item)}<li class="strip-item">{item}</li>{/each}
         </ul>

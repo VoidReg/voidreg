@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Breadcrumb from '$lib/components/Breadcrumb.svelte';
   import { resolve } from '$app/paths';
   import EmptyContent from '$lib/components/EmptyContent.svelte';
   import ArticleCard from '$lib/publishing/ArticleCard.svelte';
@@ -24,13 +25,17 @@
   }}
 />
 <main id="main-content" class="site-container page-shell">
-  <nav class="breadcrumb" aria-label="Breadcrumb">
-    <a href={resolve('/')}>Home</a><span>/</span><a href={resolve('/projects')}>Projects</a><span
-      >/</span
-    ><a href={resolve('/projects/[slug]', { slug: project?.slug ?? '' })}>{project?.title}</a><span
-      >/</span
-    ><span aria-current="page">{topic.title}</span>
-  </nav>
+  <Breadcrumb
+    items={[
+      { label: 'Home', href: resolve('/') },
+      { label: 'Projects', href: resolve('/projects') },
+      {
+        label: project?.title ?? '',
+        href: resolve('/projects/[slug]', { slug: project?.slug ?? '' })
+      },
+      { label: topic.title }
+    ]}
+  />
   <header class="section-stack">
     <p class="eyebrow">Topic in {project?.title}</p>
     <h1 class="display-heading">{topic.title}</h1>

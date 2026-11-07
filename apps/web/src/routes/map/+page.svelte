@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Breadcrumb from '$lib/components/Breadcrumb.svelte';
   import { resolve } from '$app/paths';
   import MapSection from '$lib/map/MapSection.svelte';
   import Seo from '$lib/Seo.svelte';
@@ -12,9 +13,7 @@
   description="How Voidreg projects, the posts that follow them, and the technologies they share connect."
 />
 <main id="main-content" class="site-container page-shell">
-  <nav class="breadcrumb" aria-label="Breadcrumb">
-    <a href={resolve('/')}>Home</a><span>/</span><span aria-current="page">Map</span>
-  </nav>
+  <Breadcrumb items={[{ label: 'Home', href: resolve('/') }, { label: 'Map' }]} />
   <header class="section-stack">
     <p class="eyebrow">Knowledge map</p>
     <h1 class="display-heading">Projects and the writing that follows them</h1>

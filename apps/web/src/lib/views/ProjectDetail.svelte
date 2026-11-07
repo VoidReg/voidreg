@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Breadcrumb from '$lib/components/Breadcrumb.svelte';
   import { resolve } from '$app/paths';
   import ReadingColumn from '$lib/components/ReadingColumn.svelte';
   import ArticleBody from '@voidreg/publishing-ui/ArticleBody.svelte';
@@ -17,11 +18,13 @@
 
 <main id="main-content" class="site-container page-shell">
   <ReadingColumn>
-    <nav class="breadcrumb" aria-label="Breadcrumb">
-      <a href={resolve('/')}>Home</a><span>/</span><a href={resolve('/projects')}>Projects</a><span
-        >/</span
-      ><span aria-current="page">{project.title}</span>
-    </nav>
+    <Breadcrumb
+      items={[
+        { label: 'Home', href: resolve('/') },
+        { label: 'Projects', href: resolve('/projects') },
+        { label: project.title }
+      ]}
+    />
   </ReadingColumn>
   <article class="section-stack detail-article">
     <ReadingColumn>

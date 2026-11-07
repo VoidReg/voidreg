@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Breadcrumb from '$lib/components/Breadcrumb.svelte';
   import { resolve } from '$app/paths';
   import ReadingColumn from '$lib/components/ReadingColumn.svelte';
   import ArticleBody from '@voidreg/publishing-ui/ArticleBody.svelte';
@@ -27,20 +28,30 @@
 
 <main id="main-content" class="site-container page-shell">
   <ReadingColumn>
-    <nav class="breadcrumb" aria-label="Breadcrumb">
-      <a href={resolve('/')}>Home</a><span>/</span>{#if topic}<a href={resolve('/projects')}
-          >Projects</a
-        ><span>/</span><a href={resolve('/projects/[slug]', { slug: topic.project.slug })}
-          >{topic.project.title}</a
-        ><span>/</span>{#if live}<a
-            href={resolve('/projects/[slug]/topics/[topic]', {
-              slug: topic.project.slug,
-              topic: topic.slug
-            })}>{topic.title}</a
-          >{:else}<span>{topic.title}</span>{/if}<span>/</span>{:else}<a href={resolve('/blog')}
-          >Blog</a
-        ><span>/</span>{/if}<span aria-current="page">{article.title}</span>
-    </nav>
+    <Breadcrumb
+      items={[
+        { label: 'Home', href: resolve('/') },
+        ...(topic
+          ? [
+              { label: 'Projects', href: resolve('/projects') },
+              {
+                label: topic.project.title,
+                href: resolve('/projects/[slug]', { slug: topic.project.slug })
+              },
+              {
+                label: topic.title,
+                href: live
+                  ? resolve('/projects/[slug]/topics/[topic]', {
+                      slug: topic.project.slug,
+                      topic: topic.slug
+                    })
+                  : undefined
+              }
+            ]
+          : [{ label: 'Blog', href: resolve('/blog') }]),
+        { label: article.title }
+      ]}
+    />
   </ReadingColumn>
   <article class="section-stack detail-article">
     <ReadingColumn>

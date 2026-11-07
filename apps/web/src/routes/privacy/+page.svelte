@@ -1,4 +1,6 @@
 <script lang="ts">
+  import SectionLabel from '$lib/components/SectionLabel.svelte';
+  import Breadcrumb from '$lib/components/Breadcrumb.svelte';
   import { resolve } from '$app/paths';
   import { openCookieSettings } from '$lib/consent';
 </script>
@@ -12,9 +14,7 @@
 </svelte:head>
 
 <main id="main-content" class="site-container page-shell privacy-page">
-  <nav class="breadcrumb" aria-label="Breadcrumb">
-    <a href={resolve('/')}>Home</a><span>/</span><span aria-current="page">Privacy</span>
-  </nav>
+  <Breadcrumb items={[{ label: 'Home', href: resolve('/') }, { label: 'Privacy' }]} />
 
   <section class="privacy-section">
     <p class="eyebrow">Privacy</p>
@@ -27,7 +27,7 @@
   </section>
 
   <section class="privacy-section">
-    <p class="eyebrow">01 / Controller</p>
+    <SectionLabel label="01 / Controller" />
     <h2>Who is responsible</h2>
     <p>
       The operator of Voidreg is the controller for personal data processed through this website.
@@ -37,7 +37,7 @@
   </section>
 
   <section class="privacy-section">
-    <p class="eyebrow">02 / What we store</p>
+    <SectionLabel label="02 / What we store" />
     <h2>Cookies we use</h2>
     <p>
       Cookies are small files stored on your device. This site uses first-party cookies only. Theme
@@ -79,7 +79,7 @@
   </section>
 
   <section class="privacy-section">
-    <p class="eyebrow">03 / Legal bases</p>
+    <SectionLabel label="03 / Legal bases" />
     <h2>Why this is allowed</h2>
     <ul>
       <li>
@@ -96,7 +96,7 @@
   </section>
 
   <section class="privacy-section">
-    <p class="eyebrow">04 / Recipients and retention</p>
+    <SectionLabel label="04 / Recipients and retention" />
     <h2>Who sees data, and for how long</h2>
     <p>
       The site is statically hosted. The hosting provider processes technical request data (such as
@@ -112,7 +112,7 @@
   </section>
 
   <section class="privacy-section">
-    <p class="eyebrow">05 / Your rights</p>
+    <SectionLabel label="05 / Your rights" />
     <h2>Control and complaints</h2>
     <p>
       Depending on applicable law you may request access, correction, erasure, restriction,

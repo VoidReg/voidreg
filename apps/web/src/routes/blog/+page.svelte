@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Breadcrumb from '$lib/components/Breadcrumb.svelte';
   import copy from '$lib/content/portfolio-copy.json';
   import EmptyContent from '$lib/components/EmptyContent.svelte';
   import ArticleCard from '$lib/publishing/ArticleCard.svelte';
@@ -14,9 +15,7 @@
 
 <Seo title="Blog | Voidreg" description={copy.blogDescription} />
 <main id="main-content" class="site-container page-shell">
-  <nav class="breadcrumb" aria-label="Breadcrumb">
-    <a href={resolve('/')}>Home</a><span>/</span><span aria-current="page">Blog</span>
-  </nav>
+  <Breadcrumb items={[{ label: 'Home', href: resolve('/') }, { label: 'Blog' }]} />
   <header class="section-stack">
     <p class="eyebrow">{copy.blogEyebrow}</p>
     <h1 class="display-heading">{copy.blogTitle}</h1>

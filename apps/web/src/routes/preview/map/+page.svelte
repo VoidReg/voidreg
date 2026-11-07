@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Breadcrumb from '$lib/components/Breadcrumb.svelte';
   import { resolve } from '$app/paths';
   import MapSection from '$lib/map/MapSection.svelte';
   let { data } = $props();
@@ -8,11 +9,7 @@
 
 <svelte:head><title>Preview: Knowledge map</title></svelte:head>
 <main id="main-content" class="site-container page-shell">
-  <nav class="breadcrumb" aria-label="Breadcrumb">
-    <a href={resolve('/map')}>Published map</a><span>/</span><span aria-current="page"
-      >Draft map</span
-    >
-  </nav>
+  <Breadcrumb items={[{ label: 'Published map', href: resolve('/map') }, { label: 'Draft map' }]} />
   <header class="section-stack">
     <p class="eyebrow">Draft knowledge map</p>
     <h1 class="display-heading">The map as it will look once everything is published</h1>
