@@ -113,6 +113,8 @@ pub struct McpToken {
     pub created_at: String,
     pub expires_at: String,
     pub last_used_at: Option<String>,
+    /// Comma-separated extra permissions. Empty means the default: read content, edit article drafts.
+    pub scopes: String,
 }
 
 #[derive(Debug, toasty::Model)]

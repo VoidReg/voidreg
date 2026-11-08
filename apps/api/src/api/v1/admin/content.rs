@@ -130,12 +130,40 @@ pub async fn create(
     input: web::Json<Value>,
 ) -> Result<HttpResponse, AppError> {
     session.validate(&db).await?;
+    Ok(HttpResponse::Created().json(create_project_draft(&db, &input).await?))
+}
+/// Creates a project draft from the allowed fields of `input`. Never publishes.
+pub async fn create_project_draft(db: &Db, input: &Value) -> Result<Value, AppError> {
     let mut value = json!({"slug":format!("project-{}",uuid::Uuid::new_v4()),"title":"Untitled project","category":"","summary":"","tags":[],"sections":[],"hero":null,"related_slugs":[],"related_project_ids":[],"repo_url":null,"has_detail_page":true,"featured":false,"sort_order":0,"document":{"schemaVersion":1,"metadata":{"language":"en"},"blocks":[]},"compiled":null});
-    merge_fields(&mut value, &input);
+    merge_fields(&mut value, input);
     normalize_project_tags(&mut value)?;
     value["status"] = json!("draft");
     validate(&value)?;
-    Ok(HttpResponse::Created().json(db.content_create("project", value).await?))
+    db.content_create("project", value).await
+}
+/// Saves the working copy of a project. With `draft_only`, a project that has ever been
+/// published is refused, so callers without publishing rights cannot touch live content.
+pub async fn update_project_draft(
+    db: &Db,
+    slug: &str,
+    input: &Value,
+    draft_only: bool,
+) -> Result<Value, AppError> {
+    let mut current = db.content_get("project", slug, false).await?;
+    let revision = input["expected_revision"]
+        .as_i64()
+        .ok_or_else(|| AppError::Conflict("expected_revision required".into()))?;
+    if input.get("document").is_some() {
+        current["compiled"] = Value::Null;
+    }
+    merge_fields(&mut current, input);
+    normalize_project_tags(&mut current)?;
+    validate(&current)?;
+    if current["slug"] != slug {
+        current["pending_slug"] = current["slug"].clone();
+    }
+    db.content_save("project", slug, revision, current, draft_only)
+        .await
 }
 #[cfg_attr(feature="swagger", utoipa::path(put,path="/api/v1/admin/projects/{slug}",tag="admin",params(("slug"=String,Path)),request_body=Object,responses((status=200,description="Project draft saved"))))]
 #[put("/projects/{slug}")]
@@ -146,23 +174,7 @@ pub async fn update(
     input: web::Json<Value>,
 ) -> Result<HttpResponse, AppError> {
     session.validate(&db).await?;
-    let mut current = db.content_get("project", &slug, false).await?;
-    let revision = input["expected_revision"]
-        .as_i64()
-        .ok_or_else(|| AppError::Conflict("expected_revision required".into()))?;
-    if input.get("document").is_some() {
-        current["compiled"] = Value::Null;
-    }
-    merge_fields(&mut current, &input);
-    normalize_project_tags(&mut current)?;
-    validate(&current)?;
-    if current["slug"] != *slug {
-        current["pending_slug"] = current["slug"].clone();
-    }
-    Ok(HttpResponse::Ok().json(
-        db.content_save("project", &slug, revision, current, false)
-            .await?,
-    ))
+    Ok(HttpResponse::Ok().json(update_project_draft(&db, &slug, &input, false).await?))
 }
 #[cfg_attr(feature="swagger", utoipa::path(post,path="/api/v1/admin/{kind}/{slug}/{action}",tag="admin",params(("kind"=String,Path),("slug"=String,Path),("action"=String,Path)),request_body=Object,responses((status=200,description="Revision-checked publication, archive, or restore"))))]
 #[post("/{kind}/{slug}/{action}")]

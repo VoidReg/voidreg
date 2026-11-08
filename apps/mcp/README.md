@@ -45,7 +45,10 @@ The reader serves the same content to crawlers: `/llms.txt`, `/llms-full.txt`,
    your client's supported syntax. Never commit it to a repository.
 
 Tokens are shown once, expire after 30 days, and can be revoked in admin.
-They read articles and write drafts only. Admin cookies, GitHub client secrets,
+They read articles and write drafts only. Tick **Allow creating and editing project
+drafts** when creating a token to add the project tools below. The permission is fixed
+for the life of the token, shown as a badge in the token list, and removed by revoking
+the token. It never allows publishing. Admin cookies, GitHub client secrets,
 and personal GitHub access tokens are not MCP credentials. Hosted OAuth
 connectors are not supported in this version.
 
@@ -76,6 +79,21 @@ connectors are not supported in this version.
   appear on the site once they hold published posts.
 - `update_topic`: rename or re-describe a topic with its `expected_revision`.
   Deleting topics is done by the owner in admin.
+
+### Project drafts (opt-in permission)
+
+Only tokens created with the project permission see these tools. They never publish.
+
+- `list_projects`: project summaries including drafts, with revisions.
+- `get_project`: a project's working copy with its Markdown, status and revision.
+- `create_project`: provide title, category, summary, one content format, and optionally
+  `slug`, `tags`, `repo_url`, `demo_url`, `featured`, `sort_order` and `related` (project
+  slugs, resolved to ids). The project is created as a draft.
+- `update_project`: provide slug and `expected_revision`. Only drafts that have never
+  been published can be edited. Once a project has been published, edit it in admin.
+
+Review, compile and publish in admin, where `admin_url` in each result points.
+Compiled output, SEO fields, media, URLs and deletion are not accepted.
 
 On a conflict, fetch the current article and reconcile before retrying. Never
 blindly retry an old replacement with a newer revision. Unknown input fields and

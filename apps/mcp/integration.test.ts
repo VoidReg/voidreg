@@ -455,3 +455,119 @@ for (const mode of ['legacy', 'auto'] as const) {
     }
   });
 }
+
+test('the projects permission adds project draft tools and nothing more', async () => {
+  const token = 'vr_mcp_' + 'b'.repeat(64);
+  let scopes: string[] = [];
+  const projects = new Map<string, Record<string, unknown>>([
+    ['alpha', { id: 'id-alpha', slug: 'alpha', status: 'draft', revision: 1, title: 'Alpha' }]
+  ]);
+  const writes: { method: string; path: string; body: Record<string, unknown> }[] = [];
+  const backend = createServer(async (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    if (req.headers.authorization !== 'Bearer ' + token) {
+      res.writeHead(401).end('{}');
+      return;
+    }
+    const url = new URL(req.url!, 'http://api');
+    if (url.pathname.endsWith('/session')) {
+      res.end(JSON.stringify({ authenticated: true, scopes }));
+      return;
+    }
+    const slug = url.pathname.split('/')[5];
+    if (req.method === 'GET') {
+      const project = slug ? projects.get(slug) : undefined;
+      if (!slug) res.end(JSON.stringify({ items: [...projects.values()], total: projects.size }));
+      else res.writeHead(project ? 200 : 404).end(JSON.stringify(project ?? {}));
+      return;
+    }
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) chunks.push(Buffer.from(chunk));
+    const body = JSON.parse(Buffer.concat(chunks).toString());
+    writes.push({ method: req.method!, path: url.pathname, body });
+    const project = {
+      ...projects.get(slug ?? ''),
+      ...body,
+      id: 'id-' + (slug ?? body.slug),
+      slug: slug ?? body.slug,
+      status: 'draft',
+      revision: 2
+    };
+    projects.set(project.slug, project);
+    res.writeHead(slug ? 200 : 201).end(JSON.stringify(project));
+  });
+  const api = await listen(backend);
+  const http = createHttpServer(api, 'http://127.0.0.1');
+  const origin = await listen(http);
+  const connect = async () => {
+    const client = new Client({ name: 'test-client', version: '1' });
+    await client.connect(
+      new StreamableHTTPClientTransport(new URL(origin + '/mcp'), {
+        requestInit: { headers: { Authorization: 'Bearer ' + token } }
+      })
+    );
+    return client;
+  };
+  const projectTools = ['create_project', 'get_project', 'list_projects', 'update_project'];
+  try {
+    const plain = await connect();
+    const names = (await plain.listTools()).tools.map((t) => t.name);
+    for (const name of projectTools) assert(!names.includes(name), name);
+    await plain.close();
+
+    scopes = ['projects'];
+    const client = await connect();
+    const listed = (await client.listTools()).tools.map((t) => t.name);
+    for (const name of projectTools) assert(listed.includes(name), name);
+    assert(!listed.some((name) => /publish|delete/.test(name)));
+
+    const created = await client.callTool({
+      name: 'create_project',
+      arguments: {
+        title: 'Beta',
+        category: 'Systems',
+        summary: 'A project',
+        slug: 'beta',
+        tags: ['rust'],
+        related: ['alpha'],
+        repo_url: 'https://github.com/example/beta',
+        markdown: '## What it is\n\nA draft.\n'
+      }
+    });
+    assert(!created.isError, JSON.stringify(created));
+    const post = writes.at(-1)!;
+    assert.equal(post.path, '/api/v1/mcp/projects');
+    assert.deepEqual(post.body.related_project_ids, ['id-alpha']);
+    assert.equal(post.body.slug, 'beta');
+    assert.equal('compiled' in post.body, false);
+    assert.equal(
+      (created.structuredContent as { admin_url: string }).admin_url,
+      'http://127.0.0.1/admin/?project=beta'
+    );
+
+    const updated = await client.callTool({
+      name: 'update_project',
+      arguments: { slug: 'beta', expected_revision: 2, summary: 'Better summary', featured: true }
+    });
+    assert(!updated.isError, JSON.stringify(updated));
+    const put = writes.at(-1)!;
+    assert.equal(put.path, '/api/v1/mcp/projects/beta');
+    assert.equal('slug' in put.body, false);
+    assert.equal(put.body.featured, true);
+
+    const stale = await client.callTool({
+      name: 'update_project',
+      arguments: { slug: 'beta', expected_revision: 1, title: 'Stale' }
+    });
+    assert.equal(stale.isError, true);
+    const extra = await client.callTool({
+      name: 'create_project',
+      arguments: { title: 'X', category: 'Y', summary: 'Z', markdown: 'Hi', compiled: {} }
+    });
+    assert.equal(extra.isError, true);
+    await client.close();
+  } finally {
+    await close(http);
+    await close(backend);
+  }
+});

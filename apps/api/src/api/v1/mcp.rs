@@ -1,5 +1,7 @@
 //! Private HTTP bridge for the MCP service. Nginx denies public access.
-//! Bearer credentials never grant cookie-admin access or publishing rights.
+//! Bearer credentials never grant cookie-admin access or publishing rights. A token reads
+//! content and edits article drafts. The `projects` permission, chosen by the owner when the
+//! token is created, adds creating and editing project drafts. Nothing here publishes.
 use crate::{
     auth::{hash_token, rate::RateLimiter},
     config::Config,
@@ -11,12 +13,13 @@ use actix_web::{HttpRequest, HttpResponse, get, post, put, web};
 use serde::Deserialize;
 use serde_json::Value;
 
+/// Checks the bearer token and returns the extra permissions it carries.
 pub async fn authorize(
     request: &HttpRequest,
     db: &Db,
     config: &Config,
     limiter: &RateLimiter,
-) -> Result<(), AppError> {
+) -> Result<Vec<String>, AppError> {
     let token = request
         .headers()
         .get("authorization")
@@ -25,8 +28,8 @@ pub async fn authorize(
         .filter(|s| s.starts_with("vr_mcp_") && s.len() <= 128)
         .ok_or_else(|| AppError::Unauthorized("MCP bearer token required".into()))?;
     let hash = hash_token(token);
-    let identity = db
-        .mcp_token_identity(&hash)
+    let (identity, scopes) = db
+        .mcp_token_auth(&hash)
         .await?
         .ok_or_else(|| AppError::Unauthorized("MCP token expired or revoked".into()))?;
     let (provider, subject) = db
@@ -48,7 +51,16 @@ pub async fn authorize(
         ));
     }
     db.touch_mcp_token(&hash).await?;
-    Ok(())
+    Ok(scopes)
+}
+
+fn require_scope(scopes: &[String], scope: &str) -> Result<(), AppError> {
+    if scopes.iter().any(|s| s == scope) {
+        return Ok(());
+    }
+    Err(AppError::Forbidden(format!(
+        "This token cannot do that. Create a new token with the '{scope}' permission in admin."
+    )))
 }
 #[get("/session")]
 async fn session(
@@ -57,8 +69,8 @@ async fn session(
     config: web::Data<Config>,
     limiter: web::Data<RateLimiter>,
 ) -> Result<HttpResponse, AppError> {
-    authorize(&request, &db, &config, &limiter).await?;
-    Ok(HttpResponse::Ok().json(serde_json::json!({"authenticated": true})))
+    let scopes = authorize(&request, &db, &config, &limiter).await?;
+    Ok(HttpResponse::Ok().json(serde_json::json!({"authenticated": true, "scopes": scopes})))
 }
 #[derive(Deserialize)]
 struct ListQuery {
@@ -214,6 +226,82 @@ async fn project(
     authorize(&request, &db, &config, &limiter).await?;
     Ok(HttpResponse::Ok().json(db.content_get("project", &slug, false).await?))
 }
+/// Working copies of projects, drafts included.
+#[get("/projects")]
+async fn list_projects(
+    request: HttpRequest,
+    db: web::Data<Db>,
+    config: web::Data<Config>,
+    limiter: web::Data<RateLimiter>,
+    query: web::Query<crate::db::content::ContentQuery>,
+) -> Result<HttpResponse, AppError> {
+    authorize(&request, &db, &config, &limiter).await?;
+    Ok(HttpResponse::Ok().json(db.content_page("project", false, &query).await?))
+}
+
+/// Fields a project-scoped token may set. Media, SEO fields, the compiled artifact and URL
+/// changes stay with the owner. Featured and order only take effect when the owner publishes.
+const PROJECT_FIELDS: &[&str] = &[
+    "title",
+    "category",
+    "summary",
+    "tags",
+    "repo_url",
+    "demo_url",
+    "featured",
+    "sort_order",
+    "document",
+    "related_project_ids",
+];
+
+fn restrict_project(input: &Value, creating: bool) -> Result<(), AppError> {
+    let Some(fields) = input.as_object() else {
+        return Err(AppError::Unprocessable("expected a JSON object".into()));
+    };
+    for key in fields.keys() {
+        let allowed = PROJECT_FIELDS.contains(&key.as_str())
+            || key == "expected_revision" && !creating
+            || key == "slug" && creating;
+        if !allowed {
+            return Err(AppError::Forbidden(format!(
+                "MCP may not set '{key}' on a project. Use admin for media, SEO, URLs and publishing."
+            )));
+        }
+    }
+    Ok(())
+}
+
+#[post("/projects")]
+async fn create_project(
+    request: HttpRequest,
+    db: web::Data<Db>,
+    config: web::Data<Config>,
+    limiter: web::Data<RateLimiter>,
+    input: web::Json<Value>,
+) -> Result<HttpResponse, AppError> {
+    let scopes = authorize(&request, &db, &config, &limiter).await?;
+    require_scope(&scopes, super::admin::mcp::SCOPE_PROJECTS)?;
+    restrict_project(&input, true)?;
+    Ok(HttpResponse::Created()
+        .json(super::admin::content::create_project_draft(&db, &input).await?))
+}
+
+#[put("/projects/{slug}")]
+async fn update_project(
+    request: HttpRequest,
+    db: web::Data<Db>,
+    config: web::Data<Config>,
+    limiter: web::Data<RateLimiter>,
+    slug: web::Path<String>,
+    input: web::Json<Value>,
+) -> Result<HttpResponse, AppError> {
+    let scopes = authorize(&request, &db, &config, &limiter).await?;
+    require_scope(&scopes, super::admin::mcp::SCOPE_PROJECTS)?;
+    restrict_project(&input, false)?;
+    Ok(HttpResponse::Ok()
+        .json(super::admin::content::update_project_draft(&db, &slug, &input, true).await?))
+}
+
 #[get("/topics")]
 async fn topics(
     request: HttpRequest,
@@ -275,6 +363,9 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(create)
         .service(update)
         .service(project)
+        .service(list_projects)
+        .service(create_project)
+        .service(update_project)
         .service(topics)
         .service(topic)
         .service(create_topic)

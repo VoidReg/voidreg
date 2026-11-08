@@ -120,7 +120,10 @@ export function createHttpServer(apiUrl: string, publicOrigin: string, webUrl = 
     };
     try {
       // Authenticate discovery and validation too, even when no draft is read.
-      await bridge('/session');
+      const session = await bridge('/session');
+      const scopes = Array.isArray(session.scopes)
+        ? session.scopes.filter((scope): scope is string => typeof scope === 'string')
+        : [];
       if (req.method !== 'POST') {
         respond(res, 405, 'Only POST is supported by this stateless MCP server');
         return;
@@ -142,7 +145,7 @@ export function createHttpServer(apiUrl: string, publicOrigin: string, webUrl = 
         respond(res, 400, 'Invalid JSON');
         return;
       }
-      const handler = createMcpHandler(() => createTools(bridge, publicOrigin), {
+      const handler = createMcpHandler(() => createTools(bridge, publicOrigin, scopes), {
         legacy: 'stateless',
         responseMode: 'auto'
       });

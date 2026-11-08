@@ -11,9 +11,11 @@
     created_at: string;
     expires_at: string;
     last_used_at: string | null;
+    scopes?: string[];
   };
   let connections = $state<Connection[]>([]);
   let name = $state('');
+  let projects = $state(false);
   let token = $state('');
   let tokenId = $state('');
   let reveal = $state(false);
@@ -82,11 +84,12 @@
       const result = await adminRequest<{ token: string; connection: Connection }>(
         '/mcp-tokens',
         'POST',
-        { name }
+        { name, scopes: projects ? ['projects'] : [] }
       );
       token = result.token;
       tokenId = result.connection.id;
       name = '';
+      projects = false;
       connections = [...connections, result.connection];
       notify.success('Connection created. Copy the token now; it is shown only once.');
     } catch (e) {
@@ -151,6 +154,16 @@
       <button class="ui-btn ui-btn-primary" disabled={busy || loading || !name.trim()}
         >{busy ? 'Working...' : 'Create token'}</button
       >
+      <label class="scope">
+        <input type="checkbox" bind:checked={projects} />
+        <span>
+          Allow creating and editing project drafts
+          <span class="hint"
+            >Off by default. A token can always read content and edit article drafts. No token can
+            publish, delete, or change media, SEO or URLs.</span
+          >
+        </span>
+      </label>
     </form>
     {#if token}
       <div class="token ui-notice" role="group" aria-label="New access token">
@@ -235,7 +248,12 @@
             {#each connections as connection (connection.id)}
               {@const left = daysLeft(connection.expires_at)}
               <tr>
-                <th scope="row">{connection.name}</th>
+                <th scope="row"
+                  >{connection.name}
+                  {#if connection.scopes?.includes('projects')}<span class="ui-badge"
+                      >Project drafts</span
+                    >{/if}</th
+                >
                 <td>
                   {when.format(new Date(connection.expires_at))}
                   {#if left <= 0}<span class="ui-badge warn">Expired</span>
@@ -298,6 +316,18 @@
     grid-template-columns: minmax(0, 24rem) auto;
     gap: 0.75rem;
     align-items: end;
+  }
+  .scope {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.625rem;
+  }
+  .scope input {
+    margin-block-start: 0.25rem;
+  }
+  .scope .hint {
+    display: block;
   }
   .token {
     display: grid;

@@ -535,12 +535,25 @@ impl Db {
         Ok(row.map(|row| (row.provider, row.subject)))
     }
 
+    /// A token with the default permissions: read content and edit article drafts.
     pub async fn create_mcp_token(
         &self,
         identity_id: &str,
         name: &str,
         hash: &str,
         ttl_hours: i64,
+    ) -> Result<McpTokenInfo, AppError> {
+        self.create_mcp_token_with_scopes(identity_id, name, hash, ttl_hours, &[])
+            .await
+    }
+
+    pub async fn create_mcp_token_with_scopes(
+        &self,
+        identity_id: &str,
+        name: &str,
+        hash: &str,
+        ttl_hours: i64,
+        scopes: &[String],
     ) -> Result<McpTokenInfo, AppError> {
         let mut db = self.inner.lock().await;
         let row = toasty::create!(models::McpToken {
@@ -550,6 +563,7 @@ impl Db {
             created_at: now_rfc3339(),
             expires_at: crate::util::rfc3339_plus_hours(ttl_hours),
             last_used_at: None,
+            scopes: scopes.join(","),
         })
         .exec(&mut *db)
         .await?;
@@ -576,6 +590,17 @@ impl Db {
     }
 
     pub async fn mcp_token_identity(&self, hash: &str) -> Result<Option<String>, AppError> {
+        Ok(self
+            .mcp_token_auth(hash)
+            .await?
+            .map(|(identity, _)| identity))
+    }
+
+    /// The owner and extra permissions of a live token.
+    pub async fn mcp_token_auth(
+        &self,
+        hash: &str,
+    ) -> Result<Option<(String, Vec<String>)>, AppError> {
         let mut db = self.inner.lock().await;
         let Some(row) = models::McpToken::filter_by_token_hash(hash)
             .first()
@@ -587,7 +612,7 @@ impl Db {
         if row.expires_at <= now_rfc3339() {
             return Ok(None);
         }
-        Ok(Some(row.identity_id))
+        Ok(Some((row.identity_id, split_scopes(&row.scopes))))
     }
 
     pub async fn touch_mcp_token(&self, hash: &str) -> Result<(), AppError> {
@@ -726,6 +751,7 @@ async fn apply_schema(db: &mut toasty::Db) -> Result<(), AppError> {
     for (column, statement) in ARTICLE_COLUMN_ADDITIONS
         .iter()
         .chain(COMMENT_COLUMN_ADDITIONS)
+        .chain(MCP_TOKEN_COLUMN_ADDITIONS)
         .copied()
     {
         if let Err(err) = toasty::sql::statement(statement).exec(&mut *db).await {
@@ -749,7 +775,7 @@ const SCHEMA_STATEMENTS: &[&str] = &[
     r#"CREATE TABLE IF NOT EXISTS content_revisions (entry_id BLOB NOT NULL, revision BIGINT NOT NULL, event TEXT NOT NULL, created_at TEXT NOT NULL, title TEXT NOT NULL, blocks BIGINT NOT NULL, words BIGINT NOT NULL, snapshot TEXT NOT NULL, PRIMARY KEY (entry_id, revision))"#,
     r#"CREATE TABLE IF NOT EXISTS content_aliases (id BLOB PRIMARY KEY NOT NULL, name TEXT NOT NULL UNIQUE, owner TEXT NOT NULL)"#,
     r#"CREATE TABLE IF NOT EXISTS media_assets (id BLOB PRIMARY KEY NOT NULL, filename TEXT NOT NULL UNIQUE, metadata TEXT NOT NULL)"#,
-    r#"CREATE TABLE IF NOT EXISTS "mcp_tokens" ("id" BLOB NOT NULL, "token_hash" TEXT NOT NULL, "identity_id" TEXT NOT NULL, "name" TEXT NOT NULL, "created_at" TEXT NOT NULL, "expires_at" TEXT NOT NULL, "last_used_at" TEXT, PRIMARY KEY ("id"))"#,
+    r#"CREATE TABLE IF NOT EXISTS "mcp_tokens" ("id" BLOB NOT NULL, "token_hash" TEXT NOT NULL, "identity_id" TEXT NOT NULL, "name" TEXT NOT NULL, "created_at" TEXT NOT NULL, "expires_at" TEXT NOT NULL, "last_used_at" TEXT, "scopes" TEXT NOT NULL DEFAULT '', PRIMARY KEY ("id"))"#,
     r#"CREATE UNIQUE INDEX IF NOT EXISTS "index_mcp_tokens_by_token_hash" ON "mcp_tokens" ("token_hash")"#,
     r#"CREATE TABLE IF NOT EXISTS "projects" ("id" BLOB NOT NULL, "slug" TEXT NOT NULL, "title" TEXT NOT NULL, "category" TEXT NOT NULL, "summary" TEXT NOT NULL, "tags" TEXT NOT NULL, "sections" TEXT NOT NULL, "hero" TEXT, "has_detail_page" BOOLEAN NOT NULL, "featured" BOOLEAN NOT NULL, "sort_order" BIGINT NOT NULL, "repo_url" TEXT, "related_slugs" TEXT NOT NULL, PRIMARY KEY ("id"))"#,
     r#"CREATE UNIQUE INDEX IF NOT EXISTS "index_projects_by_slug" ON "projects" ("slug")"#,
@@ -782,6 +808,11 @@ const COMMENT_COLUMN_ADDITIONS: &[(&str, &str)] = &[
         r#"ALTER TABLE "comments" ADD COLUMN "thread_id" TEXT"#,
     ),
 ];
+
+const MCP_TOKEN_COLUMN_ADDITIONS: &[(&str, &str)] = &[(
+    "scopes",
+    r#"ALTER TABLE "mcp_tokens" ADD COLUMN "scopes" TEXT NOT NULL DEFAULT ''"#,
+)];
 
 const ARTICLE_COLUMN_ADDITIONS: &[(&str, &str)] = &[
     (
@@ -954,6 +985,14 @@ pub struct McpTokenInfo {
     pub created_at: String,
     pub expires_at: String,
     pub last_used_at: Option<String>,
+    pub scopes: Vec<String>,
+}
+fn split_scopes(raw: &str) -> Vec<String> {
+    raw.split(',')
+        .map(str::trim)
+        .filter(|scope| !scope.is_empty())
+        .map(str::to_owned)
+        .collect()
 }
 fn mcp_token_info(row: models::McpToken) -> McpTokenInfo {
     McpTokenInfo {
@@ -962,5 +1001,6 @@ fn mcp_token_info(row: models::McpToken) -> McpTokenInfo {
         created_at: row.created_at,
         expires_at: row.expires_at,
         last_used_at: row.last_used_at,
+        scopes: split_scopes(&row.scopes),
     }
 }

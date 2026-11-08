@@ -430,3 +430,170 @@ async fn the_bridge_files_drafts_under_projects_and_topics_without_touching_othe
     .await;
     assert_eq!(forbidden.status(), StatusCode::FORBIDDEN);
 }
+
+#[actix_web::test]
+async fn project_permission_creates_and_edits_project_drafts_but_never_published_projects() {
+    let db = Db::memory().await.unwrap();
+    db.migrate().await.unwrap();
+    let mut config = Config::for_test();
+    config.admin_github_ids = vec!["owner".into()];
+    let owner = db
+        .upsert_identity("github", "owner", "", "Owner", None)
+        .await
+        .unwrap();
+    let (admin, hash) = new_session_token();
+    db.create_session("admin", &hash, Some(&owner.id), 1)
+        .await
+        .unwrap();
+    let csrf = voidreg_api::api::v1::admin::session::csrf_for(&admin);
+    let cookie = Cookie::new("voidreg_admin_session", admin);
+    let app = test::init_service(build(db.clone(), config)).await;
+
+    let mint = |scopes: Value| {
+        test::TestRequest::post()
+            .uri("/api/v1/admin/mcp-tokens")
+            .cookie(cookie.clone())
+            .insert_header(("X-CSRF-Token", csrf.clone()))
+            .set_json(json!({"name":"Client","scopes":scopes}))
+            .to_request()
+    };
+    // Unknown permissions are refused; a plain token carries none.
+    assert_eq!(
+        test::call_service(&app, mint(json!(["publish"])))
+            .await
+            .status(),
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+    let plain: Value = test::call_and_read_body_json(&app, mint(json!([]))).await;
+    let wide: Value =
+        test::call_and_read_body_json(&app, mint(json!(["projects", "projects"]))).await;
+    assert_eq!(plain["connection"]["scopes"], json!([]));
+    assert_eq!(wide["connection"]["scopes"], json!(["projects"]));
+    let plain = format!("Bearer {}", plain["token"].as_str().unwrap());
+    let wide = format!("Bearer {}", wide["token"].as_str().unwrap());
+
+    let call = |method: test::TestRequest, auth: &str, uri: &str, body: Option<Value>| {
+        let mut request = method
+            .uri(uri)
+            .insert_header(("Authorization", auth.to_owned()));
+        if let Some(body) = body {
+            request = request.set_json(body);
+        }
+        test::call_service(&app, request.to_request())
+    };
+    let draft = json!({
+        "slug": "first",
+        "title": "First",
+        "category": "Systems",
+        "summary": "A draft project",
+        "tags": ["rust"],
+        "featured": true,
+        "sort_order": 5,
+        "document": {"schemaVersion":1,"blocks":[]}
+    });
+
+    let session: Value = test::read_body_json(
+        call(test::TestRequest::get(), &wide, "/api/v1/mcp/session", None).await,
+    )
+    .await;
+    assert_eq!(session["scopes"], json!(["projects"]));
+    let denied = call(
+        test::TestRequest::post(),
+        &plain,
+        "/api/v1/mcp/projects",
+        Some(draft.clone()),
+    )
+    .await;
+    assert_eq!(denied.status(), StatusCode::FORBIDDEN);
+
+    let created = call(
+        test::TestRequest::post(),
+        &wide,
+        "/api/v1/mcp/projects",
+        Some(draft.clone()),
+    )
+    .await;
+    assert_eq!(created.status(), StatusCode::CREATED);
+    let created: Value = test::read_body_json(created).await;
+    assert_eq!(created["status"], "draft");
+    let revision = created["revision"].as_i64().unwrap();
+
+    // Media, SEO, the compiled artifact and URL changes stay with the owner.
+    for key in [
+        "compiled",
+        "pending_slug",
+        "media_ids",
+        "seo_title",
+        "hero_image",
+        "slug",
+    ] {
+        let response = call(
+            test::TestRequest::put(),
+            &wide,
+            "/api/v1/mcp/projects/first",
+            Some(json!({"expected_revision": revision, key: "x"})),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::FORBIDDEN, "{key}");
+    }
+    let updated = call(
+        test::TestRequest::put(),
+        &wide,
+        "/api/v1/mcp/projects/first",
+        Some(json!({"expected_revision": revision, "title": "First, revised"})),
+    )
+    .await;
+    assert_eq!(updated.status(), StatusCode::OK);
+    let stale = call(
+        test::TestRequest::put(),
+        &wide,
+        "/api/v1/mcp/projects/first",
+        Some(json!({"expected_revision": revision, "title": "Stale"})),
+    )
+    .await;
+    assert_eq!(stale.status(), StatusCode::CONFLICT);
+    let denied = call(
+        test::TestRequest::put(),
+        &plain,
+        "/api/v1/mcp/projects/first",
+        Some(json!({"expected_revision": revision + 1, "title": "No"})),
+    )
+    .await;
+    assert_eq!(denied.status(), StatusCode::FORBIDDEN);
+
+    // Nothing is public, and a published project cannot be edited with a token.
+    let public: Value = test::call_and_read_body_json(
+        &app,
+        test::TestRequest::get()
+            .uri("/api/v1/projects")
+            .to_request(),
+    )
+    .await;
+    assert!(public["items"].as_array().unwrap().is_empty());
+    let live = db
+        .content_create(
+            "project",
+            json!({"slug":"live","status":"published","title":"Live","category":"Systems","summary":"A project","tags":[],"sections":[],"hero":null,"related_slugs":[],"related_project_ids":[],"repo_url":null,"has_detail_page":true,"featured":false,"sort_order":0,"document":{"schemaVersion":1,"blocks":[]}}),
+        )
+        .await
+        .unwrap();
+    let refused = call(
+        test::TestRequest::put(),
+        &wide,
+        "/api/v1/mcp/projects/live",
+        Some(json!({"expected_revision": live["revision"], "title": "Hijacked"})),
+    )
+    .await;
+    assert_eq!(refused.status(), StatusCode::CONFLICT);
+    let listed: Value = test::read_body_json(
+        call(
+            test::TestRequest::get(),
+            &plain,
+            "/api/v1/mcp/projects",
+            None,
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(listed["items"].as_array().unwrap().len(), 2);
+}
