@@ -25,7 +25,8 @@
     "test": "tsx --test src/*.test.ts scripts/*.test.ts",
     "seed:test-blog": "tsx scripts/seed-test-blog.ts",
     "seed:scale": "tsx scripts/seed-scale.ts",
-    "stress:publishing": "tsx scripts/stress-publishing.ts"
+    "stress:publishing": "tsx scripts/stress-publishing.ts",
+    "import:projects": "tsx scripts/import-project-drafts.ts"
   },
   "devDependencies": {
     "tsx": "^4.23.15"

@@ -550,6 +550,23 @@
   display: block;
   max-width: 100%;
   overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 1rem;
+  line-height: 1.4;
+}
+.article-prose :where(th, td) {
+  padding: 0.625rem 0.875rem;
+  border-block-end: 1px solid var(--border);
+  text-align: start;
+  vertical-align: top;
+}
+.article-prose th {
+  background: var(--card);
+  border-block-end-color: var(--input);
+  font-weight: 700;
+}
+.article-prose td code {
+  overflow-wrap: normal;
 }
 .article-prose blockquote {
   border-inline-start: 3px solid var(--primary);
