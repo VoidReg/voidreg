@@ -5,6 +5,7 @@
   import { implementations } from './renderers';
   import '@publisle/adapter-core/document.css';
   import '@publisle/adapter-core/katex.css';
+  import './styles/prose.css';
   import './blocks/styles.css';
   let { article }: { article: Article } = $props();
   const componentId = $props.id();

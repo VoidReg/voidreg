@@ -515,67 +515,6 @@
   margin-block-start: 0;
 }
 
-.article-prose {
-  min-width: 0;
-  width: min(100%, var(--prose-width));
-  margin-inline: auto;
-  font-size: 1.125rem;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-.article-prose :where(h2, h3, h4, p, ul, ol, pre, figure, blockquote, table) {
-  margin-block: 1.5rem;
-}
-.article-prose h2 {
-  font-size: clamp(1.75rem, 3vw, 2.25rem);
-  line-height: 1.15;
-}
-.article-prose h3 {
-  font-size: clamp(1.25rem, 2vw, 1.5rem);
-  line-height: 1.3;
-}
-.article-prose img,
-.article-prose svg:not(.katex svg) {
-  max-width: 100%;
-  height: auto;
-}
-.article-prose pre {
-  max-width: 100%;
-  overflow-x: auto;
-  padding: 1rem;
-  background: var(--card);
-  font: 0.8125rem/1.5 var(--font-code);
-}
-.article-prose table {
-  display: block;
-  max-width: 100%;
-  overflow-x: auto;
-  border-collapse: collapse;
-  font-size: 1rem;
-  line-height: 1.4;
-}
-.article-prose :where(th, td) {
-  padding: 0.625rem 0.875rem;
-  border-block-end: 1px solid var(--border);
-  text-align: start;
-  vertical-align: top;
-}
-.article-prose th {
-  background: var(--card);
-  border-block-end-color: var(--input);
-  font-weight: 700;
-}
-.article-prose td code {
-  overflow-wrap: normal;
-}
-.article-prose blockquote {
-  border-inline-start: 3px solid var(--primary);
-  padding-inline-start: 1.5rem;
-}
-.article-prose a {
-  color: var(--link);
-  text-decoration: underline;
-}
 .publishing-form {
   display: grid;
   gap: 1rem;
