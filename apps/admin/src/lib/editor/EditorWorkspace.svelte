@@ -608,14 +608,18 @@
         </div>
       {:else}
         <div class="document-sheet article-preview">
-          <div class="preview-label">
-            <p class="editor-kicker">Reader preview</p>
-            <span class="editor-help">{category || 'Uncategorized'}</span>
+          <div class="preview-reading-column">
+            <header class="preview-reading-header">
+              <div class="preview-label">
+                <p class="editor-kicker">Reader preview</p>
+                <span class="editor-help">{category || 'Uncategorized'}</span>
+              </div>
+              <h2 class="preview-article-title">
+                {title || (kind === 'projects' ? 'Untitled project' : 'Untitled article')}
+              </h2>
+              <p class="preview-summary">{summary || 'Add a summary in Write mode.'}</p>
+            </header>
           </div>
-          <h2 class="preview-article-title">
-            {title || (kind === 'projects' ? 'Untitled project' : 'Untitled article')}
-          </h2>
-          <p class="preview-summary">{summary || 'Add a summary in Write mode.'}</p>
           {#if errors.length}<div class="editor-notice">
               Resolve document errors to preview.
             </div>{:else if previewArticle.compiled}<ArticleBody article={previewArticle} />{/if}

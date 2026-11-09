@@ -132,9 +132,13 @@
   <div class="live-preview-frame">
     <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
     <article class="live-preview-article" bind:this={body} onclick={click}>
-      <p class="editor-kicker">{shown.category || 'Uncategorized'}</p>
-      <h1 class="preview-article-title">{shown.title || 'Untitled'}</h1>
-      {#if shown.summary}<p class="preview-summary">{shown.summary}</p>{/if}
+      <div class="preview-reading-column">
+        <header class="preview-reading-header">
+          <p class="editor-kicker">{shown.category || 'Uncategorized'}</p>
+          <h1 class="preview-article-title">{shown.title || 'Untitled'}</h1>
+          {#if shown.summary}<p class="preview-summary">{shown.summary}</p>{/if}
+        </header>
+      </div>
       {#if problems.length}
         <p class="editor-help">Resolve document errors to refresh the preview.</p>
       {/if}

@@ -553,6 +553,18 @@
 .return-to-document {
   display: none;
 }
+/* Match ArticleBody's measure at its prose font size, independent of heading sizes. */
+.preview-reading-column {
+  min-width: 0;
+  width: min(100%, var(--prose-width, 68ch));
+  margin-inline: auto;
+  font-size: 1.125rem;
+}
+.preview-reading-header {
+  min-width: 0;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
 .preview-label {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
