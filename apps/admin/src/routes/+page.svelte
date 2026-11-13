@@ -318,9 +318,11 @@
   });
   $effect(() => {
     if (!session.loggedIn || conflict || !editing || !dirty || busy || routeLoading) return;
-    // Back off after failures (3s, 6s, 12s, 24s) and stop after five so a bad payload cannot loop.
+    // Track every edit, not just the clean-to-dirty transition, to debounce continuous typing.
+    void revision;
+    // Back off after failures and stop after five so a bad payload cannot loop.
     if (saveFailures >= 5) return;
-    const delay = saveFailures === 0 ? 1500 : Math.min(30000, 1500 * 2 ** saveFailures);
+    const delay = saveFailures === 0 ? 2000 : Math.min(30000, 1500 * 2 ** saveFailures);
     const timer = setTimeout(() => {
       void save();
     }, delay);

@@ -1266,3 +1266,25 @@
 html:has(.publishing-workspace) {
   scroll-behavior: auto;
 }
+
+/* Selecting a block should not shift the document into a narrower column. */
+.document-block {
+  overflow-anchor: none;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease;
+}
+.document-block.selected {
+  background: var(--background);
+}
+.document-block-label {
+  min-height: 2.75rem;
+}
+.editor-button[aria-disabled='true']:not(:disabled) {
+  cursor: progress;
+}
+@media (prefers-reduced-motion: reduce) {
+  .document-block {
+    transition: none;
+  }
+}

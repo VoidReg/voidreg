@@ -19,6 +19,7 @@
   import Tabs from '$lib/ui/Tabs.svelte';
   import { outlineText } from './outline-text';
   import BlockSummary from './BlockSummary.svelte';
+  import ListBlockEditor from './ListBlockEditor.svelte';
   import BlockInserter from './BlockInserter.svelte';
   import './workspace.css';
 
@@ -191,6 +192,7 @@
     // The block scrolls itself into view below, so a remembered position must not override it.
     const target = panel === 'preview' && wide ? 'preview' : 'document';
     if (`write:${target}` !== viewKey()) skipRestore = true;
+    const anchor = document.getElementById(`editing-${id}`)?.getBoundingClientRect().top;
     await go({
       mode: 'write',
       panel: panel === 'preview' && wide ? 'preview' : 'document',
@@ -199,7 +201,21 @@
     });
     await tick();
     const element = document.getElementById(`editing-${id}`);
-    element?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+    if (element) {
+      const top = element.getBoundingClientRect().top;
+      if (anchor !== undefined) window.scrollBy({ top: top - anchor, behavior: 'instant' });
+      const toolbarBottom =
+        document.querySelector('.editor-toolbar')?.getBoundingClientRect().bottom ?? 0;
+      const visibleTop = element.getBoundingClientRect().top;
+      if (visibleTop < toolbarBottom || visibleTop > window.innerHeight - 100) {
+        element.scrollIntoView({
+          block: 'start',
+          behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+            ? 'instant'
+            : 'smooth'
+        });
+      }
+    }
     element?.querySelector<HTMLElement>('textarea, input, select')?.focus({ preventScroll: true });
   }
   function add(type: string) {
@@ -218,8 +234,13 @@
     void select(block.id);
   }
   async function finish(id: BlockId) {
+    const anchor = document.getElementById(`editing-${id}`)?.getBoundingClientRect().top;
     await go({ block: null });
     await tick();
+    const top = document.getElementById(`editing-${id}`)?.getBoundingClientRect().top;
+    if (anchor !== undefined && top !== undefined) {
+      window.scrollBy({ top: top - anchor, behavior: 'instant' });
+    }
     document
       .getElementById(`editing-${id}`)
       ?.querySelector<HTMLElement>('.block-read-view')
@@ -286,8 +307,7 @@
 <div
   class="publishing-workspace"
   class:preview-mode={mode === 'preview'}
-  class:settings-visible={panel === 'settings' ||
-    (panel !== 'preview' && inspector === 'block' && !!selected)}
+  class:settings-visible={panel === 'settings'}
   class:preview-visible={panel === 'preview'}
   data-panel={panel}
 >
@@ -302,14 +322,20 @@
     <div class="editor-primary-actions">
       <button
         class="editor-button secondary"
-        disabled={busy || conflict}
+        disabled={conflict}
+        aria-disabled={busy || conflict}
         title="Shortcut: Ctrl or Cmd + S"
-        onclick={onsave}>Save</button
+        onclick={() => {
+          if (!busy) void onsave();
+        }}>Save</button
       ><button
         class="editor-button primary"
-        disabled={busy || conflict || errors.length > 0}
+        disabled={conflict || errors.length > 0}
+        aria-disabled={busy || conflict || errors.length > 0}
         title="Shortcut: Ctrl or Cmd + Enter"
-        onclick={onpublish}>{status === 'published' ? 'Update' : 'Publish'}</button
+        onclick={() => {
+          if (!busy) void onpublish();
+        }}>{status === 'published' ? 'Update' : 'Publish'}</button
       >
       <details class="ui-menu editor-more" bind:open={moreOpen}>
         <summary class="editor-button secondary" aria-label="More actions"
@@ -551,6 +577,11 @@
                   >
                     {#if block.type === 'publisle:math'}
                       <MathBlockEditor
+                        {block}
+                        onUpdate={(id, data) => editor.updateBlock(id, data)}
+                      />
+                    {:else if block.type === 'publisle:list'}
+                      <ListBlockEditor
                         {block}
                         onUpdate={(id, data) => editor.updateBlock(id, data)}
                       />

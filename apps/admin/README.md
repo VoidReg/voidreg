@@ -11,7 +11,7 @@ at localhost:8080, then `pnpm dev`. Requests proxy to the API. Set
 explicitly enabled for local development.
 
 The editor supports all core block types, footnotes, technical schematics, and a
-host-defined counter example. Working drafts autosave after 1.5 seconds, including incomplete metadata. Save failures preserve the local editor state and pause
+host-defined counter example. Working drafts autosave after 2 seconds without edits, including incomplete metadata. Save failures preserve the local editor state and pause
 autosave until another edit or manual save. Unsaved changes prompt before leaving.
 Preview and Publish request a revision-bound server compilation through Publisle.
 Invalid LaTeX and diagram source can be saved privately but block publication.

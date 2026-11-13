@@ -20,10 +20,22 @@
   } = $props();
   const time = new Intl.DateTimeFormat('en', { timeStyle: 'short' });
   const GIVE_UP = 5;
+  // Fast saves should not flash a transient label. Slow saves still get feedback.
+  let showSaving = $state(false);
+  $effect(() => {
+    if (!busy) {
+      showSaving = false;
+      return;
+    }
+    const timer = setTimeout(() => {
+      showSaving = true;
+    }, 400);
+    return () => clearTimeout(timer);
+  });
   const text = $derived(
     conflict
       ? 'Autosave paused. Resolve the editing conflict.'
-      : busy
+      : showSaving
         ? 'Saving...'
         : failures >= GIVE_UP
           ? 'Autosave stopped after repeated failures. Your edits are still on this page.'
