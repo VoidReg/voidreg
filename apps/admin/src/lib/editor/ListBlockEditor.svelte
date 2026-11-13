@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Block, BlockId } from '@publisle/schema';
   import { outlineText } from './outline-text';
+  import { editorLink } from './editor-links';
 
   type Node = {
     type: string;
@@ -58,6 +59,14 @@
                 update(replace(nodes, index, { ...node, url: event.currentTarget.value }))}
             />
           </label>
+          {#if editorLink(node.url)}
+            <a
+              class="block-settings-link"
+              href={editorLink(node.url)}
+              target="_blank"
+              rel="noopener noreferrer">Open link ↗</a
+            >
+          {/if}
         {/if}
         {@render inline(node.children, (children) =>
           update(replace(nodes, index, { ...node, children }))

@@ -74,6 +74,7 @@
   });
 
   function click(event: MouseEvent) {
+    if ((event.target as HTMLElement).closest('a, button, input, select, textarea')) return;
     const element = (event.target as HTMLElement).closest<HTMLElement>('[data-publisle-id]');
     const id = element?.getAttribute('data-publisle-id');
     if (id && blockIds.includes(id)) onpick(id);
@@ -143,7 +144,7 @@
         <p class="editor-help">Resolve document errors to refresh the preview.</p>
       {/if}
       {#if shown.compiled}
-        <ArticleBody article={shown} />
+        <ArticleBody linksInNewTab article={shown} />
       {/if}
     </article>
   </div>

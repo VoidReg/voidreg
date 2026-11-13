@@ -7,7 +7,7 @@
   import '@publisle/adapter-core/katex.css';
   import './styles/prose.css';
   import './blocks/styles.css';
-  let { article }: { article: Article } = $props();
+  let { article, linksInNewTab = false }: { article: Article; linksInNewTab?: boolean } = $props();
   const componentId = $props.id();
   const instanceId = 'article-' + componentId.replace(/[^A-Za-z0-9_-]/g, '');
   let container = $state<HTMLDivElement>();
@@ -50,6 +50,24 @@
     const observer = new ResizeObserver(update);
     observer.observe(element);
     update();
+    return () => observer.disconnect();
+  });
+  $effect(() => {
+    if (!container || !linksInNewTab) return;
+    const element = container;
+    const updateLinks = () => {
+      for (const link of element.querySelectorAll<HTMLAnchorElement>('a[href]')) {
+        const href = link.getAttribute('href') ?? '';
+        // Keep footnotes and other in-document references in this preview.
+        if (!href || href.startsWith('#') || link.hasAttribute('download')) continue;
+        if (!['http:', 'https:'].includes(link.protocol)) continue;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+      }
+    };
+    updateLinks();
+    const observer = new MutationObserver(updateLinks);
+    observer.observe(element, { childList: true, subtree: true });
     return () => observer.disconnect();
   });
   const safe = $derived(

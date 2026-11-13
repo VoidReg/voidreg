@@ -653,7 +653,10 @@
           </div>
           {#if errors.length}<div class="editor-notice">
               Resolve document errors to preview.
-            </div>{:else if previewArticle.compiled}<ArticleBody article={previewArticle} />{/if}
+            </div>{:else if previewArticle.compiled}<ArticleBody
+              linksInNewTab
+              article={previewArticle}
+            />{/if}
         </div>
       {/if}
     </div>
