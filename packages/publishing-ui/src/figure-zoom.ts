@@ -105,6 +105,15 @@ function writeView(dialog: HTMLDialogElement, img: HTMLImageElement, view: ZoomV
   apply(img, view);
 }
 
+/** Close after this click finishes, so the press cannot land on the page underneath. */
+function dismiss(event: Event, dialog: HTMLDialogElement) {
+  event.preventDefault();
+  event.stopPropagation();
+  window.setTimeout(() => {
+    if (dialog.open) dialog.close();
+  }, 0);
+}
+
 function ensureDialog(doc: Document): HTMLDialogElement {
   const existing = doc.querySelector<HTMLDialogElement>('dialog.figure-zoom');
   if (existing) return existing;
@@ -154,7 +163,7 @@ function ensureDialog(doc: Document): HTMLDialogElement {
   bar.addEventListener('click', (event) => {
     const button = event.target instanceof Element ? event.target.closest('button') : null;
     const action = button?.dataset.zoom;
-    if (action === 'close') dialog.close();
+    if (action === 'close') dismiss(event, dialog);
     else if (action === 'in') change(1.25, { x: 0, y: 0 });
     else if (action === 'out') change(1 / 1.25, { x: 0, y: 0 });
     else if (action === 'fit') {
@@ -163,12 +172,14 @@ function ensureDialog(doc: Document): HTMLDialogElement {
     }
   });
   dialog.addEventListener('click', (event) => {
-    if (event.target === dialog) dialog.close();
+    if (event.target === dialog) dismiss(event, dialog);
   });
   dialog.addEventListener('close', () => {
     pointers.clear();
     pinch = null;
     stage.classList.remove('is-panning');
+    const current = image();
+    if (current) current.style.transform = '';
   });
   stage.addEventListener(
     'wheel',
