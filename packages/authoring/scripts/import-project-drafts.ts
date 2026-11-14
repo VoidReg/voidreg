@@ -12,9 +12,15 @@
 //     pnpm --filter @voidreg/authoring import:projects
 //
 // Add DRY_RUN=1 to validate every file and print the plan without writing anything.
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { importMarkdown } from "../src/authoring.ts";
-import { parseDraft, type ProjectDraft } from "./project-drafts.ts";
+import {
+  isLocalAsset,
+  localAssets,
+  parseDraft,
+  withMediaUrls,
+  type ProjectDraft,
+} from "./project-drafts.ts";
 
 const DIR = new URL("../../../docs/drafts/projects/", import.meta.url);
 const ORIGIN = (
@@ -92,8 +98,64 @@ function load(): ProjectDraft[] {
   );
 }
 
-function documentOf(draft: ProjectDraft) {
-  const result = importMarkdown(draft.body);
+// Image files the drafts refer to as assets/..., uploaded once to the media library. A file already
+// in the library under the same name and byte size is reused, so reruns do not pile up copies.
+type Media = Map<string, { id: string; url: string }>;
+const DRY_MEDIA: Media = new Map();
+
+function assetFile(ref: string): Buffer {
+  const url = new URL(ref, DIR);
+  if (!existsSync(url)) throw new Error(`Missing image file ${ref}`);
+  return readFileSync(url);
+}
+
+function checkAssets(draft: ProjectDraft) {
+  if (
+    draft.hero_image &&
+    !isLocalAsset(draft.hero_image) &&
+    !/^(https?:\/\/|\/media\/)/.test(draft.hero_image)
+  )
+    throw new Error(`${draft.slug}: hero_image must be assets/*.png, a URL or /media/`);
+  for (const ref of localAssets(draft)) assetFile(ref);
+}
+
+async function uploadAssets(drafts: ProjectDraft[]): Promise<Media> {
+  const media: Media = new Map();
+  const refs = [...new Set(drafts.flatMap(localAssets))];
+  if (!refs.length) return media;
+  const library = await call<{ items: Json[] }>("GET", "/media");
+  for (const ref of refs) {
+    const bytes = assetFile(ref);
+    const name = ref.replace(/^assets\//, "");
+    const alt = drafts
+      .filter((d) => d.hero_image === ref)
+      .map((d) => d.hero_alt)[0];
+    const caption = drafts
+      .filter((d) => d.hero_image === ref)
+      .map((d) => d.hero_caption)[0];
+    let asset = library?.items.find(
+      (item) => item.name === name && item.bytes === bytes.length,
+    ) as Json | undefined;
+    if (!asset)
+      asset = (await call<Json>("POST", "/media", {
+        name,
+        alt: alt ?? "",
+        data: bytes.toString("base64"),
+      }))!;
+    if ((alt ?? "") !== (asset.alt ?? "") || (caption ?? "") !== (asset.caption ?? ""))
+      asset = (await call<Json>("PUT", `/media/${asset.id}`, {
+        alt: alt ?? asset.alt ?? "",
+        caption: caption ?? asset.caption ?? "",
+      }))!;
+    media.set(ref, { id: String(asset.id), url: String(asset.url) });
+    console.log(`  image ${ref} -> ${asset.url}`);
+  }
+  return media;
+}
+
+function documentOf(draft: ProjectDraft, media: Media) {
+  const urls = new Map([...media].map(([ref, asset]) => [ref, asset.url]));
+  const result = importMarkdown(withMediaUrls(draft.body, urls));
   const errors = result.diagnostics.filter((d) => d.level === "error");
   if (errors.length || !result.document)
     throw new Error(
@@ -105,7 +167,9 @@ function documentOf(draft: ProjectDraft) {
   };
 }
 
-function fields(draft: ProjectDraft) {
+function fields(draft: ProjectDraft, media: Media) {
+  const hero = draft.hero_image;
+  const cover = hero && isLocalAsset(hero) ? media.get(hero)?.url : hero;
   return {
     slug: draft.slug,
     title: draft.title,
@@ -115,14 +179,21 @@ function fields(draft: ProjectDraft) {
     repo_url: draft.repo_url,
     featured: draft.featured,
     sort_order: draft.sort_order,
-    document: documentOf(draft),
+    ...(cover ? { hero_image: cover } : {}),
+    media_ids: localAssets(draft)
+      .map((ref) => media.get(ref)?.id)
+      .filter((id): id is string => Boolean(id)),
+    document: documentOf(draft, media),
   };
 }
 
 async function main() {
   const drafts = load();
   // Validate everything first so a bad file never leaves a half-imported batch.
-  for (const draft of drafts) fields(draft);
+  for (const draft of drafts) {
+    checkAssets(draft);
+    fields(draft, DRY_MEDIA);
+  }
   console.log(
     `${drafts.length} drafts valid at ${ORIGIN}${DRY ? " (dry run)" : ""}`,
   );
@@ -134,15 +205,16 @@ async function main() {
     return;
   }
   await signIn();
+  const media = await uploadAssets(drafts);
   const ids = new Map<string, string>();
   for (const draft of drafts) {
     const existing = await call<Json>("GET", `/projects/${draft.slug}`);
     const saved = existing
       ? await call<Json>("PUT", `/projects/${draft.slug}`, {
-          ...fields(draft),
+          ...fields(draft, media),
           expected_revision: existing.revision,
         })
-      : await call<Json>("POST", "/projects", fields(draft));
+      : await call<Json>("POST", "/projects", fields(draft, media));
     ids.set(draft.slug, saved!.id);
     console.log(
       `  ${existing ? "updated" : "created"} draft ${draft.slug} (revision ${saved!.revision})`,

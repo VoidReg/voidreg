@@ -13,6 +13,19 @@ imports as the project document. Status: drafts for review, not published.
 | 50 | `sidermux.md` | no |
 | 60 | `systems-42.md` | no |
 
+## Images
+
+A draft can name its cover in the front matter (`hero_image`, `hero_alt`, `hero_caption`) and use
+`![alt](assets/...)` in the body. Files live in `assets/` next to the drafts and must be PNG or JPEG
+under 4 MiB, because that is what the media library accepts. The importer uploads each file once
+(an existing file with the same name and size is reused), points the cover and body figures at the
+managed `/media/` URL, and records the files in the project's `media_ids`.
+
+Rotex: `rotex-brand-card.png` is the dark-theme logo lockup from the
+[rotex-assets](https://github.com/rotex-labs/rotex-assets) brand folder on a solid background, so it
+reads in both site themes. `rotex-nova-gravity.png` is the render area of the `nova_gravity`
+example from rotex-examples, 1280x720, window frame removed.
+
 ## Facts checked against GitHub, npm and crates.io (2026-11-08)
 
 - Publisle: 240 of the commits are by VoidReg. npm `@publisle/cli`, crates `publisle-pdf`, `publisle-math`, `publisle-cli` exist. Playground URL redirects.

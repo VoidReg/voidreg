@@ -8,11 +8,20 @@ repo_url: https://github.com/rotex-labs/rotex-core
 featured: false
 sort_order: 40
 related: []
+hero_image: assets/rotex/rotex-brand-card.png
+hero_alt: The Rotex logo: an orange three-blade rotor mark next to the word ROTEX on a dark background
+hero_caption: The Rotex logo.
 ---
 
 ## What it is
 
 Rotex is a graphics engine for Rust, built from small crates. Its core is a hardware interface (an RHI): you record a list of explicit commands, and a backend translates that list for a specific graphics API. The same command list runs on Vulkan, wgpu and Direct3D 12, and an OpenGL ES 3 and WebGL2 backend is in progress.
+
+## Preview
+
+![A glowing blue particle field, two bright cores trailing curved sheets of light](assets/rotex/rotex-nova-gravity.png "The nova_gravity example: one million particles simulated and drawn on the GPU through the Vulkan backend, as one command list.")
+
+The picture comes from [`nova_gravity`](https://github.com/rotex-labs/rotex-examples/blob/main/nova_gravity.rs), one of the examples in [rotex-examples](https://github.com/rotex-labs/rotex-examples). A compute pass moves the particles around two gravity wells, a fade pass leaves the trails, and the points are drawn on top. All of it is recorded as a Rotex command list. The example owns the scene and the buffers, and the backend only translates.
 
 ## The design in three ideas
 

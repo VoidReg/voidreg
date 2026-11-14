@@ -12,6 +12,11 @@ export interface ProjectDraft {
   featured: boolean;
   sort_order: number;
   related: string[];
+  /** Cover image: an `assets/...` file next to the drafts, or an http(s) or `/media/` URL. */
+  hero_image: string | null;
+  /** Alt text and caption stored on the cover's media asset. */
+  hero_alt: string;
+  hero_caption: string;
   body: string;
 }
 
@@ -59,6 +64,35 @@ export function parseDraft(source: string): ProjectDraft {
     featured: featured === "true",
     sort_order: sortOrder,
     related: list(fields.get("related") ?? ""),
+    hero_image: fields.get("hero_image") || null,
+    hero_alt: fields.get("hero_alt") ?? "",
+    hero_caption: fields.get("hero_caption") ?? "",
     body: match[2].trim() + "\n",
   };
+}
+
+const LOCAL = /^assets\/[A-Za-z0-9._\/-]+\.(png|jpg)$/;
+const BODY_IMAGE = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g;
+
+export function isLocalAsset(ref: string): boolean {
+  return LOCAL.test(ref) && !ref.includes("..");
+}
+
+/** Image files a draft refers to as `assets/...`, cover first, each once. */
+export function localAssets(draft: ProjectDraft): string[] {
+  const refs = new Set<string>();
+  if (draft.hero_image && isLocalAsset(draft.hero_image))
+    refs.add(draft.hero_image);
+  for (const match of draft.body.matchAll(BODY_IMAGE))
+    if (isLocalAsset(match[2])) refs.add(match[2]);
+  return [...refs];
+}
+
+/** Replaces `assets/...` image references in the body with the given media URLs. */
+export function withMediaUrls(body: string, urls: Map<string, string>): string {
+  return body.replace(BODY_IMAGE, (whole, alt, ref, title) => {
+    const url = urls.get(ref);
+    if (!url) return whole;
+    return `![${alt}](${url}${title ? ` "${title}"` : ""})`;
+  });
 }
