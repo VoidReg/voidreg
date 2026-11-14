@@ -21,10 +21,13 @@ under 4 MiB, because that is what the media library accepts. The importer upload
 (an existing file with the same name and size is reused), points the cover and body figures at the
 managed `/media/` URL, and records the files in the project's `media_ids`.
 
-Rotex: `rotex-brand-card.png` is the dark-theme logo lockup from the
-[rotex-assets](https://github.com/rotex-labs/rotex-assets) brand folder on a solid background, so it
-reads in both site themes. `rotex-nova-gravity.png` is the render area of the `nova_gravity`
-example from rotex-examples, 1280x720, window frame removed.
+Rotex: `rotex-social-preview-1280x640.png` is the unmodified project card from the
+[rotex-assets](https://github.com/rotex-labs/rotex-assets) brand kit (brand v1.0, Rotor Cube mark). The brand
+terms forbid altering the marks, so use the files as shipped. `rotex-nova-gravity.png` is the render area
+of the `nova_gravity` example from rotex-examples, 1280x720, window frame removed.
+
+The working Rotex draft in the admin is edited through MCP, which cannot upload media or set a cover.
+Its images are body figures that point at pinned rotex-assets URLs.
 
 ## Facts checked against GitHub, npm and crates.io (2026-11-08)
 

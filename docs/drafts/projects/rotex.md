@@ -8,9 +8,9 @@ repo_url: https://github.com/rotex-labs/rotex-core
 featured: false
 sort_order: 40
 related: []
-hero_image: assets/rotex/rotex-brand-card.png
-hero_alt: The Rotex logo: an orange three-blade rotor mark next to the word ROTEX on a dark background
-hero_caption: The Rotex logo.
+hero_image: assets/rotex/rotex-social-preview-1280x640.png
+hero_alt: Rotex Engine project card: the Rotex logo, the line One API. Every GPU. Zero cost., and labels for Vulkan, D3D12, OpenGL, WebGL, wgpu and Metal (planned)
+hero_caption: The Rotex project card from the brand kit.
 ---
 
 ## What it is
