@@ -86,10 +86,22 @@ async function find(id: string) {
   }
   return job;
 }
-async function palette(dark: boolean) {
+async function themeStylesheet() {
   const css = await readFile(cssPath, 'utf8');
+  if (css.includes('\n.light {') && css.includes('\n.dark {')) return css;
+  const imported = "@import '@voidreg/publishing-ui/styles/base.css'";
+  if (!css.includes(imported)) return css;
+  try {
+    return await readFile(require.resolve('@voidreg/publishing-ui/styles/base.css'), 'utf8');
+  } catch {
+    return css;
+  }
+}
+async function palette(dark: boolean) {
+  const css = await themeStylesheet();
   const selector = dark ? '\n.dark {' : '\n.light {';
-  const body = css.slice(css.indexOf(selector) + selector.length).split('}')[0];
+  const at = css.indexOf(selector);
+  const body = at < 0 ? '' : css.slice(at + selector.length).split('}')[0];
   const values = Object.fromEntries(
     [...body.matchAll(/--([a-z-]+):\s*(#[a-fA-F0-9]{3,8});/g)].map((m) => [m[1], m[2]])
   );
