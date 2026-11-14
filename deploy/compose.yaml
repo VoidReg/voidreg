@@ -38,6 +38,10 @@ services:
       dockerfile: apps/publishing/Dockerfile
     environment:
       COMPILER_TOKEN: ${COMPILER_TOKEN:?Set COMPILER_TOKEN in .env}
+      # The root filesystem is read-only. Chromium aborts if its profile and crashpad database cannot be created.
+      HOME: /tmp
+      XDG_CONFIG_HOME: /tmp
+      XDG_CACHE_HOME: /tmp
     expose:
       - "8092"
     networks:
