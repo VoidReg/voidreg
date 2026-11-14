@@ -69,3 +69,22 @@
   color: var(--link);
   text-decoration: underline;
 }
+/* A figure's src is the light rendition. variant "dark" is a second image the
+   theme class selects. Hosts without this rule would show both. */
+.article-prose .publisle-figure-themed > img[data-publisle-variant] {
+  display: none;
+}
+.dark .article-prose .publisle-figure-themed > img:not([data-publisle-variant]) {
+  display: none;
+}
+.dark .article-prose .publisle-figure-themed > img[data-publisle-variant='dark'] {
+  display: block;
+}
+@media print {
+  .dark .article-prose .publisle-figure-themed > img:not([data-publisle-variant]) {
+    display: block;
+  }
+  .article-prose .publisle-figure-themed > img[data-publisle-variant] {
+    display: none;
+  }
+}
