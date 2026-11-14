@@ -1,3 +1,4 @@
+import { publishedNeighbors } from '$lib/post-neighbors';
 import { adminGet, draftItem, draftPosts, draftProjects } from '$lib/server/preview';
 import { postTopic } from '$lib/server/topics';
 import type { PreviewInfo } from '$lib/server/preview';
@@ -20,11 +21,7 @@ export async function load({ params, cookies, fetch }) {
   const primary = projects[0];
   if (primary?.id) {
     const posts = await draftPosts(cookies, fetch, primary.id);
-    const index = posts.items.findIndex((p) => p.slug === article.slug);
-    if (index >= 0) {
-      newer = posts.items[index - 1] ?? null;
-      older = posts.items[index + 1] ?? null;
-    }
+    ({ newer, older } = publishedNeighbors(posts.items, article.slug));
   }
   const topic = await postTopic({ get: adminGet(cookies, fetch), posts: '/articles' }, article);
   const preview: PreviewInfo = {
