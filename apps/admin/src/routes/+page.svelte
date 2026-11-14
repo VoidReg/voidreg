@@ -6,7 +6,7 @@
   import { DocumentEditor } from '@publisle/playground';
   import type { PublicationArtifact } from '@publisle/adapter-core';
   import { parseDocument, type Document, type Diagnostic } from '@publisle/schema';
-  import { compileDocument, importMarkdown, archivalMarkdown } from '@voidreg/authoring';
+  import { compileDocument, importMarkdown, readingMarkdown } from '@voidreg/authoring';
   import ContentSettings from '$lib/ContentSettings.svelte';
   import AdminShell from '$lib/AdminShell.svelte';
   import LoginScreen from '$lib/LoginScreen.svelte';
@@ -555,7 +555,7 @@
     }
   }
   function download(format: 'json' | 'markdown') {
-    const result = format === 'markdown' ? archivalMarkdown(doc) : undefined;
+    const result = format === 'markdown' ? readingMarkdown(doc) : undefined;
     if (result?.diagnostics.some((d) => d.level === 'error')) {
       error = result.diagnostics.map((d) => d.message).join('\n');
       return;

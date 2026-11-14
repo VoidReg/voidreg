@@ -11,7 +11,7 @@ import { fromMarkdown, toMarkdown } from '@publisle/markdown';
 import { registry, extensions } from './blocks';
 import { defaultData, blockFields, blockLabels } from '@publisle/playground';
 import { rendererRegistry } from '@voidreg/publishing-ui/renderers';
-import { referenceRender } from '@voidreg/publishing-ui/references';
+import { readingDocument, referenceRender } from '@voidreg/publishing-ui/references';
 
 export function compileDocument(
   input: unknown,
@@ -131,6 +131,22 @@ export function safeMarkdown(document: Document) {
 
 export function archivalMarkdown(document: Document) {
   return toMarkdown(document, { policy: 'archival' });
+}
+
+const readingQuiet = new Set([
+  'extension-semantics-lost',
+  'interactive-behavior-lost',
+  'document-envelope-not-exported',
+  'readable-representation-not-exported'
+]);
+
+/** Prose, figures, diagrams, and references. Schematic payloads stay in the saved document. */
+export function readingMarkdown(document: Document) {
+  const result = toMarkdown(readingDocument(document), { policy: 'standard' });
+  return {
+    ...result,
+    diagnostics: result.diagnostics.filter((item) => item.level === 'error' || !readingQuiet.has(item.code))
+  };
 }
 
 export function blockCatalog() {

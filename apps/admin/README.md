@@ -25,8 +25,8 @@ automatically appear on project pages. Search, status filters, pagination,
 archive/restore, featuring, ordering, and URL changes live in the dashboard.
 
 Blocks have typed field panels, JSON fallback, drag reordering, and keyboard
-move controls. Markdown export uses the lossless archival grammar to preserve complete custom
-payloads, metadata, and block IDs. JSON export remains available. Imports replace the active document after
+move controls. Markdown export is the reading copy: prose, figures, diagrams, and references.
+Schematic payloads stay in the saved document. JSON export remains the complete copy. Imports replace the active document after
 confirmation. Core schema and accessibility diagnostics appear next to preview.
 
 Custom definitions live in `packages/authoring/src/blocks.ts`. Register a namespaced type, schema

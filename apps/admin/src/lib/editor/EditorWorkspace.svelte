@@ -356,8 +356,10 @@
           <button type="button" onclick={() => menuAction(() => onexport('json'))}
             >Export JSON</button
           >
-          <button type="button" onclick={() => menuAction(() => onexport('markdown'))}
-            >Export Markdown</button
+          <button
+            type="button"
+            title="Prose, figures, and references. Schematic data stays in the saved document."
+            onclick={() => menuAction(() => onexport('markdown'))}>Export Markdown</button
           >
           <button type="button" onclick={() => menuAction(() => (shortcutsOpen = true))}
             >Keyboard shortcuts</button
