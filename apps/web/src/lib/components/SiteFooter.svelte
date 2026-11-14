@@ -19,5 +19,85 @@
         <a href="#top">Back to top</a>
       </nav>
     </div>
+    <a
+      class="publisle-banner"
+      href="https://publisle.xyz"
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="This website uses Publisle"
+    >
+      <span>This website uses</span>
+      <span class="publisle-lockup">
+        <img
+          class="publisle-light"
+          src="/brand/publisle-lockup-light.svg"
+          alt=""
+          width="94"
+          height="28"
+        />
+        <img
+          class="publisle-dark"
+          src="/brand/publisle-lockup-dark.svg"
+          alt=""
+          aria-hidden="true"
+          width="94"
+          height="28"
+        />
+      </span>
+    </a>
   </div>
 </footer>
+
+<style>
+  .publisle-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem 1.5rem;
+    margin-top: 2rem;
+    border: 1px solid var(--border);
+    background: var(--card);
+    padding: 0.75rem 1.25rem;
+    color: var(--muted-foreground);
+    font-size: 0.875rem;
+    text-decoration: none;
+  }
+
+  .publisle-banner:hover {
+    border-color: var(--foreground);
+    color: var(--foreground);
+  }
+
+  .publisle-lockup {
+    display: block;
+    flex: none;
+    height: 1.75rem;
+    aspect-ratio: 803 / 240;
+  }
+
+  .publisle-lockup img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .publisle-dark {
+    display: none;
+  }
+
+  :global(.dark) .publisle-light {
+    display: none;
+  }
+
+  :global(.dark) .publisle-dark {
+    display: block;
+  }
+
+  @media (max-width: 47.999rem) {
+    .publisle-banner {
+      flex-direction: column;
+      text-align: center;
+    }
+  }
+</style>
