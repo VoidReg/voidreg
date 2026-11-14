@@ -24,6 +24,11 @@
       "default": "./src/ui/Combobox.svelte"
     },
     "./ui/listbox": "./src/ui/listbox.ts",
+    "./ProviderButton.svelte": {
+      "svelte": "./src/ProviderButton.svelte",
+      "default": "./src/ProviderButton.svelte"
+    },
+    "./provider-button": "./src/provider-button.ts",
     "./styles/base.css": "./src/styles/base.css",
     "./theme": "./src/theme.ts"
   },

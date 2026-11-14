@@ -3,7 +3,9 @@
   import { request, type Page } from '@voidreg/publishing-ui/api';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import { authErrorMessage, providerLabel, session, signInUrl } from '$lib/session.svelte';
+  import ProviderButton from '@voidreg/publishing-ui/ProviderButton.svelte';
+  import { isSignInProvider } from '@voidreg/publishing-ui/provider-button';
+  import { authErrorMessage, session, signInUrl } from '$lib/session.svelte';
   import type { DiscussionComment } from './discussion';
   import CommentEntry from './CommentEntry.svelte';
   import CommentComposer from './CommentComposer.svelte';
@@ -158,13 +160,9 @@
           <strong>Sign in to post as yourself.</strong> Your comments publish right away under one name
           and photo you control. Or comment as a guest below, and a moderator will review it first.
         </p>
-        <div class="button-row">
-          {#each providers as provider (provider)}
-            <!-- eslint-disable svelte/no-navigation-without-resolve -->
-            <a class="button button-secondary" href={signInUrl(provider, returnTo)}
-              >Continue with {providerLabel(provider)}</a
-            >
-            <!-- eslint-enable svelte/no-navigation-without-resolve -->
+        <div class="provider-buttons">
+          {#each providers.filter(isSignInProvider) as provider (provider)}
+            <ProviderButton {provider} href={signInUrl(provider, returnTo)} />
           {/each}
         </div>
       </div>

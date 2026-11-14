@@ -1,4 +1,6 @@
 <script lang="ts">
+  import ProviderButton from '@voidreg/publishing-ui/ProviderButton.svelte';
+  import { isSignInProvider } from '@voidreg/publishing-ui/provider-button';
   import { session } from './session.svelte';
   import { theme } from './ui/theme.svelte';
   import Icon from './components/Icon.svelte';
@@ -39,12 +41,8 @@
       </div>
     {:else}
       <div class="login-providers">
-        {#each session.options.providers as provider (provider)}
-          <a
-            class="ui-btn ui-btn-primary"
-            href={'/api/v1/auth/' + provider + '/start?purpose=admin'}
-            >Continue with {provider === 'github' ? 'GitHub' : 'Google'}</a
-          >
+        {#each session.options.providers.filter(isSignInProvider) as provider (provider)}
+          <ProviderButton {provider} href={'/api/v1/auth/' + provider + '/start?purpose=admin'} />
         {/each}
       </div>
       {#if session.options.providers.length === 0 && !session.options.password_enabled}

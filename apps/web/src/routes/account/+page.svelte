@@ -6,6 +6,8 @@
   import Breadcrumb from '$lib/components/Breadcrumb.svelte';
   import SectionLabel from '$lib/components/SectionLabel.svelte';
   import Seo from '$lib/Seo.svelte';
+  import ProviderButton from '@voidreg/publishing-ui/ProviderButton.svelte';
+  import { isSignInProvider } from '@voidreg/publishing-ui/provider-button';
   import { authErrorMessage, providerLabel, session, signInUrl } from '$lib/session.svelte';
 
   const JSON_HEADERS = { 'Content-Type': 'application/json' };
@@ -141,13 +143,9 @@
         </ul>
       {/if}
       {#if providers.length && !deleted}
-        <div class="button-row">
-          {#each providers as provider (provider)}
-            <!-- eslint-disable svelte/no-navigation-without-resolve -->
-            <a class="button" href={signInUrl(provider, '/account')}
-              >Continue with {providerLabel(provider)}</a
-            >
-            <!-- eslint-enable svelte/no-navigation-without-resolve -->
+        <div class="provider-buttons">
+          {#each providers.filter(isSignInProvider) as provider (provider)}
+            <ProviderButton {provider} href={signInUrl(provider, '/account')} />
           {/each}
         </div>
         <p class="muted small">
@@ -263,13 +261,13 @@
         {/each}
       </ul>
       {#if unlinkedProviders.length}
-        <div class="button-row">
-          {#each unlinkedProviders as provider (provider)}
-            <!-- eslint-disable svelte/no-navigation-without-resolve -->
-            <a class="button button-secondary" href={signInUrl(provider, '/account', true)}
-              >Connect {providerLabel(provider)}</a
-            >
-            <!-- eslint-enable svelte/no-navigation-without-resolve -->
+        <div class="provider-buttons">
+          {#each unlinkedProviders.filter(isSignInProvider) as provider (provider)}
+            <ProviderButton
+              {provider}
+              intent="continue"
+              href={signInUrl(provider, '/account', true)}
+            />
           {/each}
         </div>
         <p class="muted small">
