@@ -15,6 +15,26 @@ pub const SOURCE_PER_DAY: i64 = 8;
 pub const GLOBAL_PER_DAY: i64 = 100;
 /// Attempt records, which also show delivery failures, are kept this long.
 const RETAIN_SECS: i64 = 30 * 86_400;
+/// Stored messages are kept for one year, then deleted.
+const MESSAGE_RETAIN_DAYS: i64 = 365;
+
+/// Stamps undated contact messages, then deletes those older than one year.
+pub(super) async fn retain_messages(db: &mut dyn toasty::Executor) -> Result<(), AppError> {
+    let stamp = crate::util::now_rfc3339();
+    sql(
+        db,
+        "UPDATE contact_messages SET created_at=? WHERE created_at IS NULL OR created_at=''".into(),
+        vec![stamp.into()],
+    )
+    .await?;
+    sql(
+        db,
+        "DELETE FROM contact_messages WHERE created_at<?".into(),
+        vec![crate::util::rfc3339_days_ago(MESSAGE_RETAIN_DAYS).into()],
+    )
+    .await?;
+    Ok(())
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ContactAdmission {
@@ -117,5 +137,34 @@ impl Db {
                 .map(|row| row["outcome"].as_str().unwrap_or_default().to_owned())
                 .collect(),
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn contact_messages_older_than_a_year_are_deleted() {
+        let db = Db::memory().await.unwrap();
+        db.migrate().await.unwrap();
+        db.insert_contact("Ada", "ada@example.com", "Hello from a year ago")
+            .await
+            .unwrap();
+        assert_eq!(db.contact_summary().await.unwrap().0, 1);
+
+        {
+            let mut inner = db.inner.lock().await;
+            sql(
+                &mut *inner,
+                "UPDATE contact_messages SET created_at=?".into(),
+                vec!["2000-01-01T00:00:00.000000000Z".into()],
+            )
+            .await
+            .unwrap();
+            retain_messages(&mut *inner).await.unwrap();
+        }
+
+        assert_eq!(db.contact_summary().await.unwrap().0, 0);
     }
 }

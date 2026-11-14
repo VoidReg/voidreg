@@ -49,6 +49,7 @@ pub struct ContactMessage {
     pub name: String,
     pub email: String,
     pub message: String,
+    pub created_at: String,
 }
 
 #[derive(Debug, toasty::Model)]

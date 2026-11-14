@@ -32,6 +32,13 @@ pub fn now_rfc3339() -> String {
     format_rfc3339(time::OffsetDateTime::now_utc())
 }
 
+/// RFC 3339 string for `now` minus a number of whole days.
+pub fn rfc3339_days_ago(days: i64) -> String {
+    let now = time::OffsetDateTime::now_utc();
+    let then = now.checked_sub(time::Duration::days(days)).unwrap_or(now);
+    format_rfc3339(then)
+}
+
 /// RFC 3339 string for `now + hours`.
 pub fn rfc3339_plus_hours(hours: i64) -> String {
     let now = time::OffsetDateTime::now_utc();

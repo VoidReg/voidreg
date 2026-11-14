@@ -28,8 +28,9 @@
     <SectionLabel label="01 / Controller" />
     <h2>Who is responsible</h2>
     <p>
-      The operator of Voidreg is the controller for personal data processed through this website.
-      Questions, access requests, and other privacy correspondence can be sent through the
+      Ammar Saleh, in Jordan, is the controller for personal data processed through this website.
+      There is no street address. Privacy requests can be sent to
+      <a class="text-link" href="mailto:privacy@voidreg.xyz">privacy@voidreg.xyz</a>, or through the
       <a class="text-link" href={resolve('/about#contact')}>contact section on the About page</a>.
     </p>
   </section>
@@ -76,6 +77,18 @@
             <td>Strictly necessary</td>
             <td>30 days</td>
           </tr>
+          <tr>
+            <td><code>voidreg_oauth_state</code></td>
+            <td>Finishes a sign-in you started. Removed when the sign-in ends.</td>
+            <td>Strictly necessary</td>
+            <td>10 minutes</td>
+          </tr>
+          <tr>
+            <td><code>voidreg_oauth_verifier</code></td>
+            <td>Finishes a sign-in you started. Removed when the sign-in ends.</td>
+            <td>Strictly necessary</td>
+            <td>10 minutes</td>
+          </tr>
         </tbody>
       </table>
     </div>
@@ -107,14 +120,19 @@
     </p>
     <p>
       Each comment also stores a salted one-way hash of your network address, used only to limit
-      spam and abuse. Short-lived anti-abuse counters expire within 30 days.
+      spam and abuse. The hash stays with the comment for as long as the comment is kept, so a
+      repeat source can be blocked. Short-lived anti-abuse counters expire within 30 days.
     </p>
     <p>
       Account data is kept until you delete your account. On your
-      <a class="text-link" href={resolve('/account')}>account page</a> you can change your name and photo,
-      disconnect a provider, sign out everywhere, download your data as JSON, and delete your account.
-      Deleting removes your profile, connected accounts and sessions. Your comments stay in their threads
-      as &ldquo;Deleted user&rdquo; unless you choose to remove their text as well.
+      <a class="text-link" href={resolve('/account')}>account page</a> you can change your name and
+      photo, disconnect a provider, sign out everywhere, download your data as JSON, and delete your
+      account. Deleting removes your profile, connected accounts and sessions. Your comments stay in
+      their threads as &ldquo;Deleted user&rdquo; unless you choose to remove their text as well. A
+      guest comment, and a comment left as &ldquo;Deleted user&rdquo;, stays while the page stays
+      up. To have a guest comment removed, write to
+      <a class="text-link" href="mailto:privacy@voidreg.xyz">privacy@voidreg.xyz</a>
+      or use the contact form.
     </p>
   </section>
 
@@ -134,8 +152,11 @@
       </li>
       <li>
         Commenter accounts: GDPR Article 6(1)(b) to provide the profile you ask for, and Article
-        6(1)(f) for our interest in keeping the discussion free of spam and abuse.
+        6(1)(f) for our interest in keeping the discussion free of spam and abuse. A guest comment
+        uses the same two bases: publishing the comment you submit, and the address hash that limits
+        spam.
       </li>
+      <li>Contact messages: GDPR Article 6(1)(b) to answer the message you send.</li>
     </ul>
   </section>
 
@@ -143,16 +164,27 @@
     <SectionLabel label="05 / Recipients and retention" />
     <h2>Who sees data, and for how long</h2>
     <p>
-      The site is statically hosted. The hosting provider processes technical request data (such as
-      IP address and user agent in server logs) as a processor, for as long as those logs are kept
-      by the host. Fonts are served from this site, not from Google. There are no analytics,
-      advertising, or social-media trackers. Data is not sold. If you sign in, GitHub or Google
-      handles that sign-in under its own privacy policy.
+      Profiles, comments and contact messages are stored in the site database on a server in
+      Frankfurt, Germany, operated by OVH as processor. Request logs are not kept. Diagnostic logs
+      are capped and discarded as they rotate, and are not kept longer than 30 days. Fonts are
+      served from this site, not from Google. There are no analytics, advertising, or social-media
+      trackers. Data is not sold.
+    </p>
+    <p>
+      The contact form stores your name, email address and message, and sends a copy through Resend
+      in the United States under Resend's standard contractual clauses. Messages are deleted after
+      12 months. The short rate-limit hashes for that form expire after 30 days.
+    </p>
+    <p>
+      If you sign in, Google or GitHub handles that sign-in as its own controller. Both are
+      certified under the EU-US Data Privacy Framework. We then store the profile details described
+      above.
     </p>
     <p>
       Theme cookies expire after one year, consent cookies after six months, and the sign-in cookie
-      after 30 days. After six months you will be asked again about optional cookies. You can change
-      or withdraw optional consent at any time through Cookie settings in the footer.
+      after 30 days. The two sign-in cookies that finish a login expire after 10 minutes. After six
+      months you will be asked again about optional cookies. You can change or withdraw optional
+      consent at any time through Cookie settings in the footer.
     </p>
   </section>
 
@@ -163,9 +195,11 @@
       Depending on applicable law you may request access, correction, erasure, restriction,
       objection, or portability, and you may withdraw consent without affecting processing that
       already happened. If you have an account, you can download and delete your data yourself on
-      the account page. For anything else, use the
-      <a class="text-link" href={resolve('/about#contact')}>About contact section</a>
-      for these requests. You may also lodge a complaint with your local supervisory authority.
+      the account page. For anything else, write to
+      <a class="text-link" href="mailto:privacy@voidreg.xyz">privacy@voidreg.xyz</a>
+      or use the
+      <a class="text-link" href={resolve('/about#contact')}>About contact section</a>. You may also
+      lodge a complaint with your local supervisory authority.
     </p>
     <p>
       This site does not use automated decision-making that produces legal or similarly significant

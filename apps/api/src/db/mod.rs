@@ -118,6 +118,7 @@ impl Db {
             moderation::sql(&mut *db, (*statement).into(), vec![]).await?;
         }
         moderation::backfill_ancestors(&mut *db).await?;
+        contact::retain_messages(&mut *db).await?;
         let mut tx = db.transaction().await?;
         Self::backfill(&mut tx).await?;
         tx.commit().await?;
@@ -144,6 +145,7 @@ impl Db {
         }
         seed::seed_if_empty(&mut db).await?;
         moderation::backfill_ancestors(&mut *db).await?;
+        contact::retain_messages(&mut *db).await?;
         let mut tx = db.transaction().await?;
         Self::backfill(&mut tx).await?;
         tx.commit().await?;
@@ -248,10 +250,12 @@ impl Db {
         message: &str,
     ) -> Result<(), AppError> {
         let mut db = self.inner.lock().await;
+        contact::retain_messages(&mut *db).await?;
         toasty::create!(models::ContactMessage {
             name: name.to_owned(),
             email: email.to_owned(),
             message: message.to_owned(),
+            created_at: now_rfc3339(),
         })
         .exec(&mut *db)
         .await?;
@@ -751,6 +755,7 @@ async fn apply_schema(db: &mut toasty::Db) -> Result<(), AppError> {
     for (column, statement) in ARTICLE_COLUMN_ADDITIONS
         .iter()
         .chain(COMMENT_COLUMN_ADDITIONS)
+        .chain(CONTACT_COLUMN_ADDITIONS)
         .chain(MCP_TOKEN_COLUMN_ADDITIONS)
         .copied()
     {
@@ -782,7 +787,7 @@ const SCHEMA_STATEMENTS: &[&str] = &[
     // articles: base columns shared with pre-document databases
     r#"CREATE TABLE IF NOT EXISTS "articles" ("id" BLOB NOT NULL, "slug" TEXT NOT NULL, "title" TEXT NOT NULL, "category" TEXT NOT NULL, "summary" TEXT NOT NULL, "status" TEXT NOT NULL, "featured" BOOLEAN NOT NULL, "sort_order" BIGINT NOT NULL, "published_at" TEXT, "reading_time_minutes" BIGINT, "sections" TEXT NOT NULL, "document" TEXT NOT NULL DEFAULT '', "document_version" BIGINT NOT NULL DEFAULT 0, "compiled" TEXT NOT NULL DEFAULT '', "content_hash" TEXT NOT NULL DEFAULT '', PRIMARY KEY ("id"))"#,
     r#"CREATE UNIQUE INDEX IF NOT EXISTS "index_articles_by_slug" ON "articles" ("slug")"#,
-    r#"CREATE TABLE IF NOT EXISTS "contact_messages" ("id" BLOB NOT NULL, "name" TEXT NOT NULL, "email" TEXT NOT NULL, "message" TEXT NOT NULL, PRIMARY KEY ("id"))"#,
+    r#"CREATE TABLE IF NOT EXISTS "contact_messages" ("id" BLOB NOT NULL, "name" TEXT NOT NULL, "email" TEXT NOT NULL, "message" TEXT NOT NULL, "created_at" TEXT NOT NULL, PRIMARY KEY ("id"))"#,
     r#"CREATE TABLE IF NOT EXISTS "newsletter_subscribers" ("id" BLOB NOT NULL, "email" TEXT NOT NULL, PRIMARY KEY ("id"))"#,
     r#"CREATE UNIQUE INDEX IF NOT EXISTS "index_newsletter_subscribers_by_email" ON "newsletter_subscribers" ("email")"#,
     r#"CREATE TABLE IF NOT EXISTS "comments" ("id" BLOB NOT NULL, "article_slug" TEXT NOT NULL, "identity_id" TEXT, "author_name" TEXT NOT NULL, "body" TEXT NOT NULL, "status" TEXT NOT NULL, "ip_hash" TEXT NOT NULL, "created_at" TEXT NOT NULL, PRIMARY KEY ("id"))"#,
@@ -808,6 +813,11 @@ const COMMENT_COLUMN_ADDITIONS: &[(&str, &str)] = &[
         r#"ALTER TABLE "comments" ADD COLUMN "thread_id" TEXT"#,
     ),
 ];
+
+const CONTACT_COLUMN_ADDITIONS: &[(&str, &str)] = &[(
+    "created_at",
+    r#"ALTER TABLE "contact_messages" ADD COLUMN "created_at" TEXT"#,
+)];
 
 const MCP_TOKEN_COLUMN_ADDITIONS: &[(&str, &str)] = &[(
     "scopes",

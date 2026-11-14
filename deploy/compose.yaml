@@ -29,6 +29,11 @@ services:
       timeout: 3s
       retries: 5
       start_period: 40s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
 
   publishing:
@@ -154,6 +159,11 @@ services:
         condition: service_healthy
       web:
         condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
 
 volumes:

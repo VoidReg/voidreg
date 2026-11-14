@@ -20,14 +20,14 @@
       These terms cover reading, quoting and commenting on Voidreg. They are short on purpose. By
       using the site you agree to them. If you do not, please do not use the site.
     </p>
-    <p class="updated">Last updated November 8, 2026.</p>
+    <p class="updated">Last updated November 15, 2026.</p>
   </section>
 
   <section class="terms-section">
     <SectionLabel label="01 / The site" />
     <h2>What Voidreg is</h2>
     <p>
-      Voidreg is a personal site with projects, notes and a knowledge map. It is run by one operator
+      Voidreg is a personal site with projects, notes and a knowledge map. It is run by Ammar Saleh
       and provided as is, free of charge. Pages, posts and features can change or disappear without
       notice. How personal data is handled is described in the
       <a class="text-link" href={resolve('/privacy')}>privacy notice</a>, which is part of these
