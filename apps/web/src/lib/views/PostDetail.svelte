@@ -104,13 +104,13 @@
           >{/if}
       </header>
     </ReadingColumn>
-    {#if article.hero_image}<figure>
-        <img
-          style="max-width:100%;height:auto"
-          src={article.hero_image}
-          alt={article.hero_alt ?? ''}
-        />{#if article.hero_caption}<figcaption>{article.hero_caption}</figcaption>{/if}
-      </figure>{/if}<ArticleBody {article} />
+    {#if article.hero_image}<ReadingColumn>
+        <figure class="article-hero">
+          <img src={article.hero_image} alt={article.hero_alt ?? ''} />
+          {#if article.hero_caption}<figcaption>{article.hero_caption}</figcaption>{/if}
+        </figure>
+      </ReadingColumn>{/if}
+    <ArticleBody {article} />
   </article>
   {#if live}<ReadingColumn>
       <AgentNote

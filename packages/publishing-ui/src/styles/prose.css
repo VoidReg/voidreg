@@ -66,6 +66,38 @@
   max-width: 100%;
   height: auto;
 }
+.article-prose figure {
+  display: block;
+  max-width: 100%;
+}
+.article-prose figure :is(img, svg) {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+/* A vertical diagram stays at its own aspect ratio and is centered in the column.
+   Stretching it to the text width leaves the nodes stuck to one side. */
+.article-prose .publisle-diagram-screen {
+  display: flex;
+  justify-content: center;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.article-prose .publisle-diagram-screen :is(img, svg) {
+  width: auto;
+  max-width: 100%;
+  margin-inline: auto;
+}
+.article-prose figcaption {
+  margin-block-start: 0.75rem;
+  color: var(--muted-foreground);
+  font-size: 0.9375rem;
+  line-height: 1.45;
+  text-align: start;
+}
+.article-prose figcaption :where(p) {
+  margin-block: 0;
+}
 .article-prose pre {
   max-width: 100%;
   overflow-x: auto;
@@ -158,19 +190,29 @@
 .article-prose .code-viewer .hljs-attr {
   color: var(--code-type);
 }
-.article-prose table {
-  display: block;
+.article-prose .table-scroll {
   max-width: 100%;
+  margin-block: 1.5rem;
   overflow-x: auto;
+}
+.article-prose .table-scroll table,
+.article-prose table {
+  display: table;
+  width: max-content;
+  min-width: 100%;
+  margin-block: 0;
   border-collapse: collapse;
   font-size: 1rem;
   line-height: 1.4;
+  font-variant-numeric: tabular-nums;
 }
 .article-prose :where(th, td) {
   padding: 0.625rem 0.875rem;
   border-block-end: 1px solid var(--border);
   text-align: start;
   vertical-align: top;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 .article-prose :where(th) {
   background: var(--card);

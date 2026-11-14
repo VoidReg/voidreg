@@ -5,6 +5,20 @@
   import { outlineFromReadings, tocCount, type TocEntry } from './article-toc';
   import { mountCodeViewers } from './code-viewer';
   import { linkRenderedReferences } from './references';
+
+  /** Keep a wide table in column alignment and let the reader scroll it sideways. */
+  function mountTables(element: HTMLElement) {
+    for (const table of element.querySelectorAll<HTMLTableElement>('table')) {
+      if (table.closest('.table-scroll, .article-toc')) continue;
+      const wrap = element.ownerDocument.createElement('div');
+      wrap.className = 'table-scroll';
+      wrap.tabIndex = 0;
+      wrap.setAttribute('role', 'region');
+      wrap.setAttribute('aria-label', 'Data table');
+      table.before(wrap);
+      wrap.append(table);
+    }
+  }
   import { implementations } from './renderers';
   import '@publisle/adapter-core/document.css';
   import '@publisle/adapter-core/katex.css';
@@ -32,7 +46,7 @@
     const update = () => {
       reserveIslands();
       for (const block of element.querySelectorAll<HTMLElement>(
-        'pre, table, div.publisle-math, p > .katex'
+        'pre, div.publisle-math, p > .katex'
       )) {
         if (block.scrollWidth > block.clientWidth) {
           block.tabIndex = 0;
@@ -43,9 +57,7 @@
               'aria-label',
               block.matches('.publisle-math, .katex')
                 ? 'Scrollable equation'
-                : block.tagName === 'PRE'
-                  ? 'Scrollable code block'
-                  : 'Scrollable data table'
+                : 'Scrollable code block'
             );
         }
       }
@@ -108,6 +120,7 @@
         if (id && heading.id !== id) heading.id = id;
       });
       mountCodeViewers(element);
+      mountTables(element);
       linkRenderedReferences(element);
       const key = JSON.stringify(next);
       if (key === seen) return;
