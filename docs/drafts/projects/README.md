@@ -26,8 +26,9 @@ Rotex: `rotex-social-preview-1280x640.png` is the unmodified project card from t
 terms forbid altering the marks, so use the files as shipped. `rotex-nova-gravity.png` is the render area
 of the `nova_gravity` example from rotex-examples, 1280x720, window frame removed.
 
-The working Rotex draft in the admin is edited through MCP, which cannot upload media or set a cover.
-Its images are body figures that point at pinned rotex-assets URLs.
+The working Rotex draft in the admin is edited through MCP. Its images are body figures that
+point at pinned rotex-assets URLs. A cover can be uploaded with the MCP media tools and set on
+the draft.
 
 ## Facts checked against GitHub, npm and crates.io (2026-11-08)
 

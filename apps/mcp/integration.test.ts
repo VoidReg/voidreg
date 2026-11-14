@@ -116,9 +116,12 @@ for (const mode of ['legacy', 'auto'] as const) {
         'get_block_catalog',
         'get_compilation',
         'list_articles',
+        'list_media',
         'list_topics',
         'update_draft',
+        'update_media',
         'update_topic',
+        'upload_media',
         'validate_document'
       ]);
       const call = (name: string, args: Record<string, unknown>) =>
@@ -274,14 +277,13 @@ test('filing a post resolves project and topic and keeps its other meta', async 
   assert.equal(await filingMeta(bridge, current, {}), undefined, 'nothing requested');
   assert.deepEqual(await filingMeta(bridge, current, { project: 'alpha', topic: 'firmware' }), {
     project_ids: ['p0', 'p1'],
-    hero_image: '/media/a.png',
     topic_id: 't1'
   });
-  assert.deepEqual(await filingMeta(bridge, current, { topic: null }), {
-    project_ids: ['p0'],
-    hero_image: '/media/a.png',
-    topic_id: null
-  });
+  assert.deepEqual(await filingMeta(bridge, current, { topic: null }), { topic_id: null });
+  assert.deepEqual(
+    await filingMeta(bridge, current, { hero_image: '/media/b.png', seo_title: 'Card' }),
+    { hero_image: '/media/b.png', seo_title: 'Card' }
+  );
   await assert.rejects(() => filingMeta(bridge, current, { topic: 'firmware' }), /project slug/);
 });
 
@@ -547,13 +549,22 @@ test('the projects permission adds project draft tools and nothing more', async 
 
     const updated = await client.callTool({
       name: 'update_project',
-      arguments: { slug: 'beta', expected_revision: 2, summary: 'Better summary', featured: true }
+      arguments: {
+        slug: 'beta',
+        expected_revision: 2,
+        summary: 'Better summary',
+        featured: true,
+        hero_image: '/media/11111111-1111-4111-8111-111111111111.png',
+        seo_title: 'Beta'
+      }
     });
     assert(!updated.isError, JSON.stringify(updated));
     const put = writes.at(-1)!;
     assert.equal(put.path, '/api/v1/mcp/projects/beta');
     assert.equal('slug' in put.body, false);
     assert.equal(put.body.featured, true);
+    assert.equal(put.body.hero_image, '/media/11111111-1111-4111-8111-111111111111.png');
+    assert.equal(put.body.seo_title, 'Beta');
 
     const stale = await client.callTool({
       name: 'update_project',
@@ -567,6 +578,103 @@ test('the projects permission adds project draft tools and nothing more', async 
     assert.equal(extra.isError, true);
     await client.close();
   } finally {
+    await close(http);
+    await close(backend);
+  }
+});
+
+test('uploading an image and setting it as a draft cover', async () => {
+  const token = 'vr_mcp_' + 'c'.repeat(64);
+  const writes: { method: string; path: string; body: Record<string, unknown> }[] = [];
+  const article = {
+    slug: 'introducing-rotex',
+    status: 'draft',
+    revision: 2,
+    title: 'Introducing Rotex',
+    document: { schemaVersion: 1, blocks: [], metadata: {} }
+  };
+  const backend = createServer(async (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    if (req.headers.authorization !== 'Bearer ' + token) {
+      res.writeHead(401).end('{}');
+      return;
+    }
+    const url = new URL(req.url!, 'http://api');
+    if (url.pathname.endsWith('/session')) {
+      res.end(JSON.stringify({ authenticated: true, scopes: [] }));
+      return;
+    }
+    if (req.method === 'GET' && url.pathname.endsWith('/articles/introducing-rotex')) {
+      res.end(JSON.stringify(article));
+      return;
+    }
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) chunks.push(Buffer.from(chunk));
+    const body = JSON.parse(Buffer.concat(chunks).toString());
+    writes.push({ method: req.method!, path: url.pathname, body });
+    if (url.pathname.endsWith('/media') && req.method === 'POST') {
+      res.writeHead(201).end(
+        JSON.stringify({
+          id: '11111111-1111-4111-8111-111111111111.png',
+          url: '/media/11111111-1111-4111-8111-111111111111.png',
+          name: body.name,
+          alt: body.alt,
+          width: 1,
+          height: 1
+        })
+      );
+      return;
+    }
+    res.end(JSON.stringify({ ...article, revision: 3, ...body }));
+  });
+  const api = await listen(backend);
+  const http = createHttpServer(api, 'http://127.0.0.1');
+  const origin = await listen(http);
+  const client = new Client({ name: 'test-client', version: '1' });
+  try {
+    await client.connect(
+      new StreamableHTTPClientTransport(new URL(origin + '/mcp'), {
+        requestInit: { headers: { Authorization: 'Bearer ' + token } }
+      })
+    );
+    const uploaded = await client.callTool({
+      name: 'upload_media',
+      arguments: {
+        name: 'Particle trails',
+        alt: 'Bright blue particle trails spiral around two gravity wells on a black background.',
+        data: 'aGVsbG8='
+      }
+    });
+    assert(!uploaded.isError, JSON.stringify(uploaded));
+    assert.equal(writes[0].path, '/api/v1/mcp/media');
+    assert.equal(
+      writes[0].body.alt,
+      'Bright blue particle trails spiral around two gravity wells on a black background.'
+    );
+    const covered = await client.callTool({
+      name: 'update_draft',
+      arguments: {
+        slug: 'introducing-rotex',
+        expected_revision: 2,
+        hero_image: '/media/11111111-1111-4111-8111-111111111111.png',
+        seo_title: 'Introducing Rotex'
+      }
+    });
+    assert(!covered.isError, JSON.stringify(covered));
+    const put = writes.at(-1)!;
+    assert.equal(put.path, '/api/v1/mcp/articles/introducing-rotex');
+    assert.equal('hero_image' in put.body, false);
+    assert.deepEqual(put.body.meta, {
+      hero_image: '/media/11111111-1111-4111-8111-111111111111.png',
+      seo_title: 'Introducing Rotex'
+    });
+    const bare = await client.callTool({
+      name: 'update_media',
+      arguments: { id: '11111111-1111-4111-8111-111111111111.png' }
+    });
+    assert.equal(bare.isError, true);
+  } finally {
+    await client.close();
     await close(http);
     await close(backend);
   }

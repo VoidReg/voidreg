@@ -159,8 +159,9 @@
         <span>
           Allow creating and editing project drafts
           <span class="hint"
-            >Off by default. A token can always read content and edit article drafts. No token can
-            publish, delete, or change media, SEO or URLs.</span
+            >Off by default. A token can always read content, edit article drafts, upload images,
+            and set a draft's cover and search text. This adds the same editing for project
+            drafts. No token can publish or delete.</span
           >
         </span>
       </label>

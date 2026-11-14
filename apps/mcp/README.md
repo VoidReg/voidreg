@@ -68,10 +68,20 @@ connectors are not supported in this version.
 - `update_draft`: provide slug and `expected_revision` from the last read. Send
   optional metadata and either content format. Metadata-only edits preserve all
   blocks. Rich/interactive documents require structured editing.
+- `list_media`: images in the library, with id, url, dimensions, alt, caption and where
+  each file is used.
+- `upload_media`: PNG or JPEG up to 4 MiB. `data` is standard base64 or a data URL.
+  `name` and `alt` are required; `caption` is optional. Returns the `/media/` URL.
+  Uploading does not attach the image or publish it.
+- `update_media`: change the name, alt or caption of an uploaded image. The URL stays
+  the same. Deleting an image stays in admin.
 - `create_draft` and `update_draft` also accept `tags`, `project` (a project slug to
-  link) and `topic` (a topic slug inside that project, or `null` to clear it). A topic
-  needs its project slug. Filing is the only post metadata a token can change. SEO
-  fields, images, media links and the discussion link stay as saved.
+  link), `topic` (a topic slug inside that project, or `null` to clear it), `hero_image`,
+  `social_image`, `seo_title`, `seo_description`, `hero_alt`, `hero_caption` and
+  `media_ids`. A topic needs its project slug. Omitted fields stay as saved. A `/media/`
+  cover must already be in the library, and its alt and caption are copied from that
+  asset when the owner publishes, so set them with `update_media`. Use an http(s) URL
+  for an image hosted elsewhere. The discussion link stays as saved.
 - `get_compilation`: progress and diagnostics of a server compilation started by
   `validate_document` for documents with diagrams. Never publishes.
 - `list_topics`: topics, optionally for one project slug, with post counts.
@@ -87,13 +97,18 @@ Only tokens created with the project permission see these tools. They never publ
 - `list_projects`: project summaries including drafts, with revisions.
 - `get_project`: a project's working copy with its Markdown, status and revision.
 - `create_project`: provide title, category, summary, one content format, and optionally
-  `slug`, `tags`, `repo_url`, `demo_url`, `featured`, `sort_order` and `related` (project
-  slugs, resolved to ids). The project is created as a draft.
+  `slug`, `tags`, `repo_url`, `demo_url`, `featured`, `sort_order`, `related` (project
+  slugs, resolved to ids), `hero_image`, `social_image`, `seo_title`, `seo_description`
+  and `media_ids`. The project is created as a draft.
 - `update_project`: provide slug and `expected_revision`. Only drafts that have never
   been published can be edited. Once a project has been published, edit it in admin.
+  The same cover and search fields as `create_project` are accepted, and omitted fields
+  stay as saved.
 
 Review, compile and publish in admin, where `admin_url` in each result points.
-Compiled output, SEO fields, media, URLs and deletion are not accepted.
+Compiled output, URL renames and deletion are not accepted. A body image is a Markdown
+image whose source is a `/media/` URL from `upload_media`. Figures render at the column
+width; the cover is the sized image.
 
 On a conflict, fetch the current article and reconcile before retrying. Never
 blindly retry an old replacement with a newer revision. Unknown input fields and

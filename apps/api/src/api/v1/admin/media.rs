@@ -7,7 +7,7 @@ fn directory() -> std::path::PathBuf {
         .unwrap_or_else(|_| "data/media".into())
         .into()
 }
-fn filename(value: &str) -> Result<(), AppError> {
+pub(crate) fn filename(value: &str) -> Result<(), AppError> {
     let valid = value
         .rsplit_once('.')
         .is_some_and(|(id, ext)| uuid::Uuid::parse_str(id).is_ok() && matches!(ext, "png" | "jpg"));
@@ -16,6 +16,81 @@ fn filename(value: &str) -> Result<(), AppError> {
     } else {
         Err(AppError::Unprocessable("invalid media filename".into()))
     }
+}
+fn text_field(input: &Value, key: &str, max: usize) -> Result<String, AppError> {
+    let text = match &input[key] {
+        Value::Null => "",
+        Value::String(text) => text,
+        _ => return Err(AppError::Unprocessable(format!("{key} must be text"))),
+    };
+    if text.len() > max {
+        return Err(AppError::Unprocessable(format!("{key} is too long")));
+    }
+    Ok(text.to_owned())
+}
+/// Decodes a PNG or JPEG upload of at most 4 MiB and stores it in the media library.
+/// `data` is standard base64, with or without a `data:` URL prefix. Alt may be empty here;
+/// the admin uploader fills it in afterwards, and the MCP route requires it.
+pub async fn store(db: &Db, input: &Value) -> Result<Value, AppError> {
+    let raw = input["data"].as_str().unwrap_or("");
+    let raw = match raw.split_once(',') {
+        Some((head, body)) if head.starts_with("data:") && head.contains("base64") => body,
+        _ => raw,
+    };
+    let compact: String = raw.chars().filter(|c| !c.is_whitespace()).collect();
+    let bytes = STANDARD
+        .decode(compact)
+        .map_err(|_| AppError::Unprocessable("invalid base64 upload".into()))?;
+    if bytes.is_empty() || bytes.len() > 4 * 1024 * 1024 {
+        return Err(AppError::Unprocessable("images may be up to 4 MiB".into()));
+    }
+    let (extension, width, height) = image_dimensions(&bytes)?;
+    if width == 0 || height == 0 || width > 16000 || height > 16000 {
+        return Err(AppError::Unprocessable(
+            "image dimensions must be between 1 and 16000 pixels".into(),
+        ));
+    }
+    let name = text_field(input, "name", 4000)?;
+    let alt = text_field(input, "alt", 4000)?;
+    let caption = text_field(input, "caption", 4000)?;
+    let file = format!("{}.{}", uuid::Uuid::new_v4(), extension);
+    let dir = directory();
+    tokio::fs::create_dir_all(&dir)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    tokio::fs::write(dir.join(&file), &bytes)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let value = json!({
+        "id": file,
+        "url": format!("/media/{file}"),
+        "name": if name.is_empty() { "Image".to_owned() } else { name },
+        "alt": alt,
+        "caption": caption,
+        "width": width,
+        "height": height,
+        "bytes": bytes.len(),
+        "created_at": crate::util::now_rfc3339()
+    });
+    if let Err(e) = db.media_save(&file, &value).await {
+        let _ = tokio::fs::remove_file(dir.join(&file)).await;
+        return Err(e);
+    }
+    Ok(value)
+}
+pub async fn save_metadata(db: &Db, id: &str, input: &Value) -> Result<Value, AppError> {
+    filename(id)?;
+    let mut value = db
+        .media_get(id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("media not found".into()))?;
+    for key in ["name", "alt", "caption"] {
+        if input.get(key).is_some() {
+            value[key] = json!(text_field(input, key, 4000)?);
+        }
+    }
+    db.media_save(id, &value).await?;
+    Ok(value)
 }
 #[cfg_attr(feature="swagger", utoipa::path(get,path="/api/v1/admin/media",tag="admin",responses((status=200,description="Media library"))))]
 #[get("/media")]
@@ -31,32 +106,7 @@ pub async fn upload(
     input: web::Json<Value>,
 ) -> Result<HttpResponse, AppError> {
     session.validate(&db).await?;
-    let bytes = STANDARD
-        .decode(input["data"].as_str().unwrap_or(""))
-        .map_err(|_| AppError::Unprocessable("invalid base64 upload".into()))?;
-    if bytes.len() > 4 * 1024 * 1024 {
-        return Err(AppError::Unprocessable("images may be up to 4 MiB".into()));
-    }
-    let (extension, width, height) = image_dimensions(&bytes)?;
-    if width == 0 || height == 0 || width > 16000 || height > 16000 {
-        return Err(AppError::Unprocessable(
-            "image dimensions must be between 1 and 16000 pixels".into(),
-        ));
-    }
-    let name = format!("{}.{}", uuid::Uuid::new_v4(), extension);
-    let dir = directory();
-    tokio::fs::create_dir_all(&dir)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-    tokio::fs::write(dir.join(&name), &bytes)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-    let value = json!({"id":name,"url":format!("/media/{name}"),"name":input["name"].as_str().unwrap_or("Image"),"alt":input["alt"].as_str().unwrap_or(""),"caption":"","width":width,"height":height,"bytes":bytes.len(),"created_at":crate::util::now_rfc3339()});
-    if let Err(e) = db.media_save(&name, &value).await {
-        let _ = tokio::fs::remove_file(dir.join(&name)).await;
-        return Err(e);
-    }
-    Ok(HttpResponse::Created().json(value))
+    Ok(HttpResponse::Created().json(store(&db, &input).await?))
 }
 // Parse headers without allocating/decompressing attacker-controlled image sizes.
 fn image_dimensions(b: &[u8]) -> Result<(&'static str, u32, u32), AppError> {
@@ -103,23 +153,7 @@ pub async fn update(
     input: web::Json<Value>,
 ) -> Result<HttpResponse, AppError> {
     session.validate(&db).await?;
-    filename(&id)?;
-    let mut value = db
-        .media_list()
-        .await?
-        .into_iter()
-        .find(|v| v["id"] == *id)
-        .ok_or_else(|| AppError::NotFound("media not found".into()))?;
-    for key in ["name", "alt", "caption"] {
-        if let Some(text) = input[key].as_str() {
-            if text.len() > 4000 {
-                return Err(AppError::Unprocessable("media text too long".into()));
-            }
-            value[key] = json!(text);
-        }
-    }
-    db.media_save(&id, &value).await?;
-    Ok(HttpResponse::Ok().json(value))
+    Ok(HttpResponse::Ok().json(save_metadata(&db, &id, &input).await?))
 }
 #[cfg_attr(feature="swagger", utoipa::path(delete,path="/api/v1/admin/media/{id}",tag="admin",params(("id"=String,Path)),responses((status=200,description="Unreferenced media deleted"))))]
 #[delete("/media/{id}")]

@@ -24,6 +24,15 @@ impl Db {
             value["used_by"]=serde_json::json!(used_by);Ok(value)
         }).collect()
     }
+    pub async fn media_get(&self, filename: &str) -> Result<Option<Value>, AppError> {
+        let mut db = self.inner.lock().await;
+        Ok(models::MediaAsset::filter_by_filename(filename)
+            .first()
+            .exec(&mut *db)
+            .await?
+            .map(|asset| serde_json::from_str(&asset.metadata))
+            .transpose()?)
+    }
     pub async fn media_save(&self, filename: &str, metadata: &Value) -> Result<(), AppError> {
         let mut db = self.inner.lock().await;
         if models::MediaAsset::filter_by_filename(filename)

@@ -386,7 +386,7 @@ async fn the_bridge_files_drafts_under_projects_and_topics_without_touching_othe
 
     let compiled = json!({"format":"publisle:publication","formatVersion":1,"identity":"test","rendererBuild":"1","html":"","styles":[],"modules":[],"islands":[],"diagnostics":[]});
     let document = json!({"schemaVersion":1,"blocks":[]});
-    // Only the project and topic of a post can change through meta. The rest is ignored.
+    // Filing and the blog presentation fields can change. The discussion link cannot.
     let post: Value = test::read_body_json(
         call(
             test::TestRequest::post(),
@@ -394,7 +394,7 @@ async fn the_bridge_files_drafts_under_projects_and_topics_without_touching_othe
             Some(json!({
                 "slug":"filed","title":"Filed","category":"Notes","summary":"A post",
                 "document":document,"compiled":compiled,
-                "meta":{"project_ids":[pid],"topic_id":topic_id,"seo_title":"hijacked","media_ids":["x"]}
+                "meta":{"project_ids":[pid],"topic_id":topic_id,"seo_title":"hijacked","hero_image":"https://cdn.example/cover.png"}
             })),
         )
         .await,
@@ -402,8 +402,29 @@ async fn the_bridge_files_drafts_under_projects_and_topics_without_touching_othe
     .await;
     assert_eq!(post["project_ids"], json!([pid]));
     assert_eq!(post["topic_id"], topic_id);
-    assert_eq!(post["seo_title"], "");
+    assert_eq!(post["seo_title"], "hijacked");
+    assert_eq!(post["hero_image"], "https://cdn.example/cover.png");
     assert_eq!(post["media_ids"], json!([]));
+    let missing_media = call(
+        test::TestRequest::put(),
+        "/api/v1/mcp/articles/filed",
+        Some(json!({
+            "expected_revision": post["revision"],
+            "meta": {"media_ids": ["00000000-0000-0000-0000-000000000000.png"]}
+        })),
+    )
+    .await;
+    assert_eq!(missing_media.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let locked = call(
+        test::TestRequest::put(),
+        "/api/v1/mcp/articles/filed",
+        Some(json!({
+            "expected_revision": post["revision"],
+            "meta": {"discussion_slug": "other"}
+        })),
+    )
+    .await;
+    assert_eq!(locked.status(), StatusCode::FORBIDDEN);
 
     let cleared: Value = test::read_body_json(
         call(
@@ -420,7 +441,8 @@ async fn the_bridge_files_drafts_under_projects_and_topics_without_touching_othe
     assert!(cleared.get("topic_id").is_none_or(Value::is_null));
     assert_eq!(cleared["project_ids"], json!([pid]));
     assert_eq!(cleared["discussion_slug"], post["discussion_slug"]);
-    assert_eq!(cleared["seo_title"], "");
+    assert_eq!(cleared["seo_title"], "hijacked");
+    assert_eq!(cleared["hero_image"], "https://cdn.example/cover.png");
 
     let forbidden = call(
         test::TestRequest::put(),
@@ -518,15 +540,9 @@ async fn project_permission_creates_and_edits_project_drafts_but_never_published
     assert_eq!(created["status"], "draft");
     let revision = created["revision"].as_i64().unwrap();
 
-    // Media, SEO, the compiled artifact and URL changes stay with the owner.
-    for key in [
-        "compiled",
-        "pending_slug",
-        "media_ids",
-        "seo_title",
-        "hero_image",
-        "slug",
-    ] {
+    // Compiled output and URL renames stay with the owner. Cover and search fields are
+    // accepted and checked against the media library in the upload test.
+    for key in ["compiled", "pending_slug", "slug"] {
         let response = call(
             test::TestRequest::put(),
             &wide,
@@ -596,4 +612,163 @@ async fn project_permission_creates_and_edits_project_drafts_but_never_published
     )
     .await;
     assert_eq!(listed["items"].as_array().unwrap().len(), 2);
+}
+
+#[actix_web::test]
+async fn mcp_uploads_images_and_sets_draft_cover_and_search_fields() {
+    let dir = std::env::temp_dir().join(format!("voidreg-mcp-media-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let _cleanup = RemoveDir(&dir);
+    // SAFETY: this test is the only reader or writer of MEDIA_PATH.
+    unsafe { std::env::set_var("MEDIA_PATH", &dir) };
+
+    let db = Db::memory().await.unwrap();
+    db.migrate().await.unwrap();
+    let mut config = Config::for_test();
+    config.admin_github_ids = vec!["owner".into()];
+    let owner = db
+        .upsert_identity("github", "owner", "", "Owner", None)
+        .await
+        .unwrap();
+    let (admin, hash) = new_session_token();
+    db.create_session("admin", &hash, Some(&owner.id), 1)
+        .await
+        .unwrap();
+    let csrf = voidreg_api::api::v1::admin::session::csrf_for(&admin);
+    let cookie = Cookie::new("voidreg_admin_session", admin);
+    let app = test::init_service(build(db.clone(), config)).await;
+    let minted: Value = test::call_and_read_body_json(
+        &app,
+        test::TestRequest::post()
+            .uri("/api/v1/admin/mcp-tokens")
+            .cookie(cookie)
+            .insert_header(("X-CSRF-Token", csrf))
+            .set_json(json!({"name":"Blog","scopes":["projects"]}))
+            .to_request(),
+    )
+    .await;
+    let auth = format!("Bearer {}", minted["token"].as_str().unwrap());
+    let call = |method: test::TestRequest, uri: &str, body: Option<Value>| {
+        let mut request = method
+            .uri(uri)
+            .insert_header(("Authorization", auth.clone()));
+        if let Some(body) = body {
+            request = request.set_json(body);
+        }
+        test::call_service(&app, request.to_request())
+    };
+    let png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    let missing_alt = call(
+        test::TestRequest::post(),
+        "/api/v1/mcp/media",
+        Some(json!({"name":"Cover","data":png})),
+    )
+    .await;
+    assert_eq!(missing_alt.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let garbage = call(
+        test::TestRequest::post(),
+        "/api/v1/mcp/media",
+        Some(json!({"name":"Cover","alt":"A pixel","data":"aGVsbG8="})),
+    )
+    .await;
+    assert_eq!(garbage.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let uploaded = call(
+        test::TestRequest::post(),
+        "/api/v1/mcp/media",
+        Some(json!({"name":"Cover","alt":"A pixel","caption":"One pixel","data":png})),
+    )
+    .await;
+    assert_eq!(uploaded.status(), StatusCode::CREATED);
+    let asset: Value = test::read_body_json(uploaded).await;
+    assert_eq!(asset["alt"], "A pixel");
+    assert_eq!(asset["width"], 1);
+    let id = asset["id"].as_str().unwrap();
+    let url = asset["url"].as_str().unwrap().to_owned();
+    assert!(url.ends_with(id));
+    assert!(dir.join(id).is_file());
+
+    let renamed = call(
+        test::TestRequest::put(),
+        &format!("/api/v1/mcp/media/{id}"),
+        Some(json!({"caption":"The cover"})),
+    )
+    .await;
+    assert_eq!(renamed.status(), StatusCode::OK);
+    let library: Value =
+        test::read_body_json(call(test::TestRequest::get(), "/api/v1/mcp/media", None).await).await;
+    assert_eq!(library["items"][0]["caption"], "The cover");
+
+    let compiled = json!({"format":"publisle:publication","formatVersion":1,"identity":"test","rendererBuild":"1","html":"","styles":[],"modules":[],"islands":[],"diagnostics":[]});
+    let post: Value = test::read_body_json(
+        call(
+            test::TestRequest::post(),
+            "/api/v1/mcp/articles",
+            Some(json!({
+                "slug":"with-cover","title":"With cover","category":"Notes","summary":"A post",
+                "document":{"schemaVersion":1,"blocks":[]},"compiled":compiled
+            })),
+        )
+        .await,
+    )
+    .await;
+    let updated: Value = test::read_body_json(
+        call(
+            test::TestRequest::put(),
+            "/api/v1/mcp/articles/with-cover",
+            Some(json!({
+                "expected_revision": post["revision"],
+                "meta": {"hero_image": url, "seo_title": "Covered", "media_ids": [id]}
+            })),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(updated["hero_image"], url);
+    assert_eq!(updated["seo_title"], "Covered");
+    assert_eq!(updated["media_ids"], json!([id]));
+    assert_eq!(updated["title"], "With cover");
+
+    let project = call(
+        test::TestRequest::post(),
+        "/api/v1/mcp/projects",
+        Some(json!({
+            "slug":"covered","title":"Covered","category":"Notes","summary":"A project",
+            "document":{"schemaVersion":1,"blocks":[]},
+            "hero_image": url,
+            "seo_description": "The project card",
+            "media_ids": [url]
+        })),
+    )
+    .await;
+    assert_eq!(project.status(), StatusCode::CREATED);
+    let project: Value = test::read_body_json(project).await;
+    assert_eq!(project["hero_image"], url);
+    assert_eq!(project["seo_description"], "The project card");
+    assert_eq!(project["media_ids"], json!([id]));
+
+    let missing = call(
+        test::TestRequest::put(),
+        "/api/v1/mcp/projects/covered",
+        Some(json!({
+            "expected_revision": project["revision"],
+            "hero_image": "/media/00000000-0000-0000-0000-000000000000.png"
+        })),
+    )
+    .await;
+    assert_eq!(missing.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let removed = call(
+        test::TestRequest::delete(),
+        &format!("/api/v1/mcp/media/{id}"),
+        None,
+    )
+    .await;
+    assert_eq!(removed.status(), StatusCode::NOT_FOUND);
+    assert!(dir.join(id).is_file());
+}
+
+struct RemoveDir<'a>(&'a std::path::Path);
+impl Drop for RemoveDir<'_> {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(self.0);
+    }
 }
