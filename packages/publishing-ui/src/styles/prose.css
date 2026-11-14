@@ -66,7 +66,9 @@
   max-width: 100%;
   height: auto;
 }
-.article-prose figure {
+.article-prose figure,
+.article-hero {
+  position: relative;
   display: block;
   max-width: 100%;
 }
@@ -75,18 +77,104 @@
   width: 100%;
   height: auto;
 }
-/* A vertical diagram stays at its own aspect ratio and is centered in the column.
-   Stretching it to the text width leaves the nodes stuck to one side. */
-.article-prose .publisle-diagram-screen {
-  display: flex;
-  justify-content: center;
+/* A portrait diagram keeps its aspect ratio, stays centered, and stops at about
+   one screen. The enlarge control opens it for a closer look. */
+.article-prose .publisle-diagram-screen,
+.article-prose .diagram-static,
+.article-prose .diagram-viewport {
+  display: block;
   max-width: 100%;
-  overflow-x: auto;
+  min-width: 0;
 }
-.article-prose .publisle-diagram-screen :is(img, svg) {
+.article-prose .publisle-diagram-screen .diagram-static img {
   width: auto;
+  height: auto;
   max-width: 100%;
+  max-height: min(36rem, 70vh);
   margin-inline: auto;
+  object-fit: contain;
+}
+.figure-zoomable :is(img) {
+  cursor: zoom-in;
+}
+.figure-enlarge {
+  position: absolute;
+  z-index: 1;
+  inset-block-start: 0.75rem;
+  inset-inline-end: 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--foreground);
+  padding: 0.35rem 0.65rem;
+  font: 500 0.8125rem/1.2 var(--font-ui);
+  cursor: zoom-in;
+}
+.figure-enlarge:hover {
+  background: var(--secondary);
+}
+.figure-zoom {
+  display: flex;
+  flex-direction: column;
+  width: calc(100vw - 2rem);
+  height: calc(100dvh - 2rem);
+  max-width: none;
+  max-height: none;
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--foreground);
+}
+.figure-zoom::backdrop {
+  background: rgb(0 0 0 / 72%);
+}
+.figure-zoom-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-block-end: 1px solid var(--border);
+}
+.figure-zoom-caption {
+  flex: 1 1 12rem;
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+.figure-zoom-bar button {
+  min-height: 2.25rem;
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--foreground);
+  padding: 0.25rem 0.65rem;
+  font: 500 0.8125rem/1.2 var(--font-ui);
+  cursor: pointer;
+}
+.figure-zoom-bar button:hover {
+  background: var(--secondary);
+}
+.figure-zoom-stage {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  place-items: center;
+  overflow: hidden;
+  touch-action: none;
+  background: var(--card);
+  cursor: grab;
+}
+.figure-zoom-stage.is-panning {
+  cursor: grabbing;
+}
+.figure-zoom-stage img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  transform-origin: center center;
+  user-select: none;
 }
 .article-prose figcaption {
   margin-block-start: 0.75rem;

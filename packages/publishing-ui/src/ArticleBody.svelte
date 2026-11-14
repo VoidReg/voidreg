@@ -4,6 +4,7 @@
   import type { Article } from './api';
   import { outlineFromReadings, tocCount, type TocEntry } from './article-toc';
   import { mountCodeViewers } from './code-viewer';
+  import { mountFigureZoom } from './figure-zoom';
   import { linkRenderedReferences } from './references';
 
   /** Keep a wide table in column alignment and let the reader scroll it sideways. */
@@ -121,6 +122,7 @@
       });
       mountCodeViewers(element);
       mountTables(element);
+      mountFigureZoom(element);
       linkRenderedReferences(element);
       const key = JSON.stringify(next);
       if (key === seen) return;
