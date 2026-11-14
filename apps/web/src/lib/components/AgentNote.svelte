@@ -33,7 +33,7 @@
     >
     <CopyButton text="https://www.voidreg.xyz/mcp" label="Copy server URL" />
     <!-- eslint-disable svelte/no-navigation-without-resolve -- the Markdown twin is already a resolved address -->
-    {#if markdown}<a class="text-link" href={markdown}>{markdownLabel}</a>{/if}
+    {#if markdown}<a class="text-link" href={markdown} data-sveltekit-reload>{markdownLabel}</a>{/if}
     <!-- eslint-enable svelte/no-navigation-without-resolve -->
   </div>
 {/snippet}

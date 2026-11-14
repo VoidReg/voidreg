@@ -32,10 +32,12 @@
     ><a
       class="button button-secondary"
       href={resolve('/blog/[slug]/source.md', { slug: data.article.slug })}
+      data-sveltekit-reload
       download>Download Markdown</a
     ><a
       class="button button-secondary"
       href={resolve('/blog/[slug]/source.md?format=archival', { slug: data.article.slug })}
+      data-sveltekit-reload
       download>Download complete archival Markdown</a
     >
   </div>
