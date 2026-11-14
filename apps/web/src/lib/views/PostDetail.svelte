@@ -9,6 +9,8 @@
   import type { Project } from '$lib/data/projects';
   import type { PostTopic } from '$lib/topics';
   import ArticleCard from '$lib/publishing/ArticleCard.svelte';
+  import { page } from '$app/state';
+  import { presentArticle, watchThemeImages } from '$lib/images';
   // Shared by the public post page and the private draft preview (no comments or source link).
   let {
     article,
@@ -25,6 +27,16 @@
     topic?: PostTopic | null;
     live?: boolean;
   } = $props();
+  const theme = $derived(
+    page.data.theme === 'dark' || page.data.theme === 'light' ? page.data.theme : null
+  );
+  const shown = $derived(presentArticle(article, theme));
+  let articleElement = $state<HTMLElement>();
+  $effect(() => {
+    const element = articleElement;
+    if (!element) return;
+    return watchThemeImages(element);
+  });
 </script>
 
 <main id="main-content" class="site-container page-shell">
@@ -54,7 +66,7 @@
       ]}
     />
   </ReadingColumn>
-  <article class="section-stack detail-article">
+  <article class="section-stack detail-article" bind:this={articleElement}>
     <ReadingColumn>
       <header class="section-stack detail-header">
         <p class="eyebrow">{article.category}</p>
@@ -106,11 +118,11 @@
     </ReadingColumn>
     {#if article.hero_image}<ReadingColumn>
         <figure class="article-hero">
-          <img src={article.hero_image} alt={article.hero_alt ?? ''} />
+          <img src={shown.hero_image} alt={article.hero_alt ?? ''} />
           {#if article.hero_caption}<figcaption>{article.hero_caption}</figcaption>{/if}
         </figure>
       </ReadingColumn>{/if}
-    <ArticleBody {article} />
+    <ArticleBody article={shown} />
   </article>
   {#if live}<ReadingColumn>
       <AgentNote

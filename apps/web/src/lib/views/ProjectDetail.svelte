@@ -8,12 +8,24 @@
   import type { Article } from '@voidreg/publishing-ui/api';
   import type { ProjectLog } from '$lib/topics';
   import type { Project } from '$lib/data/projects';
+  import { page } from '$app/state';
+  import { presentArticle, watchThemeImages } from '$lib/images';
   // Shared by the public project page and the private draft preview.
   let {
     project,
     log,
     live = true
   }: { project: Project; log: ProjectLog; live?: boolean } = $props();
+  const theme = $derived(
+    page.data.theme === 'dark' || page.data.theme === 'light' ? page.data.theme : null
+  );
+  const shown = $derived(presentArticle(project, theme));
+  let articleElement = $state<HTMLElement>();
+  $effect(() => {
+    const element = articleElement;
+    if (!element) return;
+    return watchThemeImages(element);
+  });
   const topics = $derived([...log.sections.map((s) => s.topic), ...log.more]);
   const allPosts = $derived(`/blog?project=${encodeURIComponent(project.slug)}`);
 </script>
@@ -28,7 +40,7 @@
       ]}
     />
   </ReadingColumn>
-  <article class="section-stack detail-article">
+  <article class="section-stack detail-article" bind:this={articleElement}>
     <ReadingColumn>
       <header class="section-stack detail-header">
         <p class="eyebrow">{project.category}</p>
@@ -64,12 +76,12 @@
         <!-- eslint-enable svelte/no-navigation-without-resolve -->
       </header>
     </ReadingColumn>
-    {#if project.hero_image}<img
+    {#if shown.hero_image}<img
         class="project-image"
-        src={project.hero_image}
+        src={shown.hero_image}
         alt={project.hero_alt ?? project.title}
       />{/if}
-    <ArticleBody article={project as unknown as Article} />
+    <ArticleBody article={shown as unknown as Article} />
   </article>
   {#if project.related?.length}<ReadingColumn>
       <section class="section-stack" aria-labelledby="related-projects">

@@ -12,7 +12,8 @@ COPY packages/publishing-ui packages/publishing-ui
 COPY apps/web apps/web
 RUN pnpm --filter voidreg-web build \
     && pnpm --filter voidreg-web deploy --prod --legacy /out \
-    && cp -r apps/web/build /out/build
+    && cp -r apps/web/build /out/build \
+    && cd /out && node -e "require('sharp')"
 
 FROM node:25-bookworm-slim
 WORKDIR /app
