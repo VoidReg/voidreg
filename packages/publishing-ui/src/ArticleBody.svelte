@@ -2,6 +2,7 @@
   import { sanitizePublicationHtml } from './publication-html';
   import PublisleArticle from '@publisle/adapter-svelte/article';
   import type { Article } from './api';
+  import { outlineFromReadings, tocCount, type TocEntry } from './article-toc';
   import { implementations } from './renderers';
   import '@publisle/adapter-core/document.css';
   import '@publisle/adapter-core/katex.css';
@@ -78,9 +79,62 @@
         }
       : undefined
   );
+  let outline = $state<TocEntry[]>([]);
+  // The compiled article has headings and no fragment ids. Read them after render,
+  // give each one a stable id, and list the ones a reader can jump to.
+  $effect(() => {
+    const element = container;
+    const hasBody = Boolean(safe?.html) || article.sections.length > 0;
+    if (!element || !hasBody) {
+      outline = [];
+      return;
+    }
+    let seen = '';
+    const collect = () => {
+      const headings = [...element.querySelectorAll<HTMLElement>('h2, h3, h4')].filter(
+        (heading) => !heading.closest('aside, .article-toc')
+      );
+      const { outline: next, assigned } = outlineFromReadings(
+        headings.map((heading) => ({
+          level: Number(heading.tagName.slice(1)),
+          text: heading.textContent ?? '',
+          id: heading.id
+        }))
+      );
+      headings.forEach((heading, index) => {
+        const id = assigned[index];
+        if (id && heading.id !== id) heading.id = id;
+      });
+      const key = JSON.stringify(next);
+      if (key === seen) return;
+      seen = key;
+      outline = tocCount(next) >= 2 ? next : [];
+    };
+    collect();
+    const observer = new MutationObserver(collect);
+    observer.observe(element, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  });
 </script>
 
+{#snippet contents(entries: TocEntry[])}
+  <ol>
+    {#each entries as entry (entry.id)}
+      <li>
+        <a href={`#${entry.id}`}>{entry.text}</a>
+        {#if entry.children.length}{@render contents(entry.children)}{/if}
+      </li>
+    {/each}
+  </ol>
+{/snippet}
+
 <div class="article-prose" bind:this={container}>
+  {#if outline.length}
+    <nav class="article-toc" aria-label="Contents">
+      <p class="article-toc-label">Contents</p>
+      {@render contents(outline)}
+    </nav>
+  {/if}
   {#if safe}
     <PublisleArticle publication={safe} {instanceId} {implementations} />
   {:else}

@@ -14,6 +14,41 @@
    Reset the next block's top margin so collapsing margins cannot enlarge the gap. */
 .article-prose :where(h2, h3, h4, h5, h6) {
   margin-block: 1.5rem 0.75rem;
+  scroll-margin-block-start: calc(var(--header-height, 5rem) + 1rem);
+}
+.article-toc {
+  margin-block: 0 2rem;
+  padding: 1rem 1.25rem 1.125rem;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--card-foreground);
+  font-size: 1rem;
+  line-height: 1.4;
+}
+.article-toc-label {
+  margin: 0 0 0.5rem;
+  color: var(--muted-foreground);
+  font: 600 0.75rem/1.2 var(--font-ui);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.article-prose .article-toc :where(ol) {
+  margin-block: 0.25rem 0;
+  padding-inline-start: 1.25rem;
+}
+.article-prose .article-toc > ol {
+  margin-block: 0;
+}
+.article-prose .article-toc :where(li) {
+  margin-block: 0.35rem;
+}
+.article-prose .article-toc ol ol {
+  list-style: disc;
+}
+.article-prose .article-toc a {
+  color: var(--link);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.15em;
 }
 .article-prose :where(h2, h3, h4, h5, h6) + * {
   margin-block-start: 0;
