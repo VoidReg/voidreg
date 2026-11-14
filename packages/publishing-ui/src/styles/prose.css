@@ -73,6 +73,91 @@
   background: var(--card);
   font: 0.8125rem/1.5 var(--font-code);
 }
+.article-prose .code-viewer {
+  --code-keyword: var(--primary);
+  --code-string: #146c43;
+  --code-number: #1e4b8a;
+  --code-type: #6d28d9;
+  --code-function: #0f6e6e;
+  margin-block: 1.5rem;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--foreground);
+}
+.dark .article-prose .code-viewer {
+  --code-string: #86efac;
+  --code-number: #93c5fd;
+  --code-type: #c4b5fd;
+  --code-function: #5eead4;
+}
+.article-prose .code-viewer pre {
+  margin: 0;
+  border: 0;
+  background: transparent;
+  font-variant-ligatures: none;
+}
+.article-prose .code-viewer-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.4rem 0.75rem;
+  border-block-end: 1px solid var(--border);
+}
+.article-prose .code-viewer-language {
+  color: var(--muted-foreground);
+  font: 600 0.75rem/1.2 var(--font-ui);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.article-prose .code-viewer-copy {
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+  padding: 0.25rem 0.4rem;
+  font: 500 0.8125rem/1 var(--font-ui);
+  cursor: pointer;
+}
+.article-prose .code-viewer-copy:hover {
+  color: var(--link);
+}
+.article-prose .code-viewer-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+.article-prose .code-viewer .hljs-keyword,
+.article-prose .code-viewer .hljs-selector-tag,
+.article-prose .code-viewer .hljs-literal,
+.article-prose .code-viewer .hljs-doctag {
+  color: var(--code-keyword);
+}
+.article-prose .code-viewer .hljs-string,
+.article-prose .code-viewer .hljs-regexp,
+.article-prose .code-viewer .hljs-addition,
+.article-prose .code-viewer .hljs-symbol {
+  color: var(--code-string);
+}
+.article-prose .code-viewer .hljs-number,
+.article-prose .code-viewer .hljs-deletion {
+  color: var(--code-number);
+}
+.article-prose .code-viewer .hljs-comment,
+.article-prose .code-viewer .hljs-quote {
+  color: var(--muted-foreground);
+}
+.article-prose .code-viewer .hljs-title,
+.article-prose .code-viewer .hljs-built_in {
+  color: var(--code-function);
+}
+.article-prose .code-viewer .hljs-type,
+.article-prose .code-viewer .hljs-attribute,
+.article-prose .code-viewer .hljs-attr {
+  color: var(--code-type);
+}
 .article-prose table {
   display: block;
   max-width: 100%;

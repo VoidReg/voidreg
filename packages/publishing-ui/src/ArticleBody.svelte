@@ -3,6 +3,7 @@
   import PublisleArticle from '@publisle/adapter-svelte/article';
   import type { Article } from './api';
   import { outlineFromReadings, tocCount, type TocEntry } from './article-toc';
+  import { mountCodeViewers } from './code-viewer';
   import { linkRenderedReferences } from './references';
   import { implementations } from './renderers';
   import '@publisle/adapter-core/document.css';
@@ -106,6 +107,7 @@
         const id = assigned[index];
         if (id && heading.id !== id) heading.id = id;
       });
+      mountCodeViewers(element);
       linkRenderedReferences(element);
       const key = JSON.stringify(next);
       if (key === seen) return;
