@@ -40,8 +40,8 @@
     >
   </div>
   <p>
-    Readable Markdown includes rich-block directives. The complete archival format preserves the
-    entire Publisle document for lossless import.
+    This copy is for reading. It keeps the prose, figures, diagrams, and references, and it describes
+    a schematic in words. The archival download is the versioned document, including schematic data.
   </p>
   {#each data.notes as note, index (index)}<p class="placeholder-note">{note}</p>{/each}
   <p role="status">{copyError}</p>

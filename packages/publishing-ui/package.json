@@ -9,6 +9,7 @@
     "./renderers": "./src/renderers.ts",
     "./publication-html": "./src/publication-html.ts",
     "./pagination": "./src/pagination.ts",
+    "./references": "./src/references.ts",
     "./ArticleBody.svelte": {
       "svelte": "./src/ArticleBody.svelte",
       "default": "./src/ArticleBody.svelte"

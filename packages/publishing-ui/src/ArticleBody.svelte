@@ -3,6 +3,7 @@
   import PublisleArticle from '@publisle/adapter-svelte/article';
   import type { Article } from './api';
   import { outlineFromReadings, tocCount, type TocEntry } from './article-toc';
+  import { linkRenderedReferences } from './references';
   import { implementations } from './renderers';
   import '@publisle/adapter-core/document.css';
   import '@publisle/adapter-core/katex.css';
@@ -105,6 +106,7 @@
         const id = assigned[index];
         if (id && heading.id !== id) heading.id = id;
       });
+      linkRenderedReferences(element);
       const key = JSON.stringify(next);
       if (key === seen) return;
       seen = key;

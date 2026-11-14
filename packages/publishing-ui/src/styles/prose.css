@@ -104,6 +104,17 @@
   color: var(--link);
   text-decoration: underline;
 }
+.article-prose .publisle-citation {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.article-prose .publisle-bibliography {
+  margin-block-start: 0.5rem;
+}
+.article-prose .publisle-bibliography p {
+  padding-inline-start: 2rem;
+  text-indent: -2rem;
+}
 /* A figure's src is the light rendition. variant "dark" is a second image the
    theme class selects. Hosts without this rule would show both. */
 .article-prose .publisle-figure-themed > img[data-publisle-variant] {

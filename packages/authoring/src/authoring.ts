@@ -11,6 +11,7 @@ import { fromMarkdown, toMarkdown } from '@publisle/markdown';
 import { registry, extensions } from './blocks';
 import { defaultData, blockFields, blockLabels } from '@publisle/playground';
 import { rendererRegistry } from '@voidreg/publishing-ui/renderers';
+import { referenceRender } from '@voidreg/publishing-ui/references';
 
 export function compileDocument(
   input: unknown,
@@ -32,9 +33,12 @@ export function compileDocument(
       unknownBlocks: 'error',
       profiles: [accessibilityProfile(), interactivePublicationProfile()]
     });
+    const references = referenceRender(document);
     const artifact = compilePublication(assertPrepared(prepared), {
       renderers: rendererRegistry,
       rawHtml: 'escape',
+      ...(references.citations ? { citations: references.citations } : {}),
+      ...(references.bibliography ? { bibliography: references.bibliography } : {}),
       diagramRenderers:
         diagramRenderers ??
         Object.fromEntries(
@@ -95,6 +99,7 @@ const markdownTypes = new Set(
     'callout',
     'divider',
     'footnote',
+    'bibliography',
     'raw-html',
     'embed',
     'diagram'
